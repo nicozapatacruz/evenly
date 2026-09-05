@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { supabase } from "./lib/supabaseClient.js";
 import {
   Plus, Receipt, X, ChevronRight, ArrowRight, Check, Trash2, ArrowLeft,
   Settings, RefreshCw, HandCoins, UtensilsCrossed, Car, Home as HomeIcon,
@@ -270,6 +271,7 @@ function generateDueRecurring(template, now = Date.now()) {
       currency: template.currency,
       category: template.category,
       paidBy: template.paidBy,
+      payers: template.payers,
       shares: template.shares,
       splitMode: template.splitMode,
       date: next,
@@ -310,134 +312,203 @@ function dateInputValue(ms) {
 
 // Hook reutilizable para subir una imagen a base64 con límite de tamaño.
 // onError recibe el mensaje de error a mostrar (cada pantalla decide dónde mostrarlo).
-function useImageUpload(initial = null, onError) {
-  const [imageBase64, setImageBase64] = useState(initial);
+// La subida real a Supabase Storage se hace recién al guardar el formulario (no al elegir el
+// archivo), para no dejar imágenes huérfanas en el bucket si el usuario cancela.
+function useImageUpload(initialUrl = null, onError) {
+  const [previewUrl, setPreviewUrl] = useState(initialUrl);
+  const [pendingFile, setPendingFile] = useState(null);
+  const [removed, setRemoved] = useState(false);
   const handleImageChange = useCallback((e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 4_000_000) { onError?.("La imagen no puede superar 4 MB."); return; }
-    const reader = new FileReader();
-    reader.onload = (ev) => setImageBase64(ev.target.result);
-    reader.readAsDataURL(file);
+    setPendingFile(file);
+    setRemoved(false);
+    setPreviewUrl(URL.createObjectURL(file));
   }, [onError]);
-  return [imageBase64, setImageBase64, handleImageChange];
+  const clear = useCallback(() => { setPendingFile(null); setPreviewUrl(null); setRemoved(true); }, []);
+  return { previewUrl, pendingFile, removed, handleImageChange, clear };
 }
 
-/* =========================================================================
-   STORAGE
-   ========================================================================= */
+// Sube el archivo pendiente (si hay uno) y devuelve la URL final a guardar en la tabla.
+// currentUrl es la URL ya guardada (si el usuario no tocó la foto, se conserva tal cual).
+async function resolvePhotoUrl({ pendingFile, removed, currentUrl }) {
+  if (pendingFile) {
+    const path = `${crypto.randomUUID()}-${pendingFile.name}`;
+    const { error } = await supabase.storage.from("evenly-images").upload(path, pendingFile);
+    if (error) throw error;
+    return supabase.storage.from("evenly-images").getPublicUrl(path).data.publicUrl;
+  }
+  if (removed) return null;
+  return currentUrl ?? null;
+}
 
 /* =========================================================================
    AUTH — usuarios, sesión, invitaciones
    ========================================================================= */
 
-// Hash simple (djb2) — no criptográfico, solo para no guardar la contraseña en texto plano
-function hashPassword(str) {
-  let h = 5381;
-  for (let i = 0; i < str.length; i++) h = ((h << 5) + h) ^ str.charCodeAt(i);
-  return (h >>> 0).toString(36);
+async function fetchProfile(userId) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("username, display_name, photo_url")
+    .eq("id", userId)
+    .single();
+  if (error) throw error;
+  return data;
 }
 
-// Storage de usuarios (shared = false → privado por sesión, pero necesitamos shared para que
-// un usuario pueda encontrar a otro por username)
-// Guardamos solo username + passwordHash + displayName en shared
-// La contraseña nunca sale de texto plano; guardamos el hash
-
-async function getUserIndex() {
-  try {
-    const res = await window.storage.get("users-index", true);
-    return res ? JSON.parse(res.value) : {};
-    // { username: { userId, passwordHash, displayName } }
-  } catch { return {}; }
-}
-
-async function saveUserIndex(index) {
-  await window.storage.set("users-index", JSON.stringify(index), true);
-}
-
-async function getUserData(userId) {
-  try {
-    const res = await window.storage.get(`userdata:${userId}`, false);
-    return res ? JSON.parse(res.value) : null;
-  } catch { return null; }
-}
-
-async function saveUserData(userId, data) {
-  await window.storage.set(`userdata:${userId}`, JSON.stringify(data), false);
-}
-
-// Invitaciones: guardadas en shared con key invite:{userId}
-// Array de { inviteId, groupId, groupName, memberId, memberName, fromUsername, createdAt }
-async function getInvites(userId) {
-  try {
-    const res = await window.storage.get(`invites:${userId}`, true);
-    return res ? JSON.parse(res.value) : [];
-  } catch { return []; }
-}
-async function saveInvites(userId, invites) {
-  await window.storage.set(`invites:${userId}`, JSON.stringify(invites), true);
+function toSession(authUser, profile) {
+  return {
+    userId: authUser.id,
+    email: authUser.email,
+    username: profile.username,
+    displayName: profile.display_name,
+    photoUrl: profile.photo_url || null,
+  };
 }
 
 function useAuth() {
-  const [session, setSession] = useState(null); // { userId, username, displayName } | null
+  const [session, setSession] = useState(null); // { userId, email, username, displayName, photoUrl } | null
   const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
-    // Intentar restaurar sesión guardada localmente
+    let cancelled = false;
+
     (async () => {
-      try {
-        const res = await window.storage.get("current-session", false);
-        if (res) {
-          const sess = JSON.parse(res.value);
-          // Cargar foto y datos actualizados desde userData
-          const userData = await getUserData(sess.userId);
-          if (userData) {
-            sess.displayName = userData.displayName || sess.displayName;
-            sess.photoBase64 = userData.photoBase64 || null;
-          }
-          setSession(sess);
-        }
-      } catch {}
-      setAuthLoading(false);
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      if (authSession?.user) {
+        try {
+          const profile = await fetchProfile(authSession.user.id);
+          if (!cancelled) setSession(toSession(authSession.user, profile));
+        } catch { /* perfil aún no creado por el trigger, o error de red */ }
+      }
+      if (!cancelled) setAuthLoading(false);
     })();
+
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, authSession) => {
+      if (!authSession?.user) { setSession(null); return; }
+      try {
+        const profile = await fetchProfile(authSession.user.id);
+        setSession(toSession(authSession.user, profile));
+      } catch { /* ignorar, se resuelve en el próximo evento */ }
+    });
+
+    return () => { cancelled = true; sub.subscription.unsubscribe(); };
   }, []);
 
-  const register = useCallback(async (username, password, displayName) => {
+  const register = useCallback(async (email, username, password, displayName) => {
     const uname = username.trim().toLowerCase();
     if (!uname || uname.length < 3) throw new Error("El usuario debe tener al menos 3 caracteres.");
     if (!password || password.length < 4) throw new Error("La contraseña debe tener al menos 4 caracteres.");
     if (!displayName.trim()) throw new Error("Ponle un nombre a tu perfil.");
-    const index = await getUserIndex();
-    if (index[uname]) throw new Error("Ese nombre de usuario ya está en uso.");
-    const userId = uid();
-    const hash = hashPassword(password);
-    index[uname] = { userId, passwordHash: hash, displayName: displayName.trim() };
-    await saveUserIndex(index);
-    await saveUserData(userId, { userId, username: uname, displayName: displayName.trim(), groupIds: [] });
-    const sess = { userId, username: uname, displayName: displayName.trim() };
-    await window.storage.set("current-session", JSON.stringify(sess), false);
-    setSession(sess);
-    return sess;
+    const { data, error } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: { data: { username: uname, display_name: displayName.trim() } },
+    });
+    if (error) {
+      if (/duplicate key/i.test(error.message) && /username/i.test(error.message)) {
+        throw new Error("Ese nombre de usuario ya está en uso.");
+      }
+      throw error;
+    }
+    // Si el proyecto exige confirmación de email, signUp no crea sesión todavía.
+    return { needsEmailConfirmation: !data.session };
   }, []);
 
-  const login = useCallback(async (username, password) => {
-    const uname = username.trim().toLowerCase();
-    const index = await getUserIndex();
-    const entry = index[uname];
-    if (!entry) throw new Error("Usuario no encontrado.");
-    if (entry.passwordHash !== hashPassword(password)) throw new Error("Contraseña incorrecta.");
-    const sess = { userId: entry.userId, username: uname, displayName: entry.displayName };
-    await window.storage.set("current-session", JSON.stringify(sess), false);
-    setSession(sess);
-    return sess;
+  const login = useCallback(async (email, password) => {
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    if (error) throw new Error("Email o contraseña incorrectos.");
   }, []);
 
   const logout = useCallback(async () => {
-    try { await window.storage.delete("current-session", false); } catch {}
-    setSession(null);
+    await supabase.auth.signOut();
   }, []);
 
-  return { session, authLoading, register, login, logout };
+  // Vuelve a leer el profile y actualiza la sesión en memoria (evita el window.location.reload() de antes)
+  const refreshProfile = useCallback(async () => {
+    const { data: { session: authSession } } = await supabase.auth.getSession();
+    if (!authSession?.user) return;
+    const profile = await fetchProfile(authSession.user.id);
+    setSession(toSession(authSession.user, profile));
+  }, []);
+
+  return { session, authLoading, register, login, logout, refreshProfile };
+}
+
+// Select con resource embedding: PostgREST expande cada FK respetando la RLS propia
+// de esa tabla hija (is_group_member en todas), así que basta con pedir "groups".
+const GROUP_SELECT = `
+  id, name, base_currency, rates, photo_url, creator_id, created_at,
+  group_members(id, name, linked_user_id),
+  categories(id, label, icon_key, sort_order),
+  expenses(id, description, amount, currency, category_id, date, notes, image_url, split_mode, payers, shares, recurring_id, deleted, created_at),
+  payments(id, from_member_id, to_member_id, amount, currency, date, note, deleted, created_at),
+  recurring_expenses(id, description, amount, currency, category_id, split_mode, payers, shares, frequency, next_date, paused)
+`;
+
+// Traduce una fila de Supabase (snake_case, numeric como string, timestamptz como ISO)
+// al shape en memoria que ya consumen GroupView/NewExpense/SettleUp/EditGroup/RecurringList.
+function toClientGroup(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    baseCurrency: row.base_currency,
+    rates: row.rates || {},
+    photoUrl: row.photo_url || null,
+    creatorId: row.creator_id,
+    createdAt: new Date(row.created_at).getTime(),
+    members: (row.group_members || []).map((m) => ({
+      id: m.id,
+      name: m.name,
+      linkedUserId: m.linked_user_id,
+    })),
+    categories: (row.categories || [])
+      .slice()
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((c) => ({ id: c.id, label: c.label, iconKey: c.icon_key })),
+    expenses: (row.expenses || []).map((e) => ({
+      id: e.id,
+      description: e.description,
+      amount: Number(e.amount),
+      currency: e.currency,
+      category: e.category_id,
+      date: new Date(e.date).getTime(),
+      createdAt: new Date(e.created_at).getTime(),
+      notes: e.notes || "",
+      imageUrl: e.image_url || null,
+      splitMode: e.split_mode,
+      payers: e.payers,
+      shares: e.shares,
+      recurringId: e.recurring_id,
+      deleted: e.deleted,
+    })),
+    payments: (row.payments || []).map((p) => ({
+      id: p.id,
+      from: p.from_member_id,
+      to: p.to_member_id,
+      amount: Number(p.amount),
+      currency: p.currency,
+      date: new Date(p.date).getTime(),
+      createdAt: new Date(p.created_at).getTime(),
+      note: p.note || "",
+      deleted: p.deleted,
+    })),
+    recurring: (row.recurring_expenses || []).map((r) => ({
+      id: r.id,
+      description: r.description,
+      amount: Number(r.amount),
+      currency: r.currency,
+      category: r.category_id,
+      splitMode: r.split_mode,
+      payers: r.payers,
+      paidBy: Object.keys(r.payers || {})[0], // RecurringList lo muestra directo, sin fallback
+      shares: r.shares,
+      frequency: r.frequency,
+      nextDate: new Date(r.next_date).getTime(),
+      paused: r.paused,
+    })),
+  };
 }
 
 function useGroups(userId) {
@@ -447,19 +518,12 @@ function useGroups(userId) {
   const load = useCallback(async () => {
     if (!userId) { setGroups([]); setLoading(false); return; }
     try {
-      // Cargar IDs de grupos del usuario
-      const userData = await getUserData(userId);
-      const ids = userData?.groupIds || [];
-      const loaded = [];
-      for (const id of ids) {
-        try {
-          const g = await window.storage.get(`group:${id}`, true);
-          if (g) loaded.push(normalizeGroup(JSON.parse(g.value)));
-        } catch {
-          /* skip missing */
-        }
-      }
-      setGroups(loaded);
+      const { data, error } = await supabase
+        .from("groups")
+        .select(GROUP_SELECT)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      setGroups(data.map(toClientGroup));
     } catch {
       setGroups([]);
     } finally {
@@ -471,75 +535,34 @@ function useGroups(userId) {
     load();
   }, [load]);
 
-  const saveGroup = useCallback(async (group) => {
-    const payload = JSON.stringify(group);
-    if (payload.length > 4_900_000) {
-      throw new Error(`El grupo es demasiado grande para guardar (${(payload.length/1000).toFixed(0)}KB, límite ~5MB). Borra gastos antiguos.`);
-    }
-    let res;
-    try {
-      res = await window.storage.set(`group:${group.id}`, payload, true);
-    } catch (e) {
-      try {
-        await new Promise((r) => setTimeout(r, 400));
-        res = await window.storage.set(`group:${group.id}`, payload, true);
-      } catch (e2) {
-        throw new Error(`storage.set falló dos veces. Detalle: ${e2?.message || e2}`);
-      }
-    }
-    if (!res) throw new Error("storage.set devolvió null (la operación no se confirmó)");
+  // Vuelve a traer un solo grupo y reemplaza su entrada en el estado local.
+  // Cada handler de mutación (insert/update/delete puntual) llama esto al terminar,
+  // en vez de mantener a mano un patch optimista por cada operación posible.
+  const reloadGroup = useCallback(async (groupId) => {
+    const { data, error } = await supabase
+      .from("groups")
+      .select(GROUP_SELECT)
+      .eq("id", groupId)
+      .single();
+    if (error) throw error;
+    const g = toClientGroup(data);
     setGroups((prev) => {
       const next = prev ? [...prev] : [];
-      const idx = next.findIndex((g) => g.id === group.id);
-      if (idx >= 0) next[idx] = group;
-      else next.push(group);
+      const idx = next.findIndex((x) => x.id === groupId);
+      if (idx >= 0) next[idx] = g;
+      else next.push(g);
       return next;
     });
-    // Actualizar lista de grupos del usuario
-    if (userId) {
-      const userData = await getUserData(userId) || { userId, groupIds: [] };
-      if (!userData.groupIds.includes(group.id)) {
-        userData.groupIds = [...(userData.groupIds || []), group.id];
-        await saveUserData(userId, userData);
-      }
-    }
-  }, [userId]);
+    return g;
+  }, []);
 
   const deleteGroup = useCallback(async (id) => {
-    await window.storage.delete(`group:${id}`, true).catch(() => {});
-    if (userId) {
-      const userData = await getUserData(userId);
-      if (userData) {
-        userData.groupIds = (userData.groupIds || []).filter((x) => x !== id);
-        await saveUserData(userId, userData);
-      }
-    }
+    const { error } = await supabase.from("groups").delete().eq("id", id);
+    if (error) throw error;
     setGroups((prev) => (prev ? prev.filter((g) => g.id !== id) : prev));
-  }, [userId]);
+  }, []);
 
-  return { groups, loading, saveGroup, deleteGroup, reload: load };
-}
-
-// Asegura que un grupo viejo (de versiones anteriores) tenga todos los campos nuevos
-function normalizeGroup(g) {
-  return {
-    baseCurrency: "USD",
-    rates: {},
-    payments: [],
-    recurring: [],
-    categories: [],
-    pendingInvites: {},
-    ...g,
-    expenses: (g.expenses || []).map((e) => ({
-      currency: g.baseCurrency || "USD",
-      category: "general",
-      notes: "",
-      date: e.createdAt || Date.now(),
-      splitMode: "equal",
-      deleted: false,
-      ...e,
-    })),
-  };
+  return { groups, loading, reloadGroup, deleteGroup, reload: load };
 }
 
 /* =========================================================================
@@ -547,7 +570,7 @@ function normalizeGroup(g) {
    ========================================================================= */
 
 export default function SplitLedger() {
-  const { session, authLoading, register, login, logout } = useAuth();
+  const { session, authLoading, register, login, logout, refreshProfile } = useAuth();
 
   if (authLoading) {
     return <div style={{ ...styles.app, alignItems: "center", justifyContent: "center", minHeight: "100vh" }}><p style={styles.muted}>Cargando…</p></div>;
@@ -557,24 +580,53 @@ export default function SplitLedger() {
     return <AuthScreen onLogin={login} onRegister={register} />;
   }
 
-  return <AppMain session={session} onLogout={logout} />;
+  return <AppMain session={session} onLogout={logout} refreshProfile={refreshProfile} />;
 }
 
-function AppMain({ session, onLogout }) {
-  const { groups, loading, saveGroup, deleteGroup } = useGroups(session.userId);
+function AppMain({ session, onLogout, refreshProfile }) {
+  const { groups, loading, reloadGroup, deleteGroup } = useGroups(session.userId);
   const [view, setView] = useState({ screen: "home" });
   const [toast, setToast] = useState(null); // { message, type: "error" | "success" }
-  const [invites, setInvites] = useState([]);
+  const [invites, setInvites] = useState([]); // invitaciones que ME llegaron (bandeja)
+  const [groupInvites, setGroupInvites] = useState([]); // invitaciones pendientes del grupo que estoy editando
   const processedRecurring = useRef(new Set());
 
-  // Cargar invitaciones pendientes
-  useEffect(() => {
-    getInvites(session.userId).then(setInvites);
+  const loadInvites = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("invites")
+      .select("id, group_id, member_id, groups(name), group_members(name), profiles!from_user_id(username)")
+      .eq("to_user_id", session.userId)
+      .eq("status", "pending");
+    if (error) { setInvites([]); return; }
+    setInvites(data.map((i) => ({
+      inviteId: i.id,
+      groupId: i.group_id,
+      groupName: i.groups?.name || "—",
+      memberId: i.member_id,
+      memberName: i.group_members?.name || "—",
+      fromUsername: i.profiles?.username || "—",
+    })));
   }, [session.userId]);
 
-  const refreshInvites = useCallback(async () => {
-    setInvites(await getInvites(session.userId));
-  }, [session.userId]);
+  // Cargar invitaciones pendientes (bandeja propia)
+  useEffect(() => { loadInvites(); }, [loadInvites]);
+
+  const loadGroupInvites = useCallback(async (groupId) => {
+    const { data, error } = await supabase
+      .from("invites")
+      .select("id, member_id, profiles!to_user_id(username)")
+      .eq("group_id", groupId)
+      .eq("status", "pending");
+    if (error) { setGroupInvites([]); return; }
+    setGroupInvites(data.map((i) => ({ inviteId: i.id, memberId: i.member_id, username: i.profiles?.username })));
+  }, []);
+
+  // Cargar invitaciones pendientes del grupo que se está editando/invitando
+  useEffect(() => {
+    if ((view.screen === "editGroup" || view.screen === "inviteScreen") && view.groupId) {
+      loadGroupInvites(view.groupId);
+    }
+  }, [view.screen, view.groupId, loadGroupInvites]);
 
   const activeGroup = useMemo(
     () => (groups && view.groupId ? groups.find((g) => g.id === view.groupId) : null),
@@ -592,26 +644,45 @@ function AppMain({ session, onLogout }) {
     if (!groups) return;
     groups.forEach((g) => {
       if (processedRecurring.current.has(g.id)) return;
+      processedRecurring.current.add(g.id);
       const recurring = g.recurring || [];
       if (recurring.length === 0) return;
-      let changed = false;
-      const newExpenses = [...g.expenses];
-      const newRecurring = recurring.map((tpl) => {
-        if (tpl.paused) return tpl;
-        const { instances, newNextDate } = generateDueRecurring(tpl);
-        if (instances.length > 0) {
-          changed = true;
-          newExpenses.push(...instances);
-          return { ...tpl, nextDate: newNextDate };
+      (async () => {
+        const newInstanceRows = [];
+        const nextDateUpdates = [];
+        for (const tpl of recurring) {
+          if (tpl.paused) continue;
+          const { instances, newNextDate } = generateDueRecurring(tpl);
+          if (instances.length === 0) continue;
+          for (const inst of instances) {
+            newInstanceRows.push({
+              group_id: g.id,
+              description: inst.description,
+              amount: inst.amount,
+              currency: inst.currency,
+              category_id: inst.category,
+              date: new Date(inst.date).toISOString(),
+              notes: inst.notes || null,
+              split_mode: inst.splitMode,
+              payers: inst.payers,
+              shares: inst.shares,
+              recurring_id: tpl.id,
+            });
+          }
+          nextDateUpdates.push({ id: tpl.id, next_date: new Date(newNextDate).toISOString() });
         }
-        return tpl;
-      });
-      processedRecurring.current.add(g.id);
-      if (changed) {
-        saveGroup({ ...g, expenses: newExpenses, recurring: newRecurring }).catch(() => {});
-      }
+        if (newInstanceRows.length === 0) return;
+        try {
+          const { error } = await supabase.from("expenses").insert(newInstanceRows);
+          if (error) throw error;
+          for (const u of nextDateUpdates) {
+            await supabase.from("recurring_expenses").update({ next_date: u.next_date }).eq("id", u.id);
+          }
+          await reloadGroup(g.id);
+        } catch { /* silencioso, igual que antes */ }
+      })();
     });
-  }, [groups, saveGroup]);
+  }, [groups, reloadGroup]);
 
   const showError = (msg) => setToast({ message: msg, type: "error" });
   const showSuccess = (msg) => setToast({ message: msg, type: "success" });
@@ -619,39 +690,26 @@ function AppMain({ session, onLogout }) {
 
   const handleAcceptInvite = useCallback(async (invite) => {
     try {
-      const res = await window.storage.get(`group:${invite.groupId}`, true);
-      if (!res) { showError("El grupo ya no existe."); return; }
-      const g = normalizeGroup(JSON.parse(res.value));
-      const memberLinks = { ...(g.memberLinks || {}), [invite.memberId]: session.userId };
-      const members = g.members.map((m) =>
-        m.id === invite.memberId ? { ...m, name: session.displayName, linkedUserId: session.userId } : m
-      );
-      const pendingInvites = { ...(g.pendingInvites || {}) };
-      delete pendingInvites[invite.memberId];
-      await saveGroup({ ...g, memberLinks, members, pendingInvites });
-      const newInvites = invites.filter((i) => i.inviteId !== invite.inviteId);
-      await saveInvites(session.userId, newInvites);
-      setInvites(newInvites);
+      const { error: e1 } = await supabase
+        .from("group_members")
+        .update({ linked_user_id: session.userId, name: session.displayName })
+        .eq("id", invite.memberId);
+      if (e1) throw e1;
+      const { error: e2 } = await supabase.from("invites").update({ status: "accepted" }).eq("id", invite.inviteId);
+      if (e2) throw e2;
+      await loadInvites();
+      await reloadGroup(invite.groupId);
       setView({ screen: "group", groupId: invite.groupId });
     } catch (e) { showError(`No se pudo aceptar la invitación: ${e?.message || e}`); }
-  }, [invites, session.userId, session.displayName, saveGroup]);
+  }, [session.userId, session.displayName, reloadGroup, loadInvites]);
 
   const handleRejectInvite = useCallback(async (invite) => {
     try {
-      const res = await window.storage.get(`group:${invite.groupId}`, true);
-      if (res) {
-        const g = normalizeGroup(JSON.parse(res.value));
-        const pendingInvites = { ...(g.pendingInvites || {}) };
-        delete pendingInvites[invite.memberId];
-        // No usamos saveGroup aquí a propósito: quien rechaza no es miembro de
-        // este grupo, y saveGroup lo agregaría por error a su lista local.
-        await window.storage.set(`group:${invite.groupId}`, JSON.stringify({ ...g, pendingInvites }), true);
-      }
-    } catch (e) { /* si falla, igual quitamos la invitación de la bandeja de quien rechaza */ }
-    const newInvites = invites.filter((i) => i.inviteId !== invite.inviteId);
-    await saveInvites(session.userId, newInvites);
-    setInvites(newInvites);
-  }, [invites, session.userId]);
+      const { error } = await supabase.from("invites").update({ status: "rejected" }).eq("id", invite.inviteId);
+      if (error) throw error;
+    } catch { /* si falla, igual quitamos la invitación de la bandeja */ }
+    await loadInvites();
+  }, [loadInvites]);
 
   return (
     <div style={styles.app}>
@@ -686,13 +744,25 @@ function AppMain({ session, onLogout }) {
         <NewGroup
           onCancel={() => setView({ screen: "home" })}
           session={session}
-          onCreate={async (group) => {
+          onCreate={async ({ name, baseCurrency, members, photoUrl }) => {
             try {
-              // memberLinks: vincular el primer miembro (el creador) al userId
-              const creatorMember = group.members.find(m => m.linkedUserId === session.userId);
-              const memberLinks = creatorMember ? { [creatorMember.id]: session.userId } : {};
-              await saveGroup({ ...group, creatorId: session.userId, memberLinks });
-              setView({ screen: "group", groupId: group.id });
+              const { data: groupRow, error: e1 } = await supabase
+                .from("groups")
+                .insert({ name, base_currency: baseCurrency, photo_url: photoUrl, creator_id: session.userId })
+                .select("id")
+                .single();
+              if (e1) throw e1;
+              const groupId = groupRow.id;
+              const { error: e2 } = await supabase.from("group_members").insert(
+                members.map((m) => ({ group_id: groupId, name: m.name, linked_user_id: m.linkedUserId || null }))
+              );
+              if (e2) throw e2;
+              const { error: e3 } = await supabase.from("categories").insert(
+                DEFAULT_CATEGORIES.map((c, i) => ({ group_id: groupId, label: c.label, icon_key: c.iconKey, sort_order: i }))
+              );
+              if (e3) throw e3;
+              await reloadGroup(groupId);
+              setView({ screen: "group", groupId });
             } catch (e) {
               showError(`No se pudo guardar el grupo: ${e?.message || e}`);
             }
@@ -709,14 +779,12 @@ function AppMain({ session, onLogout }) {
           onSettleUp={(prefill) => setView({ screen: "settleUp", groupId: activeGroup.id, prefill })}
           onEditGroup={() => setView({ screen: "editGroup", groupId: activeGroup.id })}
           onRecurring={() => setView({ screen: "recurring", groupId: activeGroup.id })}
-          onSave={async (g) => {
-            try { await saveGroup(g); } catch (e) { showError(`No se pudo guardar el cambio: ${e?.message || e}`); }
-          }}
-          onDeleteGroup={async () => {
+          onSoftDeleteExpense={async (expenseId) => {
             try {
-              await deleteGroup(activeGroup.id);
-              setView({ screen: "home" });
-            } catch (e) { showError(`No se pudo borrar el grupo: ${e?.message || e}`); }
+              const { error } = await supabase.from("expenses").update({ deleted: true }).eq("id", expenseId);
+              if (error) throw error;
+              await reloadGroup(activeGroup.id);
+            } catch (e) { showError(`No se pudo borrar el gasto: ${e?.message || e}`); }
           }}
         />
       )}
@@ -740,12 +808,29 @@ function AppMain({ session, onLogout }) {
               : { screen: "group", groupId: activeGroup.id }
           )}
           onSave={async (expense) => {
-            const exists = activeGroup.expenses.some((e) => e.id === expense.id);
-            const expenses = exists
-              ? activeGroup.expenses.map((e) => (e.id === expense.id ? expense : e))
-              : [...activeGroup.expenses, expense];
+            const exists = !!expense.id;
+            const payload = {
+              group_id: activeGroup.id,
+              description: expense.description,
+              amount: expense.amount,
+              currency: expense.currency,
+              category_id: expense.category,
+              date: new Date(expense.date).toISOString(),
+              notes: expense.notes || null,
+              image_url: expense.imageUrl || null,
+              split_mode: expense.splitMode,
+              payers: expense.payers,
+              shares: expense.shares,
+            };
             try {
-              await saveGroup({ ...activeGroup, expenses });
+              if (exists) {
+                const { error } = await supabase.from("expenses").update(payload).eq("id", expense.id);
+                if (error) throw error;
+              } else {
+                const { error } = await supabase.from("expenses").insert(payload);
+                if (error) throw error;
+              }
+              await reloadGroup(activeGroup.id);
               setView(
                 exists
                   ? { screen: "expenseDetail", groupId: activeGroup.id, expenseId: expense.id }
@@ -754,15 +839,29 @@ function AppMain({ session, onLogout }) {
             } catch (e) { showError(`No se pudo guardar el gasto: ${e?.message || e}`); }
           }}
           onDelete={async (expenseId) => {
-            const expenses = activeGroup.expenses.filter((e) => e.id !== expenseId);
             try {
-              await saveGroup({ ...activeGroup, expenses });
+              const { error } = await supabase.from("expenses").delete().eq("id", expenseId);
+              if (error) throw error;
+              await reloadGroup(activeGroup.id);
               setView({ screen: "group", groupId: activeGroup.id });
             } catch (e) { showError(`No se pudo borrar el gasto: ${e?.message || e}`); }
           }}
           onSaveRecurring={async (template) => {
             try {
-              await saveGroup({ ...activeGroup, recurring: [...(activeGroup.recurring || []), template] });
+              const { error } = await supabase.from("recurring_expenses").insert({
+                group_id: activeGroup.id,
+                description: template.description,
+                amount: template.amount,
+                currency: template.currency,
+                category_id: template.category,
+                split_mode: template.splitMode,
+                payers: template.payers,
+                shares: template.shares,
+                frequency: template.frequency,
+                next_date: new Date(template.nextDate).toISOString(),
+              });
+              if (error) throw error;
+              await reloadGroup(activeGroup.id);
               setView({ screen: "group", groupId: activeGroup.id });
             } catch (e) { showError(`No se pudo crear el gasto recurrente: ${e?.message || e}`); }
           }}
@@ -776,7 +875,17 @@ function AppMain({ session, onLogout }) {
           onCancel={() => setView({ screen: "group", groupId: activeGroup.id })}
           onSave={async (payment) => {
             try {
-              await saveGroup({ ...activeGroup, payments: [...(activeGroup.payments || []), payment] });
+              const { error } = await supabase.from("payments").insert({
+                group_id: activeGroup.id,
+                from_member_id: payment.from,
+                to_member_id: payment.to,
+                amount: payment.amount,
+                currency: payment.currency,
+                date: new Date(payment.date).toISOString(),
+                note: payment.note || null,
+              });
+              if (error) throw error;
+              await reloadGroup(activeGroup.id);
               setView({ screen: "group", groupId: activeGroup.id });
             } catch (e) { showError(`No se pudo registrar el pago: ${e?.message || e}`); }
           }}
@@ -785,13 +894,45 @@ function AppMain({ session, onLogout }) {
 
       {view.screen === "editGroup" && activeGroup && (
         <EditGroup
-          key={`${JSON.stringify(activeGroup.pendingInvites || {})}-${activeGroup.members.length}`}
+          key={`${JSON.stringify(groupInvites)}-${activeGroup.members.length}`}
           group={activeGroup}
           session={session}
           onCancel={() => setView({ screen: "group", groupId: activeGroup.id })}
-          onSave={async (g) => {
+          onSave={async ({ name, baseCurrency, rates, photoUrl, membersToAdd, memberIdsToRemove, categoriesToAdd, categoriesToUpdate, categoryIdsToRemove }) => {
             try {
-              await saveGroup(g);
+              const { error: e1 } = await supabase
+                .from("groups")
+                .update({ name, base_currency: baseCurrency, rates, photo_url: photoUrl })
+                .eq("id", activeGroup.id);
+              if (e1) throw e1;
+              if (memberIdsToRemove.length) {
+                const { error } = await supabase.from("group_members").delete().in("id", memberIdsToRemove);
+                if (error) throw error;
+              }
+              if (membersToAdd.length) {
+                const { error } = await supabase.from("group_members").insert(
+                  membersToAdd.map((m) => ({ group_id: activeGroup.id, name: m.name }))
+                );
+                if (error) throw error;
+              }
+              if (categoryIdsToRemove.length) {
+                const { error } = await supabase.from("categories").delete().in("id", categoryIdsToRemove);
+                if (error) throw error;
+              }
+              for (const c of categoriesToUpdate) {
+                const { error } = await supabase
+                  .from("categories")
+                  .update({ label: c.label, icon_key: c.iconKey, sort_order: c.sortOrder })
+                  .eq("id", c.id);
+                if (error) throw error;
+              }
+              if (categoriesToAdd.length) {
+                const { error } = await supabase.from("categories").insert(
+                  categoriesToAdd.map((c) => ({ group_id: activeGroup.id, label: c.label, icon_key: c.iconKey, sort_order: c.sortOrder }))
+                );
+                if (error) throw error;
+              }
+              await reloadGroup(activeGroup.id);
               setView({ screen: "group", groupId: activeGroup.id });
             } catch (e) { showError(`No se pudo guardar el grupo: ${e?.message || e}`); }
           }}
@@ -802,54 +943,48 @@ function AppMain({ session, onLogout }) {
             } catch (e) { showError(`No se pudo borrar el grupo: ${e?.message || e}`); }
           }}
           onInvite={() => setView({ screen: "inviteScreen", groupId: activeGroup.id })}
+          groupInvites={groupInvites}
           showError={showError}
         />
       )}
 
       {view.screen === "inviteScreen" && activeGroup && (
         <InviteScreen
-          key={JSON.stringify(activeGroup.pendingInvites || {})}
+          key={JSON.stringify(groupInvites)}
           group={activeGroup}
           session={session}
+          groupInvites={groupInvites}
           onBack={() => setView({ screen: "editGroup", groupId: activeGroup.id })}
           onSend={async ({ memberId, targetUsername }) => {
             try {
-              const index = await getUserIndex();
-              const entry = index[targetUsername.trim().toLowerCase()];
-              if (!entry) throw new Error(`Usuario "${targetUsername}" no encontrado.`);
-              const targetId = entry.userId;
-              const member = activeGroup.members.find(m => m.id === memberId);
-              const existingInvites = await getInvites(targetId);
-              const already = existingInvites.find(i => i.groupId === activeGroup.id && i.memberId === memberId);
+              const uname = targetUsername.trim().toLowerCase();
+              const { data: target, error: e0 } = await supabase
+                .from("profiles").select("id").eq("username", uname).maybeSingle();
+              if (e0) throw e0;
+              if (!target) throw new Error(`Usuario "${targetUsername}" no encontrado.`);
+              const { data: already } = await supabase
+                .from("invites").select("id")
+                .eq("member_id", memberId).eq("status", "pending").maybeSingle();
               if (already) throw new Error("Ya existe una invitación para ese miembro.");
-              const inviteId = uid();
-              existingInvites.push({
-                inviteId,
-                groupId: activeGroup.id,
-                groupName: activeGroup.name,
-                memberId,
-                memberName: member?.name || "—",
-                fromUsername: session.username,
-                createdAt: Date.now(),
+              const { error: e1 } = await supabase.from("invites").insert({
+                group_id: activeGroup.id,
+                member_id: memberId,
+                from_user_id: session.userId,
+                to_user_id: target.id,
+                status: "pending",
               });
-              await saveInvites(targetId, existingInvites);
-              const pendingInvites = { ...(activeGroup.pendingInvites || {}), [memberId]: { username: targetUsername.trim().toLowerCase(), inviteId, targetUserId: targetId } };
-              await saveGroup({ ...activeGroup, pendingInvites });
-              showSuccess(`Invitación enviada a @${targetUsername.trim().toLowerCase()}`);
+              if (e1) throw e1;
+              await loadGroupInvites(activeGroup.id);
+              showSuccess(`Invitación enviada a @${uname}`);
             } catch (e) { showError(`No se pudo enviar la invitación: ${e?.message || e}`); }
           }}
           onCancelInvite={async (memberId) => {
             try {
-              const pending = activeGroup.pendingInvites?.[memberId];
+              const pending = groupInvites.find((i) => i.memberId === memberId);
               if (!pending) return;
-              // Borrar del storage de invitaciones del usuario destino
-              const existingInvites = await getInvites(pending.targetUserId);
-              const filtered = existingInvites.filter(i => i.inviteId !== pending.inviteId);
-              await saveInvites(pending.targetUserId, filtered);
-              // Quitar del grupo
-              const pendingInvites = { ...(activeGroup.pendingInvites || {}) };
-              delete pendingInvites[memberId];
-              await saveGroup({ ...activeGroup, pendingInvites });
+              const { error } = await supabase.from("invites").delete().eq("id", pending.inviteId);
+              if (error) throw error;
+              await loadGroupInvites(activeGroup.id);
               showInfo(`Invitación a @${pending.username} cancelada`);
             } catch (e) { showError(`No se pudo cancelar la invitación: ${e?.message || e}`); }
           }}
@@ -860,8 +995,19 @@ function AppMain({ session, onLogout }) {
         <RecurringList
           group={activeGroup}
           onBack={() => setView({ screen: "group", groupId: activeGroup.id })}
-          onSave={async (g) => {
-            try { await saveGroup(g); } catch (e) { showError(`No se pudo actualizar: ${e?.message || e}`); }
+          onTogglePause={async (recurringId, paused) => {
+            try {
+              const { error } = await supabase.from("recurring_expenses").update({ paused }).eq("id", recurringId);
+              if (error) throw error;
+              await reloadGroup(activeGroup.id);
+            } catch (e) { showError(`No se pudo actualizar: ${e?.message || e}`); }
+          }}
+          onRemove={async (recurringId) => {
+            try {
+              const { error } = await supabase.from("recurring_expenses").delete().eq("id", recurringId);
+              if (error) throw error;
+              await reloadGroup(activeGroup.id);
+            } catch (e) { showError(`No se pudo actualizar: ${e?.message || e}`); }
           }}
         />
       )}
@@ -874,20 +1020,20 @@ function AppMain({ session, onLogout }) {
           onLogout={onLogout}
           onAcceptInvite={handleAcceptInvite}
           onRejectInvite={handleRejectInvite}
-          onSave={async ({ displayName, newPassword, photoBase64 }) => {
+          onSave={async ({ displayName, newPassword, photoUrl }) => {
             try {
-              const index = await getUserIndex();
-              const entry = index[session.username];
-              if (newPassword) entry.passwordHash = hashPassword(newPassword);
-              entry.displayName = displayName;
-              await saveUserIndex(index);
-              const userData = await getUserData(session.userId) || {};
-              await saveUserData(session.userId, { ...userData, displayName, photoBase64: photoBase64 || null });
-              // Actualizar sesión en memoria y storage
-              const newSess = { ...session, displayName, photoBase64: photoBase64 || null };
-              await window.storage.set("current-session", JSON.stringify(newSess), false);
-              // Forzar recarga para que el session se actualice
-              window.location.reload();
+              const { error: e1 } = await supabase
+                .from("profiles")
+                .update({ display_name: displayName, photo_url: photoUrl })
+                .eq("id", session.userId);
+              if (e1) throw e1;
+              if (newPassword) {
+                const { error: e2 } = await supabase.auth.updateUser({ password: newPassword });
+                if (e2) throw e2;
+              }
+              await refreshProfile();
+              showSuccess("Perfil actualizado.");
+              setView({ screen: "home" });
             } catch (e) { showError(`No se pudo guardar: ${e?.message || e}`); }
           }}
         />
@@ -924,8 +1070,8 @@ function Home({ groups, loading, session, invites = [], onOpen, onNew, onProfile
             aria-label="Perfil"
             style={{ width: 40, height: 40, borderRadius: "50%", border: "2px solid #ECE3D3", overflow: "hidden", background: "#E8DFD0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
           >
-            {session?.photoBase64
-              ? <img src={session.photoBase64} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            {session?.photoUrl
+              ? <img src={session.photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               : <User size={20} color="#A89A87" />
             }
           </button>
@@ -953,9 +1099,9 @@ function Home({ groups, loading, session, invites = [], onOpen, onNew, onProfile
               <li key={g.id}>
                 <button style={styles.groupCard} onClick={() => onOpen(g.id)}>
                   <div style={styles.groupCardLeft}>
-                    <div style={{ width: 48, height: 48, minWidth: 48, borderRadius: 12, overflow: "hidden", background: g.photoBase64 ? "transparent" : "#E8DFD0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      {g.photoBase64
-                        ? <img src={g.photoBase64} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    <div style={{ width: 48, height: 48, minWidth: 48, borderRadius: 12, overflow: "hidden", background: g.photoUrl ? "transparent" : "#E8DFD0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      {g.photoUrl
+                        ? <img src={g.photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                         : <User size={22} color="#A89A87" />
                       }
                     </div>
@@ -992,7 +1138,7 @@ function NewGroup({ onCancel, onCreate, session }) {
   const [members, setMembers] = useState([""]);
   const [baseCurrency, setBaseCurrency] = useState("USD");
   const [err, setErr] = useState("");
-  const [photoBase64, setPhotoBase64, handlePhoto] = useImageUpload(null, setErr);
+  const { previewUrl: photoUrl, pendingFile, removed, handleImageChange: handlePhoto, clear: clearPhoto } = useImageUpload(null, setErr);
   const [saving, setSaving] = useState(false);
 
   const updateMember = (i, val) => setMembers((prev) => prev.map((m, idx) => (idx === i ? val : m)));
@@ -1002,22 +1148,22 @@ function NewGroup({ onCancel, onCreate, session }) {
   const handleCreate = async () => {
     if (!name.trim()) { setErr("Ponle un nombre al grupo."); return; }
     setSaving(true);
-    // Creador siempre incluido como miembro vinculado
-    const myMember = { id: uid(), name: session.displayName, linkedUserId: session.userId };
-    const otherMembers = members.map((n) => n.trim()).filter(Boolean).map((n) => ({ id: uid(), name: n }));
-    await onCreate({
-      id: uid(),
-      name: name.trim(),
-      members: [myMember, ...otherMembers],
-      expenses: [],
-      payments: [],
-      recurring: [],
-      baseCurrency,
-      rates: {},
-      photoBase64: photoBase64 || null,
-      createdAt: Date.now(),
-    });
-    setSaving(false);
+    try {
+      const resolvedPhotoUrl = await resolvePhotoUrl({ pendingFile, removed, currentUrl: null });
+      // Creador siempre incluido como miembro vinculado
+      const myMember = { name: session.displayName, linkedUserId: session.userId };
+      const otherMembers = members.map((n) => n.trim()).filter(Boolean).map((n) => ({ name: n }));
+      await onCreate({
+        name: name.trim(),
+        baseCurrency,
+        members: [myMember, ...otherMembers],
+        photoUrl: resolvedPhotoUrl,
+      });
+    } catch (e) {
+      setErr(`No se pudo subir la foto: ${e?.message || e}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -1026,19 +1172,19 @@ function NewGroup({ onCancel, onCreate, session }) {
       <div style={styles.form}>
         {/* Foto del grupo */}
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 72, height: 72, minWidth: 72, borderRadius: 16, overflow: "hidden", background: photoBase64 ? "transparent" : "#E8DFD0", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #DDD2BE" }}>
-            {photoBase64
-              ? <img src={photoBase64} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <div style={{ width: 72, height: 72, minWidth: 72, borderRadius: 16, overflow: "hidden", background: photoUrl ? "transparent" : "#E8DFD0", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #DDD2BE" }}>
+            {photoUrl
+              ? <img src={photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               : <User size={28} color="#A89A87" />
             }
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <label style={{ ...styles.btnDashed, cursor: "pointer", fontSize: 13 }}>
-              <Camera size={14} /> {photoBase64 ? "Cambiar foto" : "Añadir foto"}
+              <Camera size={14} /> {photoUrl ? "Cambiar foto" : "Añadir foto"}
               <input type="file" accept="image/*" style={{ display: "none" }} onChange={handlePhoto} />
             </label>
-            {photoBase64 && (
-              <button style={{ ...styles.btnGhostSmall, fontSize: 12 }} onClick={() => setPhotoBase64(null)}>Quitar foto</button>
+            {photoUrl && (
+              <button style={{ ...styles.btnGhostSmall, fontSize: 12 }} onClick={clearPhoto}>Quitar foto</button>
             )}
           </div>
         </div>
@@ -1094,13 +1240,13 @@ function NewGroup({ onCancel, onCreate, session }) {
    EDIT GROUP (nombre, moneda, tasas, miembros)
    ========================================================================= */
 
-function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, showError }) {
+function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, groupInvites = [], showError }) {
   const [name, setName] = useState(group.name);
   const [baseCurrency, setBaseCurrency] = useState(group.baseCurrency);
   const [rates, setRates] = useState(group.rates || {});
   const [members, setMembers] = useState(group.members);
   const [newMemberName, setNewMemberName] = useState("");
-  const [photoBase64, setPhotoBase64, handlePhoto] = useImageUpload(group.photoBase64 || null, showError);
+  const { previewUrl: photoUrl, pendingFile, removed, handleImageChange: handlePhoto, clear: clearPhoto } = useImageUpload(group.photoUrl || null, showError);
   const [saving, setSaving] = useState(false);
   const [confirmRemoveMemberId, setConfirmRemoveMemberId] = useState(null);
   const [categories, setCategories] = useState(() => groupCategories(group).map(c => ({ ...c })));
@@ -1143,8 +1289,30 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
     if (members.length < 2) return showError("El grupo necesita al menos dos personas.");
     if (categories.some(c => !c.label.trim())) return showError("Todas las categorías deben tener un nombre.");
     setSaving(true);
-    await onSave({ ...group, name: name.trim(), baseCurrency, rates, members, categories, photoBase64: photoBase64 || null });
-    setSaving(false);
+    try {
+      const resolvedPhotoUrl = await resolvePhotoUrl({ pendingFile, removed, currentUrl: group.photoUrl });
+
+      const originalMemberIds = new Set(group.members.map((m) => m.id));
+      const currentMemberIds = new Set(members.map((m) => m.id));
+      const membersToAdd = members.filter((m) => !originalMemberIds.has(m.id));
+      const memberIdsToRemove = group.members.filter((m) => !currentMemberIds.has(m.id)).map((m) => m.id);
+
+      const originalCategoryIds = new Set(groupCategories(group).map((c) => c.id));
+      const currentCategoryIds = new Set(categories.map((c) => c.id));
+      const indexedCategories = categories.map((c, i) => ({ ...c, sortOrder: i }));
+      const categoriesToAdd = indexedCategories.filter((c) => !originalCategoryIds.has(c.id));
+      const categoriesToUpdate = indexedCategories.filter((c) => originalCategoryIds.has(c.id));
+      const categoryIdsToRemove = groupCategories(group).filter((c) => !currentCategoryIds.has(c.id)).map((c) => c.id);
+
+      await onSave({
+        name: name.trim(), baseCurrency, rates, photoUrl: resolvedPhotoUrl,
+        membersToAdd, memberIdsToRemove, categoriesToAdd, categoriesToUpdate, categoryIdsToRemove,
+      });
+    } catch (e) {
+      showError(`No se pudo guardar: ${e?.message || e}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const addCategory = () => {
@@ -1182,19 +1350,19 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
       <div style={styles.form}>
         {/* Foto del grupo */}
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 72, height: 72, minWidth: 72, borderRadius: 16, overflow: "hidden", background: photoBase64 ? "transparent" : "#E8DFD0", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #DDD2BE" }}>
-            {photoBase64
-              ? <img src={photoBase64} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <div style={{ width: 72, height: 72, minWidth: 72, borderRadius: 16, overflow: "hidden", background: photoUrl ? "transparent" : "#E8DFD0", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #DDD2BE" }}>
+            {photoUrl
+              ? <img src={photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               : <User size={28} color="#A89A87" />
             }
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <label style={{ ...styles.btnDashed, cursor: "pointer", fontSize: 13 }}>
-              <Camera size={14} /> {photoBase64 ? "Cambiar foto" : "Añadir foto"}
+              <Camera size={14} /> {photoUrl ? "Cambiar foto" : "Añadir foto"}
               <input type="file" accept="image/*" style={{ display: "none" }} onChange={handlePhoto} />
             </label>
-            {photoBase64 && (
-              <button style={{ ...styles.btnGhostSmall, fontSize: 12 }} onClick={() => setPhotoBase64(null)}>Quitar foto</button>
+            {photoUrl && (
+              <button style={{ ...styles.btnGhostSmall, fontSize: 12 }} onClick={clearPhoto}>Quitar foto</button>
             )}
           </div>
         </div>
@@ -1242,9 +1410,9 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
                 <span style={{ ...styles.avatar, background: colorFor(m.id) }}>{initials(m.name)}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <span style={{ display: "block" }}>{m.name}</span>
-                  {group.pendingInvites?.[m.id] && (
+                  {groupInvites.find((i) => i.memberId === m.id) && (
                     <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#3B6E62", fontFamily: "system-ui, sans-serif" }}>
-                      <Send size={10} /> Invitación enviada a @{group.pendingInvites[m.id].username}
+                      <Send size={10} /> Invitación enviada a @{groupInvites.find((i) => i.memberId === m.id).username}
                     </span>
                   )}
                 </div>
@@ -1354,35 +1522,37 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
           </button>
         )}
 
-        {/* Borrar grupo */}
-        <div style={styles.dangerZone}>
-          {!confirmGroupDelete ? (
-            <button style={styles.btnDangerOutline} onClick={() => setConfirmGroupDelete(true)}>
-              <Trash2 size={15} /> Borrar este grupo
-            </button>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <p style={{ margin: 0, fontSize: 13, fontFamily: "system-ui, sans-serif", color: "#76695A" }}>
-                ¿Borrar "{group.name}" y todo su historial? Esta acción no se puede deshacer.
-              </p>
-              <input
-                style={{ ...styles.input, fontSize: 14 }}
-                placeholder='Escribe "Confirmar" para continuar'
-                value={deleteConfirmText}
-                onChange={e => setDeleteConfirmText(e.target.value)}
-              />
-              <div style={{ display: "flex", gap: 8 }}>
-                <button style={styles.btnGhostSmall} onClick={() => { setConfirmGroupDelete(false); setDeleteConfirmText(""); }}>Cancelar</button>
-                <button
-                  style={{ ...styles.btnDangerSmall, opacity: deleteConfirmText === "Confirmar" ? 1 : 0.4, cursor: deleteConfirmText === "Confirmar" ? "pointer" : "not-allowed" }}
-                  onClick={() => deleteConfirmText === "Confirmar" && onDeleteGroup()}
-                >
-                  Confirmar
-                </button>
+        {/* Borrar grupo — solo el creador, la RLS de todas formas lo impide para el resto */}
+        {group.creatorId === session?.userId && (
+          <div style={styles.dangerZone}>
+            {!confirmGroupDelete ? (
+              <button style={styles.btnDangerOutline} onClick={() => setConfirmGroupDelete(true)}>
+                <Trash2 size={15} /> Borrar este grupo
+              </button>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <p style={{ margin: 0, fontSize: 13, fontFamily: "system-ui, sans-serif", color: "#76695A" }}>
+                  ¿Borrar "{group.name}" y todo su historial? Esta acción no se puede deshacer.
+                </p>
+                <input
+                  style={{ ...styles.input, fontSize: 14 }}
+                  placeholder='Escribe "Confirmar" para continuar'
+                  value={deleteConfirmText}
+                  onChange={e => setDeleteConfirmText(e.target.value)}
+                />
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button style={styles.btnGhostSmall} onClick={() => { setConfirmGroupDelete(false); setDeleteConfirmText(""); }}>Cancelar</button>
+                  <button
+                    style={{ ...styles.btnDangerSmall, opacity: deleteConfirmText === "Confirmar" ? 1 : 0.4, cursor: deleteConfirmText === "Confirmar" ? "pointer" : "not-allowed" }}
+                    onClick={() => deleteConfirmText === "Confirmar" && onDeleteGroup()}
+                  >
+                    Confirmar
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1392,7 +1562,7 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
    GROUP VIEW
    ========================================================================= */
 
-function GroupView({ group, onBack, onAddExpense, onOpenExpense, onSettleUp, onEditGroup, onRecurring, onSave, onDeleteGroup }) {
+function GroupView({ group, onBack, onAddExpense, onOpenExpense, onSettleUp, onEditGroup, onRecurring, onSoftDeleteExpense }) {
   const [tab, setTab] = useState("activity"); // activity | balances | individual
   const [selectedMember, setSelectedMember] = useState(group.members[0]?.id || null);
   const { members, expenses, payments = [], baseCurrency } = group;
@@ -1416,7 +1586,7 @@ function GroupView({ group, onBack, onAddExpense, onOpenExpense, onSettleUp, onE
   }, [activeExpenses, payments]);
 
   const handleDeleteExpense = (expenseId) => {
-    onSave({ ...group, expenses: group.expenses.map((e) => (e.id === expenseId ? { ...e, deleted: true } : e)) });
+    onSoftDeleteExpense(expenseId);
   };
 
   return (
@@ -1638,7 +1808,7 @@ function GroupView({ group, onBack, onAddExpense, onOpenExpense, onSettleUp, onE
                     {/* Texto */}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ ...styles.expenseTitle, display: "flex", alignItems: "center", gap: 4 }}>
-                        {e.imageBase64 ? <Camera size={11} color="#A8967A" style={{ flexShrink: 0 }} /> : null}
+                        {e.imageUrl ? <Camera size={11} color="#A8967A" style={{ flexShrink: 0 }} /> : null}
                         <span>{e.description}</span>
                         {e.recurringId ? <Repeat size={11} color="#A8967A" style={{ flexShrink: 0 }} /> : null}
                       </p>
@@ -1779,8 +1949,8 @@ function ExpenseDetail({ group, expenseId, onBack, onEdit }) {
           </div>
         </div>
 
-        {e.imageBase64 && (
-          <img src={e.imageBase64} alt="" style={{ width: "100%", borderRadius: 12, border: "1px solid #ECE3D3", objectFit: "cover", maxHeight: 220 }} />
+        {e.imageUrl && (
+          <img src={e.imageUrl} alt="" style={{ width: "100%", borderRadius: 12, border: "1px solid #ECE3D3", objectFit: "cover", maxHeight: 220 }} />
         )}
 
         {e.notes && (
@@ -1805,7 +1975,7 @@ function NewExpense({ group, expenseId, onCancel, onSave, onDelete, onSaveRecurr
   const [description, setDescription] = useState(existing?.description || "");
   const [amount, setAmount] = useState(existing ? String(existing.amount) : "");
   const [currency, setCurrency] = useState(existing?.currency || baseCurrency);
-  const [category, setCategory] = useState(existing?.category || "general");
+  const [category, setCategory] = useState(existing?.category || groupCategories(group)[0]?.id);
   const [notes, setNotes] = useState(existing?.notes || "");
   const [date, setDate] = useState(existing ? dateInputValue(existing.date) : todayInputValue());
 
@@ -1841,7 +2011,7 @@ function NewExpense({ group, expenseId, onCancel, onSave, onDelete, onSaveRecurr
   const [splitExpanded, setSplitExpanded] = useState(false);
   const [notesOpen, setNotesOpen] = useState(!!(existing?.notes));
   const [err, setErr] = useState("");
-  const [imageBase64, setImageBase64, handleImageChange] = useImageUpload(existing?.imageBase64 || null, setErr);
+  const { previewUrl: imageUrl, pendingFile, removed, handleImageChange, clear: clearImage } = useImageUpload(existing?.imageUrl || null, setErr);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -1923,49 +2093,42 @@ function NewExpense({ group, expenseId, onCancel, onSave, onDelete, onSaveRecurr
     if (v) return setErr(v);
     const dateMs = new Date(date + "T12:00:00").getTime();
     const payers = buildPayers();
-    // paidBy legacy: el primer/único pagador (para mostrar en actividad)
-    const paidBy = Object.keys(payers)[0];
     setSaving(true);
+    try {
+      if (makeRecurring && !existing) {
+        await onSaveRecurring({
+          description: description.trim(),
+          amount: numericAmount,
+          currency,
+          category,
+          payers,
+          splitMode,
+          shares: buildShares(),
+          frequency,
+          nextDate: dateMs,
+        });
+        return;
+      }
 
-    if (makeRecurring && !existing) {
-      await onSaveRecurring({
-        id: uid(),
+      const resolvedImageUrl = await resolvePhotoUrl({ pendingFile, removed, currentUrl: existing?.imageUrl });
+      await onSave({
+        id: existing?.id,
         description: description.trim(),
         amount: numericAmount,
         currency,
         category,
         notes: notes.trim(),
-        paidBy,
+        date: dateMs,
         payers,
         splitMode,
         shares: buildShares(),
-        frequency,
-        nextDate: dateMs,
-        paused: false,
-        createdAt: Date.now(),
+        imageUrl: resolvedImageUrl,
       });
+    } catch (e) {
+      setErr(`No se pudo guardar: ${e?.message || e}`);
+    } finally {
       setSaving(false);
-      return;
     }
-
-    await onSave({
-      id: existing?.id || uid(),
-      description: description.trim(),
-      amount: numericAmount,
-      currency,
-      category,
-      notes: notes.trim(),
-      date: dateMs,
-      paidBy,
-      payers,
-      splitMode,
-      shares: buildShares(),
-      imageBase64: imageBase64 || null,
-      createdAt: existing?.createdAt || Date.now(),
-      recurringId: existing?.recurringId,
-      deleted: false,
-    });
-    setSaving(false);
   };
 
   return (
@@ -2195,7 +2358,7 @@ function NewExpense({ group, expenseId, onCancel, onSave, onDelete, onSaveRecurr
               ))}
             </select>
           </label>
-          <label title="Añadir foto" style={{ width: 44, height: 44, borderRadius: 10, border: `1.5px solid ${imageBase64 ? "#C75D3B" : "#DDD2BE"}`, background: imageBase64 ? "#C75D3B1a" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, color: imageBase64 ? "#C75D3B" : "#6B6355" }}>
+          <label title="Añadir foto" style={{ width: 44, height: 44, borderRadius: 10, border: `1.5px solid ${imageUrl ? "#C75D3B" : "#DDD2BE"}`, background: imageUrl ? "#C75D3B1a" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, color: imageUrl ? "#C75D3B" : "#6B6355" }}>
             <Camera size={18} />
             <input type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageChange} />
           </label>
@@ -2204,10 +2367,10 @@ function NewExpense({ group, expenseId, onCancel, onSave, onDelete, onSaveRecurr
           </button>
         </div>
 
-        {imageBase64 && (
+        {imageUrl && (
           <div style={{ position: "relative" }}>
-            <img src={imageBase64} alt="Adjunto del gasto" style={{ width: "100%", borderRadius: 12, maxHeight: 180, objectFit: "cover", border: "1px solid #ECE3D3" }} />
-            <button onClick={() => setImageBase64(null)} style={{ position: "absolute", top: 8, right: 8, width: 28, height: 28, borderRadius: "50%", border: "none", background: "rgba(0,0,0,0.5)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }} aria-label="Quitar imagen">
+            <img src={imageUrl} alt="Adjunto del gasto" style={{ width: "100%", borderRadius: 12, maxHeight: 180, objectFit: "cover", border: "1px solid #ECE3D3" }} />
+            <button onClick={clearImage} style={{ position: "absolute", top: 8, right: 8, width: 28, height: 28, borderRadius: "50%", border: "none", background: "rgba(0,0,0,0.5)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }} aria-label="Quitar imagen">
               <X size={14} />
             </button>
           </div>
@@ -2264,17 +2427,17 @@ function SettleUp({ group, prefill, onCancel, onSave }) {
     if (from === to) return setErr("Tienen que ser dos personas distintas.");
     if (!validAmount) return setErr("Ingresa un monto válido.");
     setSaving(true);
-    await onSave({
-      id: uid(),
-      from, to,
-      amount: numericAmount,
-      currency,
-      date: new Date(date + "T12:00:00").getTime(),
-      note: note.trim(),
-      createdAt: Date.now(),
-      deleted: false,
-    });
-    setSaving(false);
+    try {
+      await onSave({
+        from, to,
+        amount: numericAmount,
+        currency,
+        date: new Date(date + "T12:00:00").getTime(),
+        note: note.trim(),
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -2335,16 +2498,12 @@ function SettleUp({ group, prefill, onCancel, onSave }) {
    RECURRING LIST
    ========================================================================= */
 
-function RecurringList({ group, onBack, onSave }) {
-  const { recurring = [], members, baseCurrency } = group;
+function RecurringList({ group, onBack, onTogglePause, onRemove }) {
+  const { recurring = [], members } = group;
   const nameOf = (id) => members.find((m) => m.id === id)?.name || "—";
 
-  const togglePause = (id) => {
-    onSave({ ...group, recurring: recurring.map((r) => (r.id === id ? { ...r, paused: !r.paused } : r)) });
-  };
-  const remove = (id) => {
-    onSave({ ...group, recurring: recurring.filter((r) => r.id !== id) });
-  };
+  const togglePause = (id, paused) => onTogglePause(id, paused);
+  const remove = (id) => onRemove(id);
 
   return (
     <div style={styles.screen}>
@@ -2368,7 +2527,7 @@ function RecurringList({ group, onBack, onSave }) {
                 </p>
               </div>
               <div style={{ display: "flex", gap: 4 }}>
-                <button style={styles.iconBtnGhost} onClick={() => togglePause(r.id)} aria-label={r.paused ? "Reanudar" : "Pausar"}>
+                <button style={styles.iconBtnGhost} onClick={() => togglePause(r.id, !r.paused)} aria-label={r.paused ? "Reanudar" : "Pausar"}>
                   {r.paused ? <RefreshCw size={15} /> : <X size={15} />}
                 </button>
                 <button style={styles.iconBtnGhost} onClick={() => remove(r.id)} aria-label="Eliminar recurrente"><Trash2 size={15} /></button>
@@ -2419,23 +2578,29 @@ function ConfirmInline({ message, confirmLabel = "Confirmar", onCancel, onConfir
 
 function AuthScreen({ onLogin, onRegister }) {
   const [mode, setMode] = useState("login");
+  const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [err, setErr] = useState("");
+  const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handle = async () => {
-    setErr(""); setLoading(true);
+    setErr(""); setInfo(""); setLoading(true);
     try {
       if (mode === "register" && password !== confirmPassword) {
         throw new Error("Las contraseñas no coinciden.");
       }
       if (mode === "login") {
-        await onLogin(username, password);
+        await onLogin(email, password);
       } else {
-        await onRegister(username, password, displayName);
+        const { needsEmailConfirmation } = await onRegister(email, username, password, displayName);
+        if (needsEmailConfirmation) {
+          setInfo("Te enviamos un correo para confirmar tu cuenta. Confírmalo y vuelve a entrar.");
+          setMode("login");
+        }
       }
     } catch (e) {
       setErr(e?.message || "Error desconocido");
@@ -2447,7 +2612,7 @@ function AuthScreen({ onLogin, onRegister }) {
   return (
     <div style={{ ...styles.app, alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#F7F2E9" }}>
       <div style={{ width: "100%", maxWidth: 400, background: "#FBF8F2", borderRadius: 20, padding: "36px 28px", boxShadow: "0 4px 32px rgba(0,0,0,0.08)", margin: "0 16px" }}>
-        <h1 style={{ ...styles.h1, textAlign: "center", marginBottom: 4 }}>SplitLedger</h1>
+        <h1 style={{ ...styles.h1, textAlign: "center", marginBottom: 4 }}>Evenly</h1>
         <p style={{ ...styles.muted, padding: 0, textAlign: "center", marginBottom: 28 }}>
           {mode === "login" ? "Bienvenido de vuelta" : "Crea tu cuenta"}
         </p>
@@ -2459,9 +2624,15 @@ function AuthScreen({ onLogin, onRegister }) {
               <input style={styles.input} value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Tu nombre" autoFocus />
             </label>
           )}
+          {mode === "register" && (
+            <label style={styles.label}>
+              Usuario
+              <input style={styles.input} value={username} onChange={e => setUsername(e.target.value)} placeholder="nombre_de_usuario" autoCapitalize="none" />
+            </label>
+          )}
           <label style={styles.label}>
-            Usuario
-            <input style={styles.input} value={username} onChange={e => setUsername(e.target.value)} placeholder="nombre_de_usuario" autoCapitalize="none" autoFocus={mode === "login"} onKeyDown={e => e.key === "Enter" && handle()} />
+            Email
+            <input style={styles.input} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="tu@email.com" autoCapitalize="none" autoFocus={mode === "login"} onKeyDown={e => e.key === "Enter" && handle()} />
           </label>
           <label style={styles.label}>
             Contraseña
@@ -2474,12 +2645,13 @@ function AuthScreen({ onLogin, onRegister }) {
             </label>
           )}
           {err && <p style={styles.errText}>{err}</p>}
+          {info && <p style={{ ...styles.muted, padding: 0, color: "#3B6E62" }}>{info}</p>}
           <button style={{ ...styles.btnPrimary, marginTop: 4 }} onClick={handle} disabled={loading}>
             {loading ? "Un momento…" : mode === "login" ? "Entrar" : "Crear cuenta"}
           </button>
           <button
             style={{ background: "none", border: "none", fontSize: 13.5, fontFamily: "system-ui, sans-serif", color: "#A8754A", cursor: "pointer", textAlign: "center", padding: "4px 0" }}
-            onClick={() => { setMode(mode === "login" ? "register" : "login"); setErr(""); setConfirmPassword(""); }}
+            onClick={() => { setMode(mode === "login" ? "register" : "login"); setErr(""); setInfo(""); setConfirmPassword(""); }}
           >
             {mode === "login" ? "¿No tienes cuenta? Regístrate" : "¿Ya tienes cuenta? Entra"}
           </button>
@@ -2493,14 +2665,13 @@ function AuthScreen({ onLogin, onRegister }) {
    INVITE SCREEN
    ========================================================================= */
 
-function InviteScreen({ group, session, onBack, onSend, onCancelInvite }) {
+function InviteScreen({ group, session, groupInvites = [], onBack, onSend, onCancelInvite }) {
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [targetUsername, setTargetUsername] = useState("");
   const [err, setErr] = useState("");
   const [sending, setSending] = useState(false);
   const [cancelingId, setCancelingId] = useState(null);
 
-  const pendingInvites = group.pendingInvites || {};
   const invitableMembers = group.members.filter(m => !m.linkedUserId);
 
   const handle = async () => {
@@ -2529,7 +2700,7 @@ function InviteScreen({ group, session, onBack, onSend, onCancelInvite }) {
             <p style={styles.muted}>Todos los miembros ya tienen usuario vinculado.</p>
           )}
           {invitableMembers.map(m => {
-            const pending = pendingInvites[m.id];
+            const pending = groupInvites.find(i => i.memberId === m.id);
             const isSelected = selectedMemberId === m.id;
             return (
               <button key={m.id}
@@ -2597,15 +2768,16 @@ function ProfileScreen({ session, invites = [], onBack, onLogout, onAcceptInvite
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
-  const [photoBase64, setPhotoBase64, handlePhoto] = useImageUpload(session.photoBase64 || null, setErr);
+  const { previewUrl: photoUrl, pendingFile, removed, handleImageChange: handlePhoto, clear: clearPhoto } = useImageUpload(session.photoUrl || null, setErr);
 
   const handleSave = async () => {
     setErr("");
     if (!displayName.trim()) return setErr("El nombre no puede estar vacío.");
     setSaving(true);
     try {
-      await onSave({ displayName: displayName.trim(), newPassword: null, photoBase64 });
-    } catch (e) { setErr(e?.message || "Error al guardar"); setSaving(false); }
+      const resolvedPhotoUrl = await resolvePhotoUrl({ pendingFile, removed, currentUrl: session.photoUrl });
+      await onSave({ displayName: displayName.trim(), newPassword: null, photoUrl: resolvedPhotoUrl });
+    } catch (e) { setErr(e?.message || "Error al guardar"); } finally { setSaving(false); }
   };
 
   const handleChangePassword = async () => {
@@ -2613,13 +2785,13 @@ function ProfileScreen({ session, invites = [], onBack, onLogout, onAcceptInvite
     if (!currentPassword) return setErr("Escribe tu contraseña actual.");
     if (!newPassword || newPassword.length < 4) return setErr("La nueva contraseña debe tener al menos 4 caracteres.");
     if (newPassword !== confirmPassword) return setErr("Las contraseñas no coinciden.");
-    const index = await getUserIndex();
-    const entry = index[session.username];
-    if (entry?.passwordHash !== hashPassword(currentPassword)) return setErr("La contraseña actual es incorrecta.");
     setSaving(true);
     try {
-      await onSave({ displayName: displayName.trim(), newPassword, photoBase64 });
-    } catch (e) { setErr(e?.message || "Error al guardar"); setSaving(false); }
+      const { error } = await supabase.auth.signInWithPassword({ email: session.email, password: currentPassword });
+      if (error) throw new Error("La contraseña actual es incorrecta.");
+      const resolvedPhotoUrl = await resolvePhotoUrl({ pendingFile, removed, currentUrl: session.photoUrl });
+      await onSave({ displayName: displayName.trim(), newPassword, photoUrl: resolvedPhotoUrl });
+    } catch (e) { setErr(e?.message || "Error al guardar"); } finally { setSaving(false); }
   };
 
   return (
@@ -2629,18 +2801,18 @@ function ProfileScreen({ session, invites = [], onBack, onLogout, onAcceptInvite
 
         {/* Foto de perfil */}
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{ width: 72, height: 72, minWidth: 72, borderRadius: "50%", overflow: "hidden", background: photoBase64 ? "transparent" : "#E8DFD0", display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #DDD2BE" }}>
-            {photoBase64
-              ? <img src={photoBase64} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <div style={{ width: 72, height: 72, minWidth: 72, borderRadius: "50%", overflow: "hidden", background: photoUrl ? "transparent" : "#E8DFD0", display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #DDD2BE" }}>
+            {photoUrl
+              ? <img src={photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               : <User size={28} color="#A89A87" />
             }
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <label style={{ ...styles.btnDashed, cursor: "pointer", fontSize: 13 }}>
-              <Camera size={14} /> {photoBase64 ? "Cambiar foto" : "Añadir foto"}
+              <Camera size={14} /> {photoUrl ? "Cambiar foto" : "Añadir foto"}
               <input type="file" accept="image/*" style={{ display: "none" }} onChange={handlePhoto} />
             </label>
-            {photoBase64 && <button style={{ ...styles.btnGhostSmall, fontSize: 12 }} onClick={() => setPhotoBase64(null)}>Quitar foto</button>}
+            {photoUrl && <button style={{ ...styles.btnGhostSmall, fontSize: 12 }} onClick={clearPhoto}>Quitar foto</button>}
           </div>
         </div>
 

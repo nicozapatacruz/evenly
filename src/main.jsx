@@ -1,4 +1,3 @@
-import "./storagePolyfill.js"; // debe cargarse antes que SplitLedger
 import React from "react";
 import ReactDOM from "react-dom/client";
 import SplitLedger from "./SplitLedger.jsx";

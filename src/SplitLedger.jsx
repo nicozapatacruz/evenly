@@ -1696,7 +1696,7 @@ function GroupView({ group, onBack, onAddExpense, onOpenExpense, onSettleUp, onE
           <p style={styles.simplifyNote}>
             {txns.length === 0 ? "Sin pagos pendientes." : `Simplificado a ${txns.length} pago${txns.length > 1 ? "s" : ""} — el mínimo posible para saldar el grupo.`}
           </p>
-          <button style={styles.btnSecondary} onClick={() => onSettleUp(null)}>
+          <button style={{ ...styles.btnSecondary, width: "calc(100% - 40px)", margin: "4px 20px 0" }} onClick={() => onSettleUp(null)}>
             <HandCoins size={16} /> Registrar un pago
           </button>
         </div>
@@ -2849,7 +2849,7 @@ function ProfileScreen({ session, invites = [], onBack, onLogout, onAcceptInvite
 
             <label style={styles.label}>
               Nombre visible
-              <input style={styles.input} value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Tu nombre" autoFocus />
+              <input style={styles.input} value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Tu nombre" />
             </label>
 
             <button style={styles.btnSecondary} onClick={onChangePassword}>
@@ -2857,46 +2857,48 @@ function ProfileScreen({ session, invites = [], onBack, onLogout, onAcceptInvite
             </button>
 
             {err && <p style={styles.errText}>{err}</p>}
-            <div style={{ display: "flex", gap: 8 }}>
-              <button style={styles.btnGhostSmall} onClick={cancelEdit}>Cancelar</button>
-              <button style={{ ...styles.btnPrimary, flex: 1 }} onClick={handleSave} disabled={saving}>
-                {saving ? "Guardando…" : "Guardar cambios"}
-              </button>
-            </div>
+            <button style={styles.btnPrimary} onClick={handleSave} disabled={saving}>
+              {saving ? "Guardando…" : "Guardar cambios"}
+            </button>
+            <button style={styles.btnSecondary} onClick={cancelEdit}>Cancelar</button>
           </>
         )}
 
-        {/* Invitaciones pendientes */}
-        <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
-          <p style={{ margin: 0, padding: "12px 16px 8px", fontSize: 13, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#544A3C", borderBottom: invites.length ? "1px solid #F0EBE2" : "none", display: "flex", alignItems: "center", gap: 8 }}>
-            <Bell size={15} /> Invitaciones ({invites.length})
-          </p>
-          {invites.map((inv) => (
-            <div key={inv.inviteId} style={{ padding: "10px 16px", borderBottom: "1px solid #F0EBE2", display: "flex", flexDirection: "column", gap: 6 }}>
-              <p style={{ margin: 0, fontSize: 13.5, fontFamily: "system-ui, sans-serif" }}>
-                <strong>{inv.fromUsername}</strong> te invitó a <strong>{inv.groupName}</strong> como <strong>{inv.memberName}</strong>
+        {!editing && (
+          <>
+            {/* Invitaciones pendientes */}
+            <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
+              <p style={{ margin: 0, padding: "12px 16px 8px", fontSize: 13, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#544A3C", borderBottom: invites.length ? "1px solid #F0EBE2" : "none", display: "flex", alignItems: "center", gap: 8 }}>
+                <Bell size={15} /> Invitaciones ({invites.length})
               </p>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button style={styles.btnGhostSmall} onClick={() => onRejectInvite(inv)}>Rechazar</button>
-                <button style={{ ...styles.btnDangerSmall, background: "#3B6E62" }} onClick={() => onAcceptInvite(inv)}>Aceptar</button>
-              </div>
+              {invites.map((inv) => (
+                <div key={inv.inviteId} style={{ padding: "10px 16px", borderBottom: "1px solid #F0EBE2", display: "flex", flexDirection: "column", gap: 6 }}>
+                  <p style={{ margin: 0, fontSize: 13.5, fontFamily: "system-ui, sans-serif" }}>
+                    <strong>{inv.fromUsername}</strong> te invitó a <strong>{inv.groupName}</strong> como <strong>{inv.memberName}</strong>
+                  </p>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button style={styles.btnGhostSmall} onClick={() => onRejectInvite(inv)}>Rechazar</button>
+                    <button style={{ ...styles.btnDangerSmall, background: "#3B6E62" }} onClick={() => onAcceptInvite(inv)}>Aceptar</button>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
 
-        {/* Cerrar sesión con confirmación */}
-        {!showLogoutConfirm ? (
-          <button style={{ ...styles.btnGhostSmall, color: "#B0473A", borderColor: "#EBC9BA", justifyContent: "center" }} onClick={() => setShowLogoutConfirm(true)}>
-            <LogOut size={14} /> Cerrar sesión
-          </button>
-        ) : (
-          <ConfirmInline
-            message="¿Cerrar sesión?"
-            confirmLabel="Cerrar sesión"
-            onCancel={() => setShowLogoutConfirm(false)}
-            onConfirm={onLogout}
-            style={{ margin: 0 }}
-          />
+            {/* Cerrar sesión con confirmación */}
+            {!showLogoutConfirm ? (
+              <button style={styles.btnDangerOutline} onClick={() => setShowLogoutConfirm(true)}>
+                <LogOut size={14} /> Cerrar sesión
+              </button>
+            ) : (
+              <ConfirmInline
+                message="¿Cerrar sesión?"
+                confirmLabel="Cerrar sesión"
+                onCancel={() => setShowLogoutConfirm(false)}
+                onConfirm={onLogout}
+                style={{ margin: 0 }}
+              />
+            )}
+          </>
         )}
       </div>
     </div>
@@ -2933,7 +2935,7 @@ function ChangePasswordScreen({ session, onBack, onSave }) {
       <div style={styles.form}>
         <label style={styles.label}>
           Contraseña actual
-          <input style={styles.input} type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="••••••" autoFocus />
+          <input style={styles.input} type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="••••••" />
         </label>
         <label style={styles.label}>
           Nueva contraseña
@@ -3014,7 +3016,7 @@ const styles = {
   input: { fontFamily: "system-ui, sans-serif", fontSize: 15, padding: "11px 13px", borderRadius: 10, border: "1px solid #DDD2BE", background: "#fff", color: "#2B2620" },
   btnDashed: { display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px", borderRadius: 10, border: "1px dashed #C9BBA0", background: "transparent", color: "#8A7253", fontSize: 13.5, fontFamily: "system-ui, sans-serif", fontWeight: 600 },
   btnPrimary: { marginTop: 8, padding: "14px", borderRadius: 12, border: "none", background: "#C75D3B", color: "#fff", fontSize: 15, fontWeight: 700, fontFamily: "system-ui, sans-serif", boxShadow: "0 6px 14px rgba(199,93,59,0.25)" },
-  btnSecondary: { display: "flex", alignItems: "center", justifyContent: "center", gap: 7, margin: "4px 20px 0", padding: "12px", borderRadius: 12, border: "1px solid #DDD2BE", background: "#fff", color: "#544A3C", fontSize: 14, fontWeight: 600, fontFamily: "system-ui, sans-serif" },
+  btnSecondary: { display: "flex", alignItems: "center", justifyContent: "center", gap: 7, marginTop: 4, width: "100%", padding: "12px", borderRadius: 12, border: "1px solid #DDD2BE", background: "#fff", color: "#544A3C", fontSize: 14, fontWeight: 600, fontFamily: "system-ui, sans-serif" },
   btnSecondarySmall: { width: 44, borderRadius: 10, border: "1px solid #DDD2BE", background: "#fff", color: "#544A3C", display: "flex", alignItems: "center", justifyContent: "center" },
   btnGhostSmall: { padding: "8px 14px", borderRadius: 8, border: "1px solid #DDD2BE", background: "#fff", fontSize: 13, fontFamily: "system-ui, sans-serif", display: "flex", alignItems: "center", gap: 6, color: "#76695A" },
   btnDangerSmall: { padding: "8px 14px", borderRadius: 8, border: "none", background: "#B0473A", color: "#fff", fontSize: 13, fontFamily: "system-ui, sans-serif", fontWeight: 600 },
@@ -3055,13 +3057,16 @@ const styles = {
   btnDangerOutline: {
     display: "flex",
     alignItems: "center",
+    justifyContent: "center",
     gap: 7,
-    padding: "9px 14px",
-    borderRadius: 9,
-    border: "1.5px solid #B0473A",
-    background: "transparent",
+    marginTop: 4,
+    width: "100%",
+    padding: "12px",
+    borderRadius: 12,
+    border: "1px solid #EBC9BA",
+    background: "#fff",
     color: "#B0473A",
-    fontSize: 13.5,
+    fontSize: 14,
     fontWeight: 600,
     fontFamily: "system-ui, sans-serif",
     cursor: "pointer",

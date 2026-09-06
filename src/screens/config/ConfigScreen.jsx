@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { User, Camera, Pencil, LogOut, Bell, Plus } from "lucide-react";
+import { User, Camera, LogOut, Bell, Plus } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, ConfirmInline, Footer } from "../../components/Shared.jsx";
@@ -7,16 +7,17 @@ import { useImageUpload, resolvePhotoUrl, colorFor, initials } from "../../lib/h
 import ComingSoon from "../moneymanager/ComingSoon.jsx";
 
 /* =========================================================================
-   CONFIG — 3 secciones (Perfil / Money Manager / Split Ledger), toggle
-   arriba con el mismo lenguaje visual que el tab bar de abajo.
+   CONFIG — toggle de 2 secciones (Money Manager / Split Ledger) + un botón
+   de perfil arriba a la derecha (foto, contraseña, cerrar sesión — nada
+   más por ahora, así que no amerita ser una sección del toggle).
    ========================================================================= */
 
 export default function ConfigScreen({
   session, invites = [], onAcceptInvite, onRejectInvite, onLogout, refreshProfile,
   groups, onCreateGroup, showError, showSuccess,
-  changingPassword, setChangingPassword,
+  changingPassword, setChangingPassword, viewingProfile, setViewingProfile,
 }) {
-  const [section, setSection] = useState("perfil"); // "perfil" | "moneymanager" | "splitledger"
+  const [section, setSection] = useState("splitledger"); // "moneymanager" | "splitledger"
 
   if (changingPassword) {
     return (
@@ -33,32 +34,34 @@ export default function ConfigScreen({
     );
   }
 
+  if (viewingProfile) {
+    return (
+      <ProfileScreen
+        session={session}
+        onBack={() => setViewingProfile(false)}
+        onLogout={onLogout}
+        onChangePassword={() => setChangingPassword(true)}
+        onSave={async ({ photoUrl }) => {
+          const { error } = await supabase.from("profiles").update({ photo_url: photoUrl }).eq("id", session.userId);
+          if (error) throw error;
+          await refreshProfile();
+        }}
+      />
+    );
+  }
+
   return (
     <div style={styles.screen}>
-      <header style={{ padding: "32px 20px 8px" }}>
+      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "32px 20px 8px" }}>
         <h1 style={styles.h1}>Configuración</h1>
+        <button style={styles.iconBtnGhost} onClick={() => setViewingProfile(true)} aria-label="Perfil">
+          <User size={22} />
+        </button>
       </header>
       <div style={styles.tabRow}>
-        <button style={section === "perfil" ? styles.tabActive : styles.tab} onClick={() => setSection("perfil")}>Perfil</button>
         <button style={section === "moneymanager" ? styles.tabActive : styles.tab} onClick={() => setSection("moneymanager")}>Money Manager</button>
         <button style={section === "splitledger" ? styles.tabActive : styles.tab} onClick={() => setSection("splitledger")}>Split Ledger</button>
       </div>
-
-      {section === "perfil" && (
-        <ProfileSection
-          session={session}
-          invites={invites}
-          onAcceptInvite={onAcceptInvite}
-          onRejectInvite={onRejectInvite}
-          onLogout={onLogout}
-          onChangePassword={() => setChangingPassword(true)}
-          onSave={async ({ photoUrl }) => {
-            const { error } = await supabase.from("profiles").update({ photo_url: photoUrl }).eq("id", session.userId);
-            if (error) throw error;
-            await refreshProfile();
-          }}
-        />
-      )}
 
       {section === "moneymanager" && <ComingSoon title="Money Manager" />}
 
@@ -70,6 +73,9 @@ export default function ConfigScreen({
           refreshProfile={refreshProfile}
           showError={showError}
           showSuccess={showSuccess}
+          invites={invites}
+          onAcceptInvite={onAcceptInvite}
+          onRejectInvite={onRejectInvite}
         />
       )}
     </div>
@@ -77,18 +83,16 @@ export default function ConfigScreen({
 }
 
 /* =========================================================================
-   PERFIL (sin "Nombre visible" — se mudó a la sección Split Ledger)
+   PERFIL — pantalla propia (se llega acá por el ícono de usuario arriba a
+   la derecha de Configuración): foto, cambiar contraseña, cerrar sesión.
    ========================================================================= */
 
-function ProfileSection({ session, invites, onAcceptInvite, onRejectInvite, onLogout, onChangePassword, onSave }) {
-  const [editing, setEditing] = useState(false);
+function ProfileScreen({ session, onBack, onLogout, onChangePassword, onSave }) {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
   const { previewUrl: photoUrl, pendingFile, removed, handleImageChange: handlePhoto, clear: clearPhoto } = useImageUpload(session.photoUrl || null, setErr);
   const isDirty = !!pendingFile || removed;
-
-  const cancelEdit = () => { setEditing(false); setErr(""); };
 
   const handleSave = async () => {
     setErr("");
@@ -96,82 +100,40 @@ function ProfileSection({ session, invites, onAcceptInvite, onRejectInvite, onLo
     try {
       const resolvedPhotoUrl = await resolvePhotoUrl({ pendingFile, removed, currentUrl: session.photoUrl });
       await onSave({ photoUrl: resolvedPhotoUrl });
-      setEditing(false);
-    } catch (e) { setErr(e?.message || "Error al guardar"); } finally { setSaving(false); }
+      onBack();
+    } catch (e) { setErr(e?.message || "Error al guardar"); setSaving(false); }
   };
 
   return (
-    <>
-      {editing && <TopBar title="Editar perfil" onBack={cancelEdit} />}
+    <div style={styles.screen}>
+      <TopBar title="Perfil" onBack={onBack} />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-
-        {!editing ? (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-              <div style={{ width: 72, height: 72, minWidth: 72, borderRadius: "50%", overflow: "hidden", background: photoUrl ? "transparent" : "#E8DFD0", display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #DDD2BE" }}>
-                {photoUrl
-                  ? <img src={photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  : <User size={28} color="#A89A87" />
-                }
-              </div>
-              <div>
-                <p style={{ margin: 0, fontSize: 18, fontWeight: 700, fontFamily: "'Iowan Old Style', Georgia, serif" }}>{session.displayName}</p>
-                <p style={{ ...styles.muted, padding: 0, fontSize: 12 }}>@{session.username}</p>
-              </div>
-            </div>
-            <button style={styles.iconBtnGhost} onClick={() => setEditing(true)} aria-label="Editar perfil">
-              <Pencil size={18} />
-            </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ width: 72, height: 72, minWidth: 72, borderRadius: "50%", overflow: "hidden", background: photoUrl ? "transparent" : "#E8DFD0", display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #DDD2BE" }}>
+            {photoUrl
+              ? <img src={photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              : <User size={28} color="#A89A87" />
+            }
           </div>
-        ) : (
-          <>
-            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-              <div style={{ width: 72, height: 72, minWidth: 72, borderRadius: "50%", overflow: "hidden", background: photoUrl ? "transparent" : "#E8DFD0", display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #DDD2BE" }}>
-                {photoUrl
-                  ? <img src={photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  : <User size={28} color="#A89A87" />
-                }
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <label style={{ ...styles.btnDashed, cursor: "pointer", fontSize: 13 }}>
-                  <Camera size={14} /> {photoUrl ? "Cambiar foto" : "Añadir foto"}
-                  <input type="file" accept="image/*" style={{ display: "none" }} onChange={handlePhoto} />
-                </label>
-                {photoUrl && <button style={{ ...styles.btnGhostSmall, fontSize: 12 }} onClick={clearPhoto}>Quitar foto</button>}
-              </div>
-            </div>
-
-            <p style={{ ...styles.muted, padding: 0, fontSize: 12 }}>@{session.username}</p>
-
-            <button style={styles.btnSecondary} onClick={onChangePassword}>
-              Cambiar contraseña
-            </button>
-
-            {err && <p style={styles.errText}>{err}</p>}
-          </>
-        )}
-
-        {!editing && (
-          <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
-            <p style={{ margin: 0, padding: "12px 16px 8px", fontSize: 13, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#544A3C", borderBottom: invites.length ? "1px solid #F0EBE2" : "none", display: "flex", alignItems: "center", gap: 8 }}>
-              <Bell size={15} /> Invitaciones ({invites.length})
-            </p>
-            {invites.map((inv) => (
-              <div key={inv.inviteId} style={{ padding: "10px 16px", borderBottom: "1px solid #F0EBE2", display: "flex", flexDirection: "column", gap: 6 }}>
-                <p style={{ margin: 0, fontSize: 13.5, fontFamily: "system-ui, sans-serif" }}>
-                  <strong>{inv.fromUsername}</strong> te invitó a <strong>{inv.groupName}</strong> como <strong>{inv.memberName}</strong>
-                </p>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button style={styles.btnGhostSmall} onClick={() => onRejectInvite(inv)}>Rechazar</button>
-                  <button style={{ ...styles.btnDangerSmall, background: "#3B6E62" }} onClick={() => onAcceptInvite(inv)}>Aceptar</button>
-                </div>
-              </div>
-            ))}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <label style={{ ...styles.btnDashed, cursor: "pointer", fontSize: 13 }}>
+              <Camera size={14} /> {photoUrl ? "Cambiar foto" : "Añadir foto"}
+              <input type="file" accept="image/*" style={{ display: "none" }} onChange={handlePhoto} />
+            </label>
+            {photoUrl && <button style={{ ...styles.btnGhostSmall, fontSize: 12 }} onClick={clearPhoto}>Quitar foto</button>}
           </div>
-        )}
+        </div>
+
+        <p style={{ ...styles.muted, padding: 0, fontSize: 12 }}>@{session.username}</p>
+
+        <button style={styles.btnSecondary} onClick={onChangePassword}>
+          Cambiar contraseña
+        </button>
+
+        {err && <p style={styles.errText}>{err}</p>}
       </div>
 
-      {!editing && (
+      {!isDirty ? (
         <Footer>
           {!showLogoutConfirm ? (
             <button style={{ ...styles.btnDangerOutline, marginTop: 0 }} onClick={() => setShowLogoutConfirm(true)}>
@@ -187,17 +149,15 @@ function ProfileSection({ session, invites, onAcceptInvite, onRejectInvite, onLo
             />
           )}
         </Footer>
-      )}
-
-      {editing && (
+      ) : (
         <Footer>
-          <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !isDirty) ? 0.5 : 1 }} onClick={handleSave} disabled={saving || !isDirty}>
-            {saving ? "Guardando…" : "Guardar cambios"}
+          <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onBack}>Cancelar</button>
+          <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: saving ? 0.6 : 1 }} onClick={handleSave} disabled={saving}>
+            {saving ? "Guardando…" : "Guardar"}
           </button>
-          <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={cancelEdit}>Cancelar</button>
         </Footer>
       )}
-    </>
+    </div>
   );
 }
 
@@ -251,14 +211,16 @@ function ChangePasswordScreen({ session, onBack, onSave }) {
 }
 
 /* =========================================================================
-   SPLIT LEDGER (toggle on/off, nombre visible, grupo por defecto, tus grupos)
+   SPLIT LEDGER (toggle on/off, invitaciones, nombre visible, grupo por
+   defecto, tus grupos)
    ========================================================================= */
 
-function SplitLedgerSettings({ session, groups, onCreateGroup, refreshProfile, showError, showSuccess }) {
+function SplitLedgerSettings({ session, groups, onCreateGroup, refreshProfile, showError, showSuccess, invites, onAcceptInvite, onRejectInvite }) {
   const [displayName, setDisplayName] = useState(session.displayName || "");
   const [savingName, setSavingName] = useState(false);
   const [togglingEnabled, setTogglingEnabled] = useState(false);
   const [savingDefault, setSavingDefault] = useState(false);
+  const nameDirty = displayName.trim() !== (session.displayName || "");
 
   const handleSaveName = async () => {
     if (!displayName.trim()) return showError("El nombre no puede estar vacío.");
@@ -304,13 +266,36 @@ function SplitLedgerSettings({ session, groups, onCreateGroup, refreshProfile, s
         </button>
       </div>
 
+      {/* Invitaciones pendientes */}
+      <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
+        <p style={{ margin: 0, padding: "12px 16px 8px", fontSize: 13, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#544A3C", borderBottom: invites.length ? "1px solid #F0EBE2" : "none", display: "flex", alignItems: "center", gap: 8 }}>
+          <Bell size={15} /> Invitaciones ({invites.length})
+        </p>
+        {invites.map((inv) => (
+          <div key={inv.inviteId} style={{ padding: "10px 16px", borderBottom: "1px solid #F0EBE2", display: "flex", flexDirection: "column", gap: 6 }}>
+            <p style={{ margin: 0, fontSize: 13.5, fontFamily: "system-ui, sans-serif" }}>
+              <strong>{inv.fromUsername}</strong> te invitó a <strong>{inv.groupName}</strong> como <strong>{inv.memberName}</strong>
+            </p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={styles.btnGhostSmall} onClick={() => onRejectInvite(inv)}>Rechazar</button>
+              <button style={{ ...styles.btnDangerSmall, background: "#3B6E62" }} onClick={() => onAcceptInvite(inv)}>Aceptar</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
       <label style={styles.label}>
         Nombre visible
         <input style={styles.input} value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Tu nombre" />
       </label>
-      <button style={styles.btnSecondary} onClick={handleSaveName} disabled={savingName || displayName.trim() === (session.displayName || "")}>
-        {savingName ? "Guardando…" : "Guardar nombre"}
-      </button>
+      {nameDirty && (
+        <div style={{ display: "flex", gap: 8 }}>
+          <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={() => setDisplayName(session.displayName || "")}>Cancelar</button>
+          <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0 }} onClick={handleSaveName} disabled={savingName}>
+            {savingName ? "Guardando…" : "Guardar"}
+          </button>
+        </div>
+      )}
 
       <label style={styles.label}>
         Grupo por defecto

@@ -399,9 +399,10 @@ function Home({ groups, loading, onOpen, onNewExpense }) {
         </ul>
       )}
 
-      {/* FAB flotante para agregar un gasto — sin grupos todavía no hay a dónde agregarlo */}
+      {/* FAB flotante para agregar un gasto — sin grupos todavía no hay a dónde agregarlo.
+          bottom más alto que el default: acá siempre está visible la barra de 5 tabs. */}
       {!loading && groups && groups.length > 0 && (
-        <button style={styles.fab} onClick={onNewExpense} aria-label="Agregar gasto">
+        <button style={{ ...styles.fab, bottom: "calc(78px + env(safe-area-inset-bottom))" }} onClick={onNewExpense} aria-label="Agregar gasto">
           <Plus size={24} strokeWidth={2.5} />
         </button>
       )}
@@ -827,10 +828,10 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
       </div>
 
       <Footer>
-        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !isDirty) ? 0.5 : 1 }} onClick={handleSave} disabled={saving || !isDirty}>
-          {saving ? "Guardando…" : "Guardar cambios"}
-        </button>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
+        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !isDirty) ? 0.5 : 1 }} onClick={handleSave} disabled={saving || !isDirty}>
+          {saving ? "Guardando…" : "Guardar"}
+        </button>
       </Footer>
 
       {showDeleteModal && (
@@ -1444,16 +1445,8 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
       <TopBar
         title={existing ? "Editar gasto" : "Nuevo gasto"}
         onBack={onCancel}
-        right={existing ? (
+        right={existing && (
           <button style={styles.iconBtnGhost} onClick={() => setConfirmDelete(true)} aria-label="Borrar gasto"><Trash2 size={17} /></button>
-        ) : (
-          <button
-            style={{ ...styles.btnPrimary, margin: 0, padding: "7px 14px", fontSize: 13, boxShadow: "none", borderRadius: 9, opacity: saving ? 0.6 : 1 }}
-            onClick={handleSave}
-            disabled={saving}
-          >
-            {saving ? "Guardando…" : "Guardar"}
-          </button>
         )}
       />
 
@@ -1466,7 +1459,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
         />
       )}
 
-      <div style={styles.form}>
+      <div style={{ ...styles.form, paddingBottom: 100 }}>
         {extraHeaderField}
         <label style={styles.label}>
           Descripción
@@ -1705,10 +1698,14 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
         )}
 
         {err && <p style={styles.errText}>{err}</p>}
-        <button style={{ ...styles.btnPrimary, opacity: saving ? 0.6 : 1 }} onClick={handleSave} disabled={saving}>
-          {saving ? "Guardando…" : existing ? "Guardar cambios" : makeRecurring ? "Crear gasto recurrente" : "Guardar gasto"}
-        </button>
       </div>
+
+      <Footer>
+        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
+        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: saving ? 0.6 : 1 }} onClick={handleSave} disabled={saving}>
+          {saving ? "Guardando…" : existing ? "Guardar" : makeRecurring ? "Crear recurrente" : "Guardar"}
+        </button>
+      </Footer>
     </div>
   );
 }

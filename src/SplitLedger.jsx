@@ -349,6 +349,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
   const [activeTab, setActiveTab] = useState(() => (session.splitLedgerEnabled ? "splitledger" : "config"));
   const [splitLedgerView, setSplitLedgerView] = useState({ screen: "home" });
   const [changingPassword, setChangingPassword] = useState(false);
+  const [viewingProfile, setViewingProfile] = useState(false);
   const [toast, setToast] = useState(null); // { message, type: "error" | "success" | "info" }
   const [invites, setInvites] = useState([]); // invitaciones que ME llegaron (bandeja)
   const processedRecurring = useRef(new Set());
@@ -464,7 +465,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
   };
 
   const visibleTabs = TABS.filter((t) => t.key !== "splitledger" || session.splitLedgerEnabled);
-  const showTabBar = activeTab === "config" ? !changingPassword : splitLedgerView.screen === "home";
+  const showTabBar = activeTab === "config" ? (!changingPassword && !viewingProfile) : splitLedgerView.screen === "home";
 
   return (
     <div style={styles.app}>
@@ -507,6 +508,8 @@ function AppShell({ session, onLogout, refreshProfile }) {
           showSuccess={showSuccess}
           changingPassword={changingPassword}
           setChangingPassword={setChangingPassword}
+          viewingProfile={viewingProfile}
+          setViewingProfile={setViewingProfile}
         />
       )}
 

@@ -6,7 +6,7 @@ export const globalCss = `
     outline: 2px solid #C75D3B;
     outline-offset: 2px;
   }
-  button { font-family: inherit; cursor: pointer; }
+  button { font-family: inherit; cursor: pointer; color: inherit; }
   select { appearance: none; -webkit-appearance: none; background-image: none; }
   /* iOS Safari ignora font-size/height inline en <input type="date">; hay que
      anular su apariencia nativa o el campo sale gigante en mobile. */
@@ -49,7 +49,7 @@ export const styles = {
   groupCardLeft: { display: "flex", alignItems: "center", gap: 14 },
   avatarStack: { display: "flex", alignItems: "center" },
   avatar: { width: 32, height: 32, minWidth: 32, borderRadius: "50%", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, border: "2px solid #FBF8F2", fontFamily: "system-ui, sans-serif" },
-  groupName: { margin: 0, fontWeight: 600, fontSize: 15.5 },
+  groupName: { margin: 0, fontWeight: 600, fontSize: 15.5, color: "#2B2620" },
   groupMeta: { margin: "2px 0 0", fontSize: 12.5, color: "#6B6355", fontFamily: "system-ui, sans-serif" },
   topBar: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 14px 8px", gap: 8 },
   topBarTitle: { margin: 0, fontSize: 18, fontWeight: 600, flex: 1, textAlign: "center" },
@@ -128,7 +128,7 @@ export const styles = {
   expenseCard: { margin: "0 20px", padding: "11px 12px", borderRadius: 12, background: "#fff", border: "1px solid #ECE3D3", display: "flex", alignItems: "center", gap: 12, fontFamily: "system-ui, sans-serif", textAlign: "left", width: "calc(100% - 40px)" },
   paymentCard: { margin: "0 20px", padding: "11px 12px", borderRadius: 12, background: "#F3EFE5", border: "1px dashed #D9CFC1", display: "flex", alignItems: "center", gap: 12, fontFamily: "system-ui, sans-serif" },
   expenseIcon: { width: 36, height: 36, minWidth: 36, borderRadius: "50%", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" },
-  expenseTitle: { margin: 0, fontSize: 14, fontWeight: 600, fontFamily: "'Iowan Old Style', Georgia, serif" },
+  expenseTitle: { margin: 0, fontSize: 14, fontWeight: 600, fontFamily: "'Iowan Old Style', Georgia, serif", color: "#2B2620" },
   expenseSub: { margin: "2px 0 0", fontSize: 11.5, color: "#6B6355" },
   fab: { position: "fixed", bottom: 28, right: "max(20px, calc(50vw - 240px + 20px))", width: 56, height: 56, borderRadius: "50%", border: "none", background: "#C75D3B", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 8px 20px rgba(199,93,59,0.4)" },
   footer: {

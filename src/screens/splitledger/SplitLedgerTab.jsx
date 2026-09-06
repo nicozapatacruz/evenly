@@ -579,6 +579,7 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
     if (origCats.some((c, i) => c.id !== categories[i].id || c.label !== categories[i].label || c.iconKey !== categories[i].iconKey)) return true;
     return false;
   }, [name, baseCurrency, rates, pendingFile, removed, members, categories, group]);
+  const hasEmptyCategory = categories.some((c) => !c.label.trim());
 
   const addMember = () => {
     const n = newMemberName.trim();
@@ -633,7 +634,9 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
   };
 
   const addCategory = () => {
-    setCategories(prev => [...prev, { id: uid(), label: "", iconKey: "MoreHorizontal" }]);
+    const usedKeys = new Set(categories.map(c => c.iconKey));
+    const iconKey = ICON_KEYS.find(k => !usedKeys.has(k)) || "MoreHorizontal";
+    setCategories(prev => [...prev, { id: uid(), label: "", iconKey }]);
     setCatsOpen(true);
   };
 
@@ -826,16 +829,21 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
                   {/* Picker de ícono inline */}
                   {editingCatId === cat.id && (
                     <div style={{ background: "#F7F2E9", border: "1px solid #E8DFD0", borderTop: "none", borderRadius: "0 0 10px 10px", padding: 10, display: "flex", flexWrap: "wrap", gap: 6 }}>
-                      {ICON_KEYS.map(key => (
-                        <button
-                          key={key}
-                          onClick={() => { updateCategory(cat.id, { iconKey: key }); setEditingCatId(null); }}
-                          style={{ width: 34, height: 34, borderRadius: 8, border: cat.iconKey === key ? "2px solid #C75D3B" : "1px solid #DDD2BE", background: cat.iconKey === key ? "#C75D3B1a" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#544A3C" }}
-                          aria-label={key}
-                        >
-                          <IconComp iconKey={key} size={16} />
-                        </button>
-                      ))}
+                      {ICON_KEYS.map(key => {
+                        const usedByOther = categories.some(c => c.id !== cat.id && c.iconKey === key);
+                        return (
+                          <button
+                            key={key}
+                            onClick={() => { if (!usedByOther) { updateCategory(cat.id, { iconKey: key }); setEditingCatId(null); } }}
+                            disabled={usedByOther}
+                            title={usedByOther ? "Ya usado por otra categoría" : undefined}
+                            style={{ width: 34, height: 34, borderRadius: 8, border: cat.iconKey === key ? "2px solid #C75D3B" : "1px solid #DDD2BE", background: cat.iconKey === key ? "#C75D3B1a" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#544A3C", opacity: usedByOther ? 0.3 : 1, cursor: usedByOther ? "not-allowed" : "pointer" }}
+                            aria-label={key}
+                          >
+                            <IconComp iconKey={key} size={16} />
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -849,7 +857,7 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
 
       <Footer>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
-        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !isDirty) ? 0.5 : 1 }} onClick={handleSave} disabled={saving || !isDirty}>
+        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !isDirty || hasEmptyCategory) ? 0.5 : 1 }} onClick={handleSave} disabled={saving || !isDirty || hasEmptyCategory}>
           {saving ? "Guardando…" : "Guardar"}
         </button>
       </Footer>

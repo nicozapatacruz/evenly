@@ -57,6 +57,7 @@ export default function SplitLedgerTab({
         <Home
           groups={groups}
           loading={loading}
+          session={session}
           onOpen={(id) => setView({ screen: "group", groupId: id })}
           onNewExpense={() => setView({ screen: "newExpense" })}
         />
@@ -347,7 +348,32 @@ export default function SplitLedgerTab({
    HOME
    ========================================================================= */
 
-function Home({ groups, loading, onOpen, onNewExpense }) {
+function groupCardMeta(g, session) {
+  const bal = computeBalances(g);
+  const settled = Object.values(bal).every((v) => Math.abs(v) < 0.01);
+  const myId = g.members.find((m) => m.linkedUserId === session?.userId)?.id;
+  if (!myId || settled) return <span>Saldado</span>;
+
+  const nameOf = (id) => g.members.find((m) => m.id === id)?.name || "Alguien";
+  const txns = simplifyDebts(bal);
+  const owedByMe = txns.filter((t) => t.from === myId);
+  const owedToMe = txns.filter((t) => t.to === myId);
+
+  if (owedByMe.length > 0) {
+    const total = owedByMe.reduce((s, t) => s + t.amount, 0);
+    const who = owedByMe.length === 1 ? shortName(nameOf(owedByMe[0].to)) : `${owedByMe.length} personas`;
+    return <>Debes <span style={{ color: "#B0473A", fontWeight: 700 }}>{money(total, g.baseCurrency)}</span> a {who}</>;
+  }
+  if (owedToMe.length > 0) {
+    const total = owedToMe.reduce((s, t) => s + t.amount, 0);
+    const who = owedToMe.length === 1 ? shortName(nameOf(owedToMe[0].from)) : `${owedToMe.length} personas`;
+    const verb = owedToMe.length === 1 ? "te debe" : "te deben";
+    return <>{who} {verb} <span style={{ color: "#3B6E62", fontWeight: 700 }}>{money(total, g.baseCurrency)}</span></>;
+  }
+  return <span>Saldado</span>;
+}
+
+function Home({ groups, loading, session, onOpen, onNewExpense }) {
   return (
     <div style={styles.screen}>
       <header style={styles.homeHeader}>
@@ -370,9 +396,6 @@ function Home({ groups, loading, onOpen, onNewExpense }) {
       {!loading && groups && groups.length > 0 && (
         <ul style={styles.groupList}>
           {groups.map((g) => {
-            const bal = computeBalances(g);
-            const total = g.expenses.filter(e => !e.deleted).reduce((s, e) => s + toBase(e.amount, e.currency, g), 0);
-            const settled = Object.values(bal).every((v) => Math.abs(v) < 0.01);
             return (
               <li key={g.id}>
                 <button style={styles.groupCard} onClick={() => onOpen(g.id)}>
@@ -385,10 +408,7 @@ function Home({ groups, loading, onOpen, onNewExpense }) {
                     </div>
                     <div>
                       <p style={styles.groupName}>{g.name}</p>
-                      <p style={styles.groupMeta}>
-                        {g.members.length} personas · {money(total, g.baseCurrency)} en total
-                        {settled && g.expenses.length > 0 ? " · saldado" : ""}
-                      </p>
+                      <p style={styles.groupMeta}>{groupCardMeta(g, session)}</p>
                     </div>
                   </div>
                   <ChevronRight size={20} color="#A89A87" />
@@ -1705,7 +1725,11 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
 
       <Footer>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
-        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: saving ? 0.6 : 1 }} onClick={handleSave} disabled={saving}>
+        <button
+          style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !description.trim() || !validAmount) ? 0.5 : 1 }}
+          onClick={handleSave}
+          disabled={saving || !description.trim() || !validAmount}
+        >
           {saving ? "Guardando…" : existing ? "Guardar" : makeRecurring ? "Crear recurrente" : "Guardar"}
         </button>
       </Footer>

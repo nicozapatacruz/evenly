@@ -8,6 +8,10 @@ export const globalCss = `
   }
   button { font-family: inherit; cursor: pointer; }
   select { appearance: none; -webkit-appearance: none; background-image: none; }
+  /* iOS Safari ignora font-size/height inline en <input type="date">; hay que
+     anular su apariencia nativa o el campo sale gigante en mobile. */
+  input[type="date"] { appearance: none; -webkit-appearance: none; }
+  input[type="date"]::-webkit-date-and-time-value { text-align: left; }
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; animation: none !important; }
   }

@@ -1161,9 +1161,11 @@ function NewGroup({ onCancel, onCreate, session }) {
   const updateMember = (i, val) => setMembers((prev) => prev.map((m, idx) => (idx === i ? val : m)));
   const addMemberField = () => setMembers((prev) => [...prev, ""]);
   const removeMemberField = (i) => setMembers((prev) => prev.filter((_, idx) => idx !== i));
+  const hasEnoughMembers = members.some((n) => n.trim());
 
   const handleCreate = async () => {
     if (!name.trim()) { setErr("Ponle un nombre al grupo."); return; }
+    if (!hasEnoughMembers) { setErr("El grupo necesita al menos dos personas."); return; }
     setSaving(true);
     try {
       const resolvedPhotoUrl = await resolvePhotoUrl({ pendingFile, removed, currentUrl: null });
@@ -1247,7 +1249,7 @@ function NewGroup({ onCancel, onCreate, session }) {
         <button style={styles.btnDashed} onClick={addMemberField}><Plus size={16} /> Agregar persona</button>
 
         {err && <p style={styles.errText}>{err}</p>}
-        <button style={{ ...styles.btnPrimary, opacity: saving ? 0.6 : 1 }} onClick={handleCreate} disabled={saving}>{saving ? "Creando…" : "Crear grupo"}</button>
+        <button style={{ ...styles.btnPrimary, opacity: (saving || !hasEnoughMembers) ? 0.5 : 1 }} onClick={handleCreate} disabled={saving || !hasEnoughMembers}>{saving ? "Creando…" : "Crear grupo"}</button>
       </div>
     </div>
   );
@@ -1269,7 +1271,7 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
   const [categories, setCategories] = useState(() => groupCategories(group).map(c => ({ ...c })));
   const [editingCatId, setEditingCatId] = useState(null);
   const [catsOpen, setCatsOpen] = useState(false);
-  const [confirmGroupDelete, setConfirmGroupDelete] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const dragIdx = useRef(null);
   const balances = useMemo(() => computeBalances(group), [group]);
@@ -1279,6 +1281,20 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
     set.delete(baseCurrency);
     return [...set];
   }, [group.expenses, baseCurrency]);
+
+  const isDirty = useMemo(() => {
+    if (name.trim() !== group.name) return true;
+    if (baseCurrency !== group.baseCurrency) return true;
+    if (JSON.stringify(rates) !== JSON.stringify(group.rates || {})) return true;
+    if (pendingFile || removed) return true;
+    const origMemberIds = new Set(group.members.map((m) => m.id));
+    const curMemberIds = new Set(members.map((m) => m.id));
+    if (origMemberIds.size !== curMemberIds.size || [...origMemberIds].some((id) => !curMemberIds.has(id))) return true;
+    const origCats = groupCategories(group);
+    if (origCats.length !== categories.length) return true;
+    if (origCats.some((c, i) => c.id !== categories[i].id || c.label !== categories[i].label || c.iconKey !== categories[i].iconKey)) return true;
+    return false;
+  }, [name, baseCurrency, rates, pendingFile, removed, members, categories, group]);
 
   const addMember = () => {
     const n = newMemberName.trim();
@@ -1363,8 +1379,16 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
 
   return (
     <div style={styles.screen}>
-      <TopBar title="Editar grupo" onBack={onCancel} />
-      <div style={styles.form}>
+      <TopBar
+        title="Editar grupo"
+        onBack={onCancel}
+        right={group.creatorId === session?.userId && (
+          <button style={styles.iconBtnGhost} onClick={() => setShowDeleteModal(true)} aria-label="Borrar grupo">
+            <Trash2 size={18} color="#B0473A" />
+          </button>
+        )}
+      />
+      <div style={{ ...styles.form, paddingBottom: 100 }}>
         {/* Foto del grupo */}
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <div style={{ width: 72, height: 72, minWidth: 72, borderRadius: 16, overflow: "hidden", background: photoUrl ? "transparent" : "#E8DFD0", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #DDD2BE" }}>
@@ -1461,6 +1485,13 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
           <button style={styles.btnSecondarySmall} onClick={addMember}><UserPlus size={16} /></button>
         </div>
 
+        {/* Invitar personas */}
+        {group.creatorId === session?.userId && (
+          <button style={styles.btnSecondary} onClick={onInvite}>
+            <UserPlus size={16} /> Invitar a alguien al grupo
+          </button>
+        )}
+
         {/* ── Categorías colapsables ── */}
         <button
           style={styles.collapsibleHeader}
@@ -1530,47 +1561,38 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
           </>
         )}
 
-        <button style={{ ...styles.btnPrimary, opacity: saving ? 0.6 : 1 }} onClick={handleSave} disabled={saving}>{saving ? "Guardando…" : "Guardar cambios"}</button>
-
-        {/* Invitar personas */}
-        {group.creatorId === session?.userId && (
-          <button style={styles.btnSecondary} onClick={onInvite}>
-            <UserPlus size={16} /> Invitar a alguien al grupo
-          </button>
-        )}
-
-        {/* Borrar grupo — solo el creador, la RLS de todas formas lo impide para el resto */}
-        {group.creatorId === session?.userId && (
-          <div style={styles.dangerZone}>
-            {!confirmGroupDelete ? (
-              <button style={styles.btnDangerOutline} onClick={() => setConfirmGroupDelete(true)}>
-                <Trash2 size={15} /> Borrar este grupo
-              </button>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <p style={{ margin: 0, fontSize: 13, fontFamily: "system-ui, sans-serif", color: "#76695A" }}>
-                  ¿Borrar "{group.name}" y todo su historial? Esta acción no se puede deshacer.
-                </p>
-                <input
-                  style={{ ...styles.input, fontSize: 14 }}
-                  placeholder='Escribe "Confirmar" para continuar'
-                  value={deleteConfirmText}
-                  onChange={e => setDeleteConfirmText(e.target.value)}
-                />
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button style={styles.btnGhostSmall} onClick={() => { setConfirmGroupDelete(false); setDeleteConfirmText(""); }}>Cancelar</button>
-                  <button
-                    style={{ ...styles.btnDangerSmall, opacity: deleteConfirmText === "Confirmar" ? 1 : 0.4, cursor: deleteConfirmText === "Confirmar" ? "pointer" : "not-allowed" }}
-                    onClick={() => deleteConfirmText === "Confirmar" && onDeleteGroup()}
-                  >
-                    Confirmar
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
       </div>
+
+      <Footer>
+        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !isDirty) ? 0.5 : 1 }} onClick={handleSave} disabled={saving || !isDirty}>
+          {saving ? "Guardando…" : "Guardar cambios"}
+        </button>
+        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
+      </Footer>
+
+      {showDeleteModal && (
+        <Modal onClose={() => { setShowDeleteModal(false); setDeleteConfirmText(""); }}>
+          <p style={{ margin: "0 0 14px", fontSize: 15, fontFamily: "system-ui, sans-serif", color: "#2B2620" }}>
+            ¿Borrar "{group.name}" y todo su historial? Esta acción no se puede deshacer.
+          </p>
+          <input
+            style={{ ...styles.input, fontSize: 14 }}
+            placeholder='Escribe "Confirmar" para continuar'
+            value={deleteConfirmText}
+            onChange={e => setDeleteConfirmText(e.target.value)}
+            autoFocus
+          />
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <button style={{ ...styles.btnGhostSmall, flex: 1, justifyContent: "center" }} onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(""); }}>Cancelar</button>
+            <button
+              style={{ ...styles.btnDangerSmall, flex: 1, opacity: deleteConfirmText === "Confirmar" ? 1 : 0.4, cursor: deleteConfirmText === "Confirmar" ? "pointer" : "not-allowed" }}
+              onClick={() => deleteConfirmText === "Confirmar" && onDeleteGroup()}
+            >
+              Confirmar
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -2589,6 +2611,22 @@ function ConfirmInline({ message, confirmLabel = "Confirmar", onCancel, onConfir
   );
 }
 
+// Popup centrado con fondo oscuro — para confirmaciones fuertes (ej. borrar un grupo entero)
+function Modal({ onClose, children }) {
+  return (
+    <div style={styles.modalBackdrop} onClick={onClose}>
+      <div style={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// Barra fija abajo de la pantalla (botones principales de guardar/cancelar/etc.)
+function Footer({ children }) {
+  return <div style={styles.footer}>{children}</div>;
+}
+
 /* =========================================================================
    AUTH SCREEN
    ========================================================================= */
@@ -2783,6 +2821,7 @@ function ProfileScreen({ session, invites = [], onBack, onLogout, onAcceptInvite
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
   const { previewUrl: photoUrl, pendingFile, removed, handleImageChange: handlePhoto, clear: clearPhoto } = useImageUpload(session.photoUrl || null, setErr);
+  const isDirty = displayName.trim() !== (session.displayName || "") || !!pendingFile || removed;
 
   const cancelEdit = () => { setEditing(false); setErr(""); setDisplayName(session.displayName || ""); };
 
@@ -2808,7 +2847,7 @@ function ProfileScreen({ session, invites = [], onBack, onLogout, onAcceptInvite
           </button>
         )}
       />
-      <div style={styles.form}>
+      <div style={{ ...styles.form, paddingBottom: 100 }}>
 
         {!editing ? (
           <>
@@ -2857,10 +2896,6 @@ function ProfileScreen({ session, invites = [], onBack, onLogout, onAcceptInvite
             </button>
 
             {err && <p style={styles.errText}>{err}</p>}
-            <button style={styles.btnPrimary} onClick={handleSave} disabled={saving}>
-              {saving ? "Guardando…" : "Guardar cambios"}
-            </button>
-            <button style={styles.btnSecondary} onClick={cancelEdit}>Cancelar</button>
           </>
         )}
 
@@ -2883,24 +2918,36 @@ function ProfileScreen({ session, invites = [], onBack, onLogout, onAcceptInvite
                 </div>
               ))}
             </div>
-
-            {/* Cerrar sesión con confirmación */}
-            {!showLogoutConfirm ? (
-              <button style={styles.btnDangerOutline} onClick={() => setShowLogoutConfirm(true)}>
-                <LogOut size={14} /> Cerrar sesión
-              </button>
-            ) : (
-              <ConfirmInline
-                message="¿Cerrar sesión?"
-                confirmLabel="Cerrar sesión"
-                onCancel={() => setShowLogoutConfirm(false)}
-                onConfirm={onLogout}
-                style={{ margin: 0 }}
-              />
-            )}
           </>
         )}
       </div>
+
+      {!editing && (
+        <Footer>
+          {!showLogoutConfirm ? (
+            <button style={{ ...styles.btnDangerOutline, marginTop: 0 }} onClick={() => setShowLogoutConfirm(true)}>
+              <LogOut size={14} /> Cerrar sesión
+            </button>
+          ) : (
+            <ConfirmInline
+              message="¿Cerrar sesión?"
+              confirmLabel="Cerrar sesión"
+              onCancel={() => setShowLogoutConfirm(false)}
+              onConfirm={onLogout}
+              style={{ margin: 0, width: "100%" }}
+            />
+          )}
+        </Footer>
+      )}
+
+      {editing && (
+        <Footer>
+          <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !isDirty) ? 0.5 : 1 }} onClick={handleSave} disabled={saving || !isDirty}>
+            {saving ? "Guardando…" : "Guardar cambios"}
+          </button>
+          <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={cancelEdit}>Cancelar</button>
+        </Footer>
+      )}
     </div>
   );
 }
@@ -3038,22 +3085,6 @@ const styles = {
   debtAmount: { fontSize: 14, fontWeight: 700, color: "#C75D3B" },
   settleSmallBtn: { padding: "6px 12px", borderRadius: 8, border: "1px solid #C75D3B", background: "transparent", color: "#C75D3B", fontSize: 12, fontWeight: 700, fontFamily: "system-ui, sans-serif", marginLeft: "auto" },
   simplifyNote: { margin: "4px 20px 0", fontSize: 12, color: "#A8967A", fontFamily: "system-ui, sans-serif", textAlign: "center" },
-  dangerZone: {
-    marginTop: 8,
-    padding: "16px",
-    borderRadius: 12,
-    border: "1px solid #EBC9BA",
-    background: "#FDF4F1",
-  },
-  dangerZoneTitle: {
-    margin: "0 0 10px",
-    fontSize: 11.5,
-    fontWeight: 700,
-    fontFamily: "system-ui, sans-serif",
-    color: "#B0473A",
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
   btnDangerOutline: {
     display: "flex",
     alignItems: "center",
@@ -3103,6 +3134,39 @@ const styles = {
   expenseTitle: { margin: 0, fontSize: 14, fontWeight: 600, fontFamily: "'Iowan Old Style', Georgia, serif" },
   expenseSub: { margin: "2px 0 0", fontSize: 11.5, color: "#6B6355" },
   fab: { position: "fixed", bottom: 28, right: "max(20px, calc(50vw - 240px + 20px))", width: 56, height: 56, borderRadius: "50%", border: "none", background: "#C75D3B", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 8px 20px rgba(199,93,59,0.4)" },
+  footer: {
+    position: "fixed",
+    bottom: 0,
+    left: "50%",
+    transform: "translateX(-50%)",
+    width: "100%",
+    maxWidth: 480,
+    display: "flex",
+    gap: 10,
+    padding: "12px 20px calc(12px + env(safe-area-inset-bottom))",
+    background: "#FBF8F2",
+    borderTop: "1px solid #ECE3D3",
+    boxShadow: "0 -4px 16px rgba(0,0,0,0.04)",
+    zIndex: 5,
+  },
+  modalBackdrop: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(43,38,32,0.5)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+    zIndex: 20,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 380,
+    background: "#FBF8F2",
+    borderRadius: 16,
+    padding: 20,
+    boxShadow: "0 20px 50px rgba(0,0,0,0.3)",
+  },
   payerRow: { display: "flex", flexWrap: "wrap", gap: 8 },
   payerChip: { display: "flex", alignItems: "center", gap: 6, padding: "7px 12px 7px 7px", borderRadius: 20, border: "1.5px solid transparent", fontSize: 13, fontFamily: "system-ui, sans-serif", fontWeight: 600 },
   categoryGrid: { display: "flex", flexWrap: "wrap", gap: 6 },

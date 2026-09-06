@@ -3,7 +3,7 @@ import { supabase } from "../../lib/supabaseClient.js";
 import {
   Plus, Receipt, X, ChevronRight, ArrowRight, Check, Trash2, Settings,
   RefreshCw, HandCoins, UserPlus, AlertCircle, Repeat, ChevronUp,
-  ChevronDown as ChevronDownIcon, Camera, User, PenLine, Pencil, Send,
+  ChevronDown as ChevronDownIcon, Camera, User, PenLine, Pencil, Send, GripVertical,
 } from "lucide-react";
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
@@ -553,8 +553,9 @@ function SortableCategoryRow({ cat, onEditIcon, onChangeLabel, onRemove }) {
   };
   return (
     <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 6, padding: "8px 10px" }}>
-      {/* Handle — más ancho y a todo el alto de la fila para que sea fácil agarrarlo con el dedo.
-          touchAction:"none" es necesario para que el drag responda al dedo en vez del scroll. */}
+      {/* Handle — ícono SVG (se centra bien, a diferencia del glifo de texto) a todo el alto
+          de la fila para que el área de agarre sea más grande. touchAction:"none" es necesario
+          para que el drag responda al dedo en vez de disparar el scroll. */}
       <span
         {...attributes}
         {...listeners}
@@ -563,18 +564,13 @@ function SortableCategoryRow({ cat, onEditIcon, onChangeLabel, onRemove }) {
           alignItems: "center",
           justifyContent: "center",
           alignSelf: "stretch",
-          margin: "-8px 0 -8px -10px",
-          minWidth: 40,
-          padding: "0 10px",
-          background: "#F3EFE5",
-          borderRadius: "8px 0 0 8px",
-          color: "#A8967A",
-          fontSize: 20,
+          width: 32,
+          color: "#C9BBA0",
           cursor: "grab",
           touchAction: "none",
         }}
       >
-        ⠿
+        <GripVertical size={18} />
       </span>
       <button
         onClick={onEditIcon}

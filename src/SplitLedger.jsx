@@ -1028,21 +1028,30 @@ function AppMain({ session, onLogout, refreshProfile }) {
           onLogout={onLogout}
           onAcceptInvite={handleAcceptInvite}
           onRejectInvite={handleRejectInvite}
-          onSave={async ({ displayName, newPassword, photoUrl }) => {
+          onChangePassword={() => setView({ screen: "changePassword" })}
+          onSave={async ({ displayName, photoUrl }) => {
             try {
-              const { error: e1 } = await supabase
+              const { error } = await supabase
                 .from("profiles")
                 .update({ display_name: displayName, photo_url: photoUrl })
                 .eq("id", session.userId);
-              if (e1) throw e1;
-              if (newPassword) {
-                const { error: e2 } = await supabase.auth.updateUser({ password: newPassword });
-                if (e2) throw e2;
-              }
+              if (error) throw error;
               await refreshProfile();
               showSuccess("Perfil actualizado.");
-              setView({ screen: "home" });
             } catch (e) { showError(`No se pudo guardar: ${e?.message || e}`); }
+          }}
+        />
+      )}
+
+      {view.screen === "changePassword" && (
+        <ChangePasswordScreen
+          session={session}
+          onBack={() => setView({ screen: "profile" })}
+          onSave={async (newPassword) => {
+            const { error } = await supabase.auth.updateUser({ password: newPassword });
+            if (error) throw error;
+            showSuccess("Contraseña actualizada.");
+            setView({ screen: "profile" });
           }}
         />
       )}
@@ -2767,17 +2776,15 @@ function InviteScreen({ group, session, groupInvites = [], onBack, onSend, onCan
    PROFILE SCREEN
    ========================================================================= */
 
-function ProfileScreen({ session, invites = [], onBack, onLogout, onAcceptInvite, onRejectInvite, onSave }) {
+function ProfileScreen({ session, invites = [], onBack, onLogout, onAcceptInvite, onRejectInvite, onSave, onChangePassword }) {
   const [editing, setEditing] = useState(false);
   const [displayName, setDisplayName] = useState(session.displayName || "");
-  const [showPasswordForm, setShowPasswordForm] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
   const { previewUrl: photoUrl, pendingFile, removed, handleImageChange: handlePhoto, clear: clearPhoto } = useImageUpload(session.photoUrl || null, setErr);
+
+  const cancelEdit = () => { setEditing(false); setErr(""); setDisplayName(session.displayName || ""); };
 
   const handleSave = async () => {
     setErr("");
@@ -2785,28 +2792,22 @@ function ProfileScreen({ session, invites = [], onBack, onLogout, onAcceptInvite
     setSaving(true);
     try {
       const resolvedPhotoUrl = await resolvePhotoUrl({ pendingFile, removed, currentUrl: session.photoUrl });
-      await onSave({ displayName: displayName.trim(), newPassword: null, photoUrl: resolvedPhotoUrl });
+      await onSave({ displayName: displayName.trim(), photoUrl: resolvedPhotoUrl });
       setEditing(false);
-    } catch (e) { setErr(e?.message || "Error al guardar"); } finally { setSaving(false); }
-  };
-
-  const handleChangePassword = async () => {
-    setErr("");
-    if (!currentPassword) return setErr("Escribe tu contraseña actual.");
-    if (!newPassword || newPassword.length < 4) return setErr("La nueva contraseña debe tener al menos 4 caracteres.");
-    if (newPassword !== confirmPassword) return setErr("Las contraseñas no coinciden.");
-    setSaving(true);
-    try {
-      const { error } = await supabase.auth.signInWithPassword({ email: session.email, password: currentPassword });
-      if (error) throw new Error("La contraseña actual es incorrecta.");
-      const resolvedPhotoUrl = await resolvePhotoUrl({ pendingFile, removed, currentUrl: session.photoUrl });
-      await onSave({ displayName: displayName.trim(), newPassword, photoUrl: resolvedPhotoUrl });
     } catch (e) { setErr(e?.message || "Error al guardar"); } finally { setSaving(false); }
   };
 
   return (
     <div style={styles.screen}>
-      <TopBar title="Mi perfil" onBack={onBack} />
+      <TopBar
+        title={editing ? "Editar perfil" : "Mi perfil"}
+        onBack={editing ? cancelEdit : onBack}
+        right={!editing && (
+          <button style={styles.iconBtnGhost} onClick={() => setEditing(true)} aria-label="Editar perfil">
+            <Pencil size={18} />
+          </button>
+        )}
+      />
       <div style={styles.form}>
 
         {!editing ? (
@@ -2824,9 +2825,6 @@ function ProfileScreen({ session, invites = [], onBack, onLogout, onAcceptInvite
                 <p style={{ ...styles.muted, padding: 0, fontSize: 12 }}>@{session.username}</p>
               </div>
             </div>
-            <button style={styles.btnSecondary} onClick={() => setEditing(true)}>
-              <Pencil size={15} /> Editar perfil
-            </button>
           </>
         ) : (
           <>
@@ -2854,9 +2852,13 @@ function ProfileScreen({ session, invites = [], onBack, onLogout, onAcceptInvite
               <input style={styles.input} value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Tu nombre" autoFocus />
             </label>
 
-            {err && !showPasswordForm && <p style={styles.errText}>{err}</p>}
+            <button style={styles.btnSecondary} onClick={onChangePassword}>
+              Cambiar contraseña
+            </button>
+
+            {err && <p style={styles.errText}>{err}</p>}
             <div style={{ display: "flex", gap: 8 }}>
-              <button style={styles.btnGhostSmall} onClick={() => { setEditing(false); setErr(""); setDisplayName(session.displayName || ""); }}>Cancelar</button>
+              <button style={styles.btnGhostSmall} onClick={cancelEdit}>Cancelar</button>
               <button style={{ ...styles.btnPrimary, flex: 1 }} onClick={handleSave} disabled={saving}>
                 {saving ? "Guardando…" : "Guardar cambios"}
               </button>
@@ -2864,38 +2866,11 @@ function ProfileScreen({ session, invites = [], onBack, onLogout, onAcceptInvite
           </>
         )}
 
-        {/* Cambio de contraseña colapsable */}
-        <button style={styles.collapsibleHeader} onClick={() => { setShowPasswordForm(v => !v); setErr(""); setCurrentPassword(""); setNewPassword(""); setConfirmPassword(""); }}>
-          <span style={styles.label}>Cambiar contraseña</span>
-          {showPasswordForm ? <ChevronUp size={18} color="#6B6355" /> : <ChevronDownIcon size={18} color="#6B6355" />}
-        </button>
-        {showPasswordForm && (
-          <div style={{ border: "1px solid #DDD2BE", borderRadius: "0 0 10px 10px", marginTop: -8, padding: 14, display: "flex", flexDirection: "column", gap: 12, background: "#fff" }}>
-            <label style={styles.label}>
-              Contraseña actual
-              <input style={styles.input} type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="••••••" autoFocus />
-            </label>
-            <label style={styles.label}>
-              Nueva contraseña
-              <input style={styles.input} type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="••••••" />
-            </label>
-            <label style={styles.label}>
-              Confirmar nueva contraseña
-              <input style={styles.input} type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••" />
-            </label>
-            {err && showPasswordForm && <p style={styles.errText}>{err}</p>}
-            <button style={styles.btnPrimary} onClick={handleChangePassword} disabled={saving}>
-              {saving ? "Guardando…" : "Actualizar contraseña"}
-            </button>
-          </div>
-        )}
-
         {/* Invitaciones pendientes */}
         <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
-          <p style={{ margin: 0, padding: "12px 16px 8px", fontSize: 13, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#544A3C", borderBottom: "1px solid #F0EBE2", display: "flex", alignItems: "center", gap: 8 }}>
-            <Bell size={15} /> Invitaciones {invites.length === 0 ? "(ninguna)" : `(${invites.length})`}
+          <p style={{ margin: 0, padding: "12px 16px 8px", fontSize: 13, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#544A3C", borderBottom: invites.length ? "1px solid #F0EBE2" : "none", display: "flex", alignItems: "center", gap: 8 }}>
+            <Bell size={15} /> Invitaciones ({invites.length})
           </p>
-          {invites.length === 0 && <p style={{ ...styles.muted, padding: "10px 16px" }}>No tienes invitaciones pendientes.</p>}
           {invites.map((inv) => (
             <div key={inv.inviteId} style={{ padding: "10px 16px", borderBottom: "1px solid #F0EBE2", display: "flex", flexDirection: "column", gap: 6 }}>
               <p style={{ margin: 0, fontSize: 13.5, fontFamily: "system-ui, sans-serif" }}>
@@ -2927,6 +2902,56 @@ function ProfileScreen({ session, invites = [], onBack, onLogout, onAcceptInvite
     </div>
   );
 }
+
+/* =========================================================================
+   CHANGE PASSWORD
+   ========================================================================= */
+
+function ChangePasswordScreen({ session, onBack, onSave }) {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [err, setErr] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setErr("");
+    if (!currentPassword) return setErr("Escribe tu contraseña actual.");
+    if (!newPassword || newPassword.length < 4) return setErr("La nueva contraseña debe tener al menos 4 caracteres.");
+    if (newPassword !== confirmPassword) return setErr("Las contraseñas no coinciden.");
+    setSaving(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email: session.email, password: currentPassword });
+      if (error) throw new Error("La contraseña actual es incorrecta.");
+      await onSave(newPassword);
+    } catch (e) { setErr(e?.message || "Error al guardar"); setSaving(false); }
+  };
+
+  return (
+    <div style={styles.screen}>
+      <TopBar title="Cambiar contraseña" onBack={onBack} />
+      <div style={styles.form}>
+        <label style={styles.label}>
+          Contraseña actual
+          <input style={styles.input} type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="••••••" autoFocus />
+        </label>
+        <label style={styles.label}>
+          Nueva contraseña
+          <input style={styles.input} type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="••••••" />
+        </label>
+        <label style={styles.label}>
+          Confirmar nueva contraseña
+          <input style={styles.input} type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••" />
+        </label>
+        {err && <p style={styles.errText}>{err}</p>}
+        <button style={styles.btnPrimary} onClick={handleSave} disabled={saving}>
+          {saving ? "Guardando…" : "Actualizar contraseña"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* =========================================================================
    ESTILOS
    ========================================================================= */

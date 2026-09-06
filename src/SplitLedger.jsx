@@ -229,8 +229,10 @@ function useGroups(userId) {
     return g;
   }, []);
 
+  // Soft-delete: deja la fila en la base (recuperable a mano desde el Table Editor
+  // poniendo deleted = false), la RLS de "groups" ya la oculta de cualquier query.
   const deleteGroup = useCallback(async (id) => {
-    const { error } = await supabase.from("groups").delete().eq("id", id);
+    const { error } = await supabase.from("groups").update({ deleted: true }).eq("id", id);
     if (error) throw error;
     setGroups((prev) => (prev ? prev.filter((g) => g.id !== id) : prev));
   }, []);

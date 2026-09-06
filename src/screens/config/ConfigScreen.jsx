@@ -291,6 +291,8 @@ function SplitLedgerSettings({ session, groups, onCreateGroup, onOpenGroup, refr
         El botón de "+" en Split Ledger crea el gasto directo en este grupo.
       </p>
 
+      <p style={styles.label}>Tus grupos ({(groups || []).length})</p>
+
       {/* Invitaciones pendientes */}
       <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
         <p style={{ margin: 0, padding: "12px 16px 8px", fontSize: 13, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#544A3C", borderBottom: invites.length ? "1px solid #F0EBE2" : "none", display: "flex", alignItems: "center", gap: 8 }}>
@@ -309,7 +311,6 @@ function SplitLedgerSettings({ session, groups, onCreateGroup, onOpenGroup, refr
         ))}
       </div>
 
-      <p style={styles.label}>Tus grupos ({(groups || []).length})</p>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {(groups || []).map((g) => (
           <button key={g.id} style={{ ...styles.shareRow, cursor: "pointer", textAlign: "left" }} onClick={() => onOpenGroup(g.id)}>

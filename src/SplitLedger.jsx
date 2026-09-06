@@ -423,9 +423,9 @@ function AppShell({ session, onLogout, refreshProfile }) {
         try {
           const { error } = await supabase.from("expenses").insert(newInstanceRows);
           if (error) throw error;
-          for (const u of nextDateUpdates) {
-            await supabase.from("recurring_expenses").update({ next_date: u.next_date }).eq("id", u.id);
-          }
+          await Promise.all(nextDateUpdates.map((u) =>
+            supabase.from("recurring_expenses").update({ next_date: u.next_date }).eq("id", u.id)
+          ));
           await reloadGroup(g.id);
         } catch { /* silencioso, igual que antes */ }
       })();

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "../../lib/supabaseClient.js";
 import {
   Plus, Receipt, X, ChevronRight, ArrowRight, Check, Trash2, Settings,
-  RefreshCw, HandCoins, UserPlus, AlertCircle, Repeat, ChevronUp,
+  RefreshCw, HandCoins, UserPlus, Repeat, ChevronUp,
   ChevronDown as ChevronDownIcon, Camera, User, PenLine, Pencil, Send, GripVertical,
 } from "lucide-react";
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
@@ -11,9 +11,9 @@ import { CSS } from "@dnd-kit/utilities";
 import { styles } from "../../lib/styles.js";
 import { TopBar, ConfirmInline, Modal, Footer } from "../../components/Shared.jsx";
 import {
-  uid, CURRENCIES, CURRENCY_LIST, money, ICON_KEYS, IconComp,
-  DEFAULT_CATEGORIES, groupCategories, catInfo, colorFor, initials, shortName,
-  computeBalances, simplifyDebts, toBase, fairSplit, computeShares,
+  uid, CURRENCIES, CURRENCY_LIST, money, parseAmountInput, ICON_KEYS, IconComp,
+  DEFAULT_CATEGORIES, groupCategories, catInfo, colorFor, initials, shortName, nameOf,
+  computeBalances, simplifyDebts, fairSplit, computeShares,
   dateInputValue, todayInputValue, fmtDate, freqLabel,
   useImageUpload, resolvePhotoUrl,
 } from "../../lib/helpers.jsx";
@@ -230,11 +230,11 @@ export default function SplitLedgerTab({
           group={activeGroup}
           session={session}
           onCancel={() => setView({ screen: "group", groupId: activeGroup.id })}
-          onSave={async ({ name, baseCurrency, rates, photoUrl, membersToAdd, memberIdsToRemove, categoriesToAdd, categoriesToUpdate, categoryIdsToRemove }) => {
+          onSave={async ({ name, baseCurrency, photoUrl, membersToAdd, memberIdsToRemove, categoriesToAdd, categoriesToUpdate, categoryIdsToRemove }) => {
             try {
               const { error: e1 } = await supabase
                 .from("groups")
-                .update({ name, base_currency: baseCurrency, rates, photo_url: photoUrl })
+                .update({ name, base_currency: baseCurrency, photo_url: photoUrl })
                 .eq("id", activeGroup.id);
               if (e1) throw e1;
               if (memberIdsToRemove.length) {
@@ -251,12 +251,12 @@ export default function SplitLedgerTab({
                 const { error } = await supabase.from("categories").delete().in("id", categoryIdsToRemove);
                 if (error) throw error;
               }
-              for (const c of categoriesToUpdate) {
-                const { error } = await supabase
-                  .from("categories")
-                  .update({ label: c.label, icon_key: c.iconKey, sort_order: c.sortOrder })
-                  .eq("id", c.id);
-                if (error) throw error;
+              if (categoriesToUpdate.length) {
+                const results = await Promise.all(categoriesToUpdate.map((c) =>
+                  supabase.from("categories").update({ label: c.label, icon_key: c.iconKey, sort_order: c.sortOrder }).eq("id", c.id)
+                ));
+                const failed = results.find((r) => r.error);
+                if (failed) throw failed.error;
               }
               if (categoriesToAdd.length) {
                 const { error } = await supabase.from("categories").insert(
@@ -351,29 +351,34 @@ export default function SplitLedgerTab({
    HOME
    ========================================================================= */
 
-function groupCardMeta(g, session) {
-  const bal = computeBalances(g);
-  const settled = Object.values(bal).every((v) => Math.abs(v) < 0.01);
+// Una línea por cada moneda donde el usuario tenga balance pendiente en este grupo
+// (sin conversión entre monedas — si debe en COP y le deben en EUR, son dos líneas).
+function groupCardLines(g, session) {
   const myId = g.members.find((m) => m.linkedUserId === session?.userId)?.id;
-  if (!myId || settled) return <span>Saldado</span>;
+  if (!myId) return [{ key: "settled", node: "Saldado" }];
 
-  const nameOf = (id) => g.members.find((m) => m.id === id)?.name || "Alguien";
-  const txns = simplifyDebts(bal);
-  const owedByMe = txns.filter((t) => t.from === myId);
-  const owedToMe = txns.filter((t) => t.to === myId);
+  const balancesByCurrency = computeBalances(g);
+  const lines = [];
 
-  if (owedByMe.length > 0) {
-    const total = owedByMe.reduce((s, t) => s + t.amount, 0);
-    const who = owedByMe.length === 1 ? shortName(nameOf(owedByMe[0].to)) : `${owedByMe.length} personas`;
-    return <>Debes <span style={{ color: "#B0473A", fontWeight: 700 }}>{money(total, g.baseCurrency)}</span> a {who}</>;
+  for (const currency of Object.keys(balancesByCurrency)) {
+    const bal = balancesByCurrency[currency];
+    if (Object.values(bal).every((v) => Math.abs(v) < 0.01)) continue;
+    const txns = simplifyDebts(bal);
+    const owedByMe = txns.filter((t) => t.from === myId);
+    const owedToMe = txns.filter((t) => t.to === myId);
+
+    if (owedByMe.length > 0) {
+      const total = owedByMe.reduce((s, t) => s + t.amount, 0);
+      const who = owedByMe.length === 1 ? shortName(nameOf(g.members, owedByMe[0].to)) : `${owedByMe.length} personas`;
+      lines.push({ key: currency, node: <>Debes <span style={{ color: "#B0473A", fontWeight: 700 }}>{money(total, currency)}</span> a {who}</> });
+    } else if (owedToMe.length > 0) {
+      const total = owedToMe.reduce((s, t) => s + t.amount, 0);
+      const who = owedToMe.length === 1 ? shortName(nameOf(g.members, owedToMe[0].from)) : `${owedToMe.length} personas`;
+      const verb = owedToMe.length === 1 ? "te debe" : "te deben";
+      lines.push({ key: currency, node: <>{who} {verb} <span style={{ color: "#3B6E62", fontWeight: 700 }}>{money(total, currency)}</span></> });
+    }
   }
-  if (owedToMe.length > 0) {
-    const total = owedToMe.reduce((s, t) => s + t.amount, 0);
-    const who = owedToMe.length === 1 ? shortName(nameOf(owedToMe[0].from)) : `${owedToMe.length} personas`;
-    const verb = owedToMe.length === 1 ? "te debe" : "te deben";
-    return <>{who} {verb} <span style={{ color: "#3B6E62", fontWeight: 700 }}>{money(total, g.baseCurrency)}</span></>;
-  }
-  return <span>Saldado</span>;
+  return lines.length > 0 ? lines : [{ key: "settled", node: "Saldado" }];
 }
 
 function Home({ groups, loading, session, onOpen, onNewExpense }) {
@@ -411,7 +416,9 @@ function Home({ groups, loading, session, onOpen, onNewExpense }) {
                     </div>
                     <div>
                       <p style={styles.groupName}>{g.name}</p>
-                      <p style={styles.groupMeta}>{groupCardMeta(g, session)}</p>
+                      {groupCardLines(g, session).map(({ key, node }) => (
+                        <p key={key} style={styles.groupMeta}>{node}</p>
+                      ))}
                     </div>
                   </div>
                   <ChevronRight size={20} color="#A89A87" />
@@ -507,7 +514,8 @@ function NewGroup({ onCancel, onCreate, session }) {
           </select>
         </label>
         <p style={{ ...styles.muted, padding: 0, marginTop: -8 }}>
-          Los balances se calculan en esta moneda. Puedes registrar gastos en otras y definir su tasa de cambio.
+          Es la moneda que se preselecciona al crear un gasto — puedes registrar gastos en
+          otras monedas cuando quieras, cada una lleva su propio balance por separado.
         </p>
 
         <p style={styles.label}>Integrantes</p>
@@ -599,7 +607,6 @@ function SortableCategoryRow({ cat, onEditIcon, onChangeLabel, onRemove }) {
 function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, groupInvites = [], showError }) {
   const [name, setName] = useState(group.name);
   const [baseCurrency, setBaseCurrency] = useState(group.baseCurrency);
-  const [rates, setRates] = useState(group.rates || {});
   const [members, setMembers] = useState(group.members);
   const [newMemberName, setNewMemberName] = useState("");
   const { previewUrl: photoUrl, pendingFile, removed, handleImageChange: handlePhoto, clear: clearPhoto } = useImageUpload(group.photoUrl || null, showError);
@@ -612,16 +619,9 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const balances = useMemo(() => computeBalances(group), [group]);
 
-  const usedCurrencies = useMemo(() => {
-    const set = new Set(group.expenses.filter(e => !e.deleted).map((e) => e.currency));
-    set.delete(baseCurrency);
-    return [...set];
-  }, [group.expenses, baseCurrency]);
-
   const isDirty = useMemo(() => {
     if (name.trim() !== group.name) return true;
     if (baseCurrency !== group.baseCurrency) return true;
-    if (JSON.stringify(rates) !== JSON.stringify(group.rates || {})) return true;
     if (pendingFile || removed) return true;
     const origMemberIds = new Set(group.members.map((m) => m.id));
     const curMemberIds = new Set(members.map((m) => m.id));
@@ -630,7 +630,7 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
     if (origCats.length !== categories.length) return true;
     if (origCats.some((c, i) => c.id !== categories[i].id || c.label !== categories[i].label || c.iconKey !== categories[i].iconKey)) return true;
     return false;
-  }, [name, baseCurrency, rates, pendingFile, removed, members, categories, group]);
+  }, [name, baseCurrency, pendingFile, removed, members, categories, group]);
   const hasEmptyCategory = categories.some((c) => !c.label.trim());
 
   const addMember = () => {
@@ -641,8 +641,8 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
   };
 
   const removeMember = (id) => {
-    const bal = balances[id] || 0;
-    if (Math.abs(bal) > 0.01) {
+    const hasPending = Object.values(balances).some((bal) => Math.abs(bal[id] || 0) > 0.01);
+    if (hasPending) {
       showError("No puedes quitar a alguien con balance pendiente. Salda sus cuentas primero.");
       return;
     }
@@ -667,15 +667,20 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
       const membersToAdd = members.filter((m) => !originalMemberIds.has(m.id));
       const memberIdsToRemove = group.members.filter((m) => !currentMemberIds.has(m.id)).map((m) => m.id);
 
-      const originalCategoryIds = new Set(groupCategories(group).map((c) => c.id));
+      const originalCatsById = new Map(groupCategories(group).map((c, i) => [c.id, { label: c.label, iconKey: c.iconKey, sortOrder: i }]));
       const currentCategoryIds = new Set(categories.map((c) => c.id));
       const indexedCategories = categories.map((c, i) => ({ ...c, sortOrder: i }));
-      const categoriesToAdd = indexedCategories.filter((c) => !originalCategoryIds.has(c.id));
-      const categoriesToUpdate = indexedCategories.filter((c) => originalCategoryIds.has(c.id));
+      const categoriesToAdd = indexedCategories.filter((c) => !originalCatsById.has(c.id));
+      // Solo se manda a actualizar la categoría cuyo label/ícono/orden realmente cambió,
+      // no todas las que ya existían (evita un UPDATE por categoría sin tocar en cada guardado).
+      const categoriesToUpdate = indexedCategories.filter((c) => {
+        const orig = originalCatsById.get(c.id);
+        return orig && (orig.label !== c.label || orig.iconKey !== c.iconKey || orig.sortOrder !== c.sortOrder);
+      });
       const categoryIdsToRemove = groupCategories(group).filter((c) => !currentCategoryIds.has(c.id)).map((c) => c.id);
 
       await onSave({
-        name: name.trim(), baseCurrency, rates, photoUrl: resolvedPhotoUrl,
+        name: name.trim(), baseCurrency, photoUrl: resolvedPhotoUrl,
         membersToAdd, memberIdsToRemove, categoriesToAdd, categoriesToUpdate, categoryIdsToRemove,
       });
     } catch (e) {
@@ -755,28 +760,6 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
           </select>
         </label>
 
-        {usedCurrencies.length > 0 && (
-          <>
-            <p style={styles.label}>Tasas de cambio a {baseCurrency}</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {usedCurrencies.map((c) => (
-                <div key={c} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 13, fontFamily: "system-ui, sans-serif", width: 90 }}>1 {c} =</span>
-                  <input
-                    style={{ ...styles.input, flex: 1 }}
-                    value={rates[c] ?? ""}
-                    onChange={(e) => setRates((prev) => ({ ...prev, [c]: parseFloat(e.target.value) || 0 }))}
-                    placeholder={`${baseCurrency} ej. 1.08`}
-                    inputMode="decimal"
-                  />
-                </div>
-              ))}
-            </div>
-            <p style={{ ...styles.muted, padding: 0, marginTop: -8 }}>
-              Esto solo afecta cómo se calculan los balances totales — los montos originales del gasto no cambian.
-            </p>
-          </>
-        )}
 
         <p style={styles.label}>Personas</p>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -792,7 +775,7 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
                     </span>
                   )}
                 </div>
-                {Math.abs(balances[m.id] || 0) > 0.01 && (
+                {Object.values(balances).some((bal) => Math.abs(bal[m.id] || 0) > 0.01) && (
                   <span style={{ fontSize: 11, color: "#A8754A", fontFamily: "system-ui, sans-serif" }}>balance pendiente</span>
                 )}
                 {m.linkedUserId === session?.userId ? (
@@ -932,12 +915,17 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
 function GroupView({ group, onBack, onAddExpense, onOpenExpense, onSettleUp, onEditGroup, onRecurring, onSoftDeleteExpense }) {
   const [tab, setTab] = useState("activity"); // activity | balances | individual
   const [selectedMember, setSelectedMember] = useState(group.members[0]?.id || null);
-  const { members, expenses, payments = [], baseCurrency } = group;
+  const { members, expenses, payments = [] } = group;
 
-  const balances = useMemo(() => computeBalances(group), [group]);
-  const txns = useMemo(() => simplifyDebts(balances), [balances]);
-  const nameOf = (id) => members.find((m) => m.id === id)?.name || "Alguien que ya no está";
-  const allSettled = txns.length === 0;
+  // Un balance (y su lista de deudas simplificada) por cada moneda usada en el grupo —
+  // sin conversión entre ellas, para no depender de tasas de cambio.
+  const balancesByCurrency = useMemo(() => computeBalances(group), [group]);
+  const currencies = Object.keys(balancesByCurrency);
+  const txnsByCurrency = useMemo(
+    () => Object.fromEntries(currencies.map((c) => [c, simplifyDebts(balancesByCurrency[c])])),
+    [balancesByCurrency, currencies]
+  );
+  const allSettled = currencies.every((c) => txnsByCurrency[c].length === 0);
   const activeExpenses = expenses.filter((e) => !e.deleted);
 
   const activityItems = useMemo(() => {
@@ -1022,35 +1010,49 @@ function GroupView({ group, onBack, onAddExpense, onOpenExpense, onSettleUp, onE
         <button style={tab === "individual" ? styles.tabActive : styles.tab} onClick={() => setTab("individual")}>Por persona</button>
       </div>
 
-      {tab === "balances" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 6 }}>
-          {allSettled && (
-            <div style={styles.settledBox}><Check size={18} color="#3B6E62" /><span>Todo saldado. Nadie le debe nada a nadie.</span></div>
-          )}
-          {!allSettled && txns.map((t, i) => (
-            <div key={i} style={styles.debtCard}>
-              <span style={{ ...styles.avatar, background: colorFor(t.from), width: 30, height: 30, fontSize: 11, flexShrink: 0 }}>{initials(nameOf(t.from))}</span>
-              <ArrowRight size={13} color="#C9BBA0" style={{ flexShrink: 0 }} />
-              <span style={{ ...styles.avatar, background: colorFor(t.to), width: 30, height: 30, fontSize: 11, flexShrink: 0 }}>{initials(nameOf(t.to))}</span>
-              <span style={{ flex: 1, fontSize: 13.5, fontFamily: "system-ui, sans-serif", fontWeight: 500, color: "#544A3C", minWidth: 0 }}>
-                <strong style={{ fontWeight: 700 }}>{shortName(nameOf(t.from))}</strong>
-                {" le debe a "}
-                <strong style={{ fontWeight: 700 }}>{shortName(nameOf(t.to))}</strong>
-              </span>
-              <span style={{ fontWeight: 700, fontSize: 14, color: "#C75D3B", fontFamily: "system-ui, sans-serif", flexShrink: 0 }}>{money(t.amount, baseCurrency)}</span>
-              <button style={styles.settleSmallBtn} onClick={() => onSettleUp({ from: t.from, to: t.to, amount: t.amount })}>
-                Saldar
-              </button>
-            </div>
-          ))}
-          <p style={styles.simplifyNote}>
-            {txns.length === 0 ? "Sin pagos pendientes." : `Simplificado a ${txns.length} pago${txns.length > 1 ? "s" : ""} — el mínimo posible para saldar el grupo.`}
-          </p>
-          <button style={{ ...styles.btnSecondary, width: "calc(100% - 40px)", margin: "4px 20px 0" }} onClick={() => onSettleUp(null)}>
-            <HandCoins size={16} /> Registrar un pago
-          </button>
-        </div>
-      )}
+      {tab === "balances" && (() => {
+        const totalTxnCount = currencies.reduce((s, c) => s + txnsByCurrency[c].length, 0);
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 6 }}>
+            {allSettled && (
+              <div style={styles.settledBox}><Check size={18} color="#3B6E62" /><span>Todo saldado. Nadie le debe nada a nadie.</span></div>
+            )}
+            {!allSettled && currencies.map((currency) => {
+              const txns = txnsByCurrency[currency];
+              if (txns.length === 0) return null;
+              return (
+                <div key={currency} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {currencies.length > 1 && (
+                    <p style={{ ...styles.label, padding: "0 20px" }}>{currency}</p>
+                  )}
+                  {txns.map((t, i) => (
+                    <div key={i} style={styles.debtCard}>
+                      <span style={{ ...styles.avatar, background: colorFor(t.from), width: 30, height: 30, fontSize: 11, flexShrink: 0 }}>{initials(nameOf(members, t.from))}</span>
+                      <ArrowRight size={13} color="#C9BBA0" style={{ flexShrink: 0 }} />
+                      <span style={{ ...styles.avatar, background: colorFor(t.to), width: 30, height: 30, fontSize: 11, flexShrink: 0 }}>{initials(nameOf(members, t.to))}</span>
+                      <span style={{ flex: 1, fontSize: 13.5, fontFamily: "system-ui, sans-serif", fontWeight: 500, color: "#544A3C", minWidth: 0 }}>
+                        <strong style={{ fontWeight: 700 }}>{shortName(nameOf(members, t.from))}</strong>
+                        {" le debe a "}
+                        <strong style={{ fontWeight: 700 }}>{shortName(nameOf(members, t.to))}</strong>
+                      </span>
+                      <span style={{ fontWeight: 700, fontSize: 14, color: "#C75D3B", fontFamily: "system-ui, sans-serif", flexShrink: 0 }}>{money(t.amount, currency)}</span>
+                      <button style={styles.settleSmallBtn} onClick={() => onSettleUp({ from: t.from, to: t.to, amount: t.amount, currency })}>
+                        Saldar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+            <p style={styles.simplifyNote}>
+              {allSettled ? "Sin pagos pendientes." : `Simplificado a ${totalTxnCount} pago${totalTxnCount > 1 ? "s" : ""} — el mínimo posible para saldar el grupo.`}
+            </p>
+            <button style={{ ...styles.btnSecondary, width: "calc(100% - 40px)", margin: "4px 20px 0" }} onClick={() => onSettleUp(null)}>
+              <HandCoins size={16} /> Registrar un pago
+            </button>
+          </div>
+        );
+      })()}
 
       {tab === "individual" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 6 }}>
@@ -1070,59 +1072,75 @@ function GroupView({ group, onBack, onAddExpense, onOpenExpense, onSettleUp, onE
           </div>
 
           {selectedMember && (() => {
-            const bal = balances[selectedMember] || 0;
-            const isZero = Math.abs(bal) < 0.01;
-            const isPos = bal > 0.005;
+            const perCurrency = currencies.map((currency) => {
+              const bal = balancesByCurrency[currency][selectedMember] || 0;
+              const myTxns = txnsByCurrency[currency].filter(t => t.from === selectedMember || t.to === selectedMember);
+              const totalLent = activeExpenses.filter(e => e.currency === currency).reduce((sum, e) => {
+                const payers = e.payers || { [e.paidBy]: e.amount };
+                const paid = payers[selectedMember] || 0;
+                const owes = e.shares[selectedMember] || 0;
+                return sum + Math.max(0, paid - owes);
+              }, 0);
+              return { currency, bal, myTxns, totalLent };
+            }).filter(({ bal, totalLent }) => Math.abs(bal) > 0.01 || totalLent > 0.01);
 
-            // Usar las transacciones simplificadas globales filtradas por esta persona
-            const myTxns = txns.filter(t => t.from === selectedMember || t.to === selectedMember);
-
-            // Total puesto de su bolsillo
-            const totalLent = (group.expenses || []).filter(e => !e.deleted).reduce((sum, e) => {
-              const payers = e.payers || { [e.paidBy]: e.amount };
-              const paid = toBase(payers[selectedMember] || 0, e.currency, group);
-              const owes = toBase(e.shares[selectedMember] || 0, e.currency, group);
-              return sum + Math.max(0, paid - owes);
-            }, 0);
+            if (perCurrency.length === 0) {
+              return (
+                <div style={{ padding: "14px 16px", borderRadius: 12, background: "#F3EFE5", border: "1px solid #DDD2BE", margin: "0 20px" }}>
+                  <p style={{ margin: 0, fontSize: 13, fontFamily: "system-ui, sans-serif", color: "#76695A" }}>{nameOf(members, selectedMember)}</p>
+                  <p style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#76695A" }}>Sin cuentas pendientes</p>
+                </div>
+              );
+            }
 
             return (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "0 20px" }}>
-                {/* Balance general */}
-                <div style={{ padding: "14px 16px", borderRadius: 12, background: isZero ? "#F3EFE5" : isPos ? "#EAF1ED" : "#FBEDE7", border: `1px solid ${isZero ? "#DDD2BE" : isPos ? "#CFE2D7" : "#EBC9BA"}` }}>
-                  <p style={{ margin: 0, fontSize: 13, fontFamily: "system-ui, sans-serif", color: "#76695A" }}>{nameOf(selectedMember)}</p>
-                  {isZero ? (
-                    <p style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#76695A" }}>Sin cuentas pendientes</p>
-                  ) : (
-                    <p style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: isPos ? "#3B6E62" : "#B0473A" }}>
-                      {isPos ? "Le deben " : "Debe "}
-                      <span>{money(Math.abs(bal), baseCurrency)}</span>
-                    </p>
-                  )}
-                </div>
-
-                {/* Pagos pendientes simplificados que involucran a esta persona */}
-                {myTxns.length > 0 && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    {myTxns.map((t, i) => (
-                      <div key={i} style={styles.pairRow}>
-                        <span style={{ ...styles.avatar, background: colorFor(t.from), width: 28, height: 28, fontSize: 11 }}>{initials(nameOf(t.from))}</span>
-                        <span style={{ flex: 1, fontSize: 13.5, fontFamily: "system-ui, sans-serif" }}>
-                          <strong>{shortName(nameOf(t.from))}</strong> le debe a <strong>{shortName(nameOf(t.to))}</strong>
-                        </span>
-                        <span style={{ fontWeight: 700, fontSize: 13.5, color: t.from === selectedMember ? "#B0473A" : "#3B6E62", fontFamily: "system-ui, sans-serif" }}>
-                          {money(t.amount, baseCurrency)}
-                        </span>
+              <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: "0 20px" }}>
+                {perCurrency.map(({ currency, bal, myTxns, totalLent }) => {
+                  const isZero = Math.abs(bal) < 0.01;
+                  const isPos = bal > 0.005;
+                  return (
+                    <div key={currency} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {/* Balance general de esta moneda */}
+                      <div style={{ padding: "14px 16px", borderRadius: 12, background: isZero ? "#F3EFE5" : isPos ? "#EAF1ED" : "#FBEDE7", border: `1px solid ${isZero ? "#DDD2BE" : isPos ? "#CFE2D7" : "#EBC9BA"}` }}>
+                        <p style={{ margin: 0, fontSize: 13, fontFamily: "system-ui, sans-serif", color: "#76695A" }}>
+                          {nameOf(members, selectedMember)}{currencies.length > 1 ? ` · ${currency}` : ""}
+                        </p>
+                        {isZero ? (
+                          <p style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#76695A" }}>Sin cuentas pendientes</p>
+                        ) : (
+                          <p style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: isPos ? "#3B6E62" : "#B0473A" }}>
+                            {isPos ? "Le deben " : "Debe "}
+                            <span>{money(Math.abs(bal), currency)}</span>
+                          </p>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                )}
 
-                {/* Total puesto de su bolsillo */}
-                {totalLent > 0.01 && (
-                  <p style={{ ...styles.muted, padding: 0, fontSize: 12.5 }}>
-                    Ha puesto de su bolsillo un total de <strong>{money(totalLent, baseCurrency)}</strong> en gastos del grupo.
-                  </p>
-                )}
+                      {/* Pagos pendientes simplificados que involucran a esta persona */}
+                      {myTxns.length > 0 && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          {myTxns.map((t, i) => (
+                            <div key={i} style={styles.pairRow}>
+                              <span style={{ ...styles.avatar, background: colorFor(t.from), width: 28, height: 28, fontSize: 11 }}>{initials(nameOf(members, t.from))}</span>
+                              <span style={{ flex: 1, fontSize: 13.5, fontFamily: "system-ui, sans-serif" }}>
+                                <strong>{shortName(nameOf(members, t.from))}</strong> le debe a <strong>{shortName(nameOf(members, t.to))}</strong>
+                              </span>
+                              <span style={{ fontWeight: 700, fontSize: 13.5, color: t.from === selectedMember ? "#B0473A" : "#3B6E62", fontFamily: "system-ui, sans-serif" }}>
+                                {money(t.amount, currency)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Total puesto de su bolsillo */}
+                      {totalLent > 0.01 && (
+                        <p style={{ ...styles.muted, padding: 0, fontSize: 12.5 }}>
+                          Ha puesto de su bolsillo un total de <strong>{money(totalLent, currency)}</strong> en gastos del grupo.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             );
           })()}
@@ -1182,7 +1200,7 @@ function GroupView({ group, onBack, onAddExpense, onOpenExpense, onSettleUp, onE
                       <p style={styles.expenseSub}>
                         {(() => {
                           const payers = e.payers || { [e.paidBy]: e.amount };
-                          const payerNames = Object.keys(payers).map(id => shortName(nameOf(id)));
+                          const payerNames = Object.keys(payers).map(id => shortName(nameOf(members, id)));
                           const payerStr = payerNames.length === 1
                             ? `${payerNames[0]} pagó`
                             : `${payerNames.slice(0, -1).join(", ")} y ${payerNames.at(-1)} pagaron`;
@@ -1208,7 +1226,7 @@ function GroupView({ group, onBack, onAddExpense, onOpenExpense, onSettleUp, onE
                   </div>
                   <div style={{ ...styles.expenseIcon, background: "#3B6E62", flexShrink: 0 }}><HandCoins size={16} /></div>
                   <p style={{ ...styles.expenseTitle, flex: 1, minWidth: 0, margin: 0 }}>
-                    {nameOf(p.from)} le pagó a {nameOf(p.to)}{p.note ? ` · ${p.note}` : ""}
+                    {nameOf(members, p.from)} le pagó a {nameOf(members, p.to)}{p.note ? ` · ${p.note}` : ""}
                   </p>
                   <span style={{ fontWeight: 700, fontSize: 14, color: "#3B6E62", fontFamily: "system-ui, sans-serif", flexShrink: 0 }}>
                     {money(p.amount, p.currency)}
@@ -1232,7 +1250,6 @@ function GroupView({ group, onBack, onAddExpense, onOpenExpense, onSettleUp, onE
 function ExpenseDetail({ group, expenseId, onBack, onEdit }) {
   const { members } = group;
   const e = group.expenses.find((x) => x.id === expenseId);
-  const nameOf = (id) => members.find((m) => m.id === id)?.name || "Alguien que ya no está";
 
   if (!e) {
     return (
@@ -1291,9 +1308,9 @@ function ExpenseDetail({ group, expenseId, onBack, onEdit }) {
             {payerIds.map((id) => (
               <div key={id} style={styles.shareRow}>
                 <span style={{ ...styles.avatar, background: colorFor(id), width: 30, height: 30, minWidth: 30, fontSize: 11 }}>
-                  {initials(nameOf(id))}
+                  {initials(nameOf(members, id))}
                 </span>
-                <span style={{ flex: 1 }}>{nameOf(id)}</span>
+                <span style={{ flex: 1 }}>{nameOf(members, id)}</span>
                 <span style={styles.shareAmount}>{money(payers[id], e.currency)}</span>
               </div>
             ))}
@@ -1307,9 +1324,9 @@ function ExpenseDetail({ group, expenseId, onBack, onEdit }) {
             {shareIds.map((id) => (
               <div key={id} style={styles.shareRow}>
                 <span style={{ ...styles.avatar, background: colorFor(id), width: 30, height: 30, minWidth: 30, fontSize: 11 }}>
-                  {initials(nameOf(id))}
+                  {initials(nameOf(members, id))}
                 </span>
-                <span style={{ flex: 1 }}>{nameOf(id)}</span>
+                <span style={{ flex: 1 }}>{nameOf(members, id)}</span>
                 <span style={styles.shareAmount}>{money(e.shares[id], e.currency)}</span>
               </div>
             ))}
@@ -1386,12 +1403,12 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const numericAmount = parseFloat((amount || "").replace(",", "."));
+  const numericAmount = parseAmountInput(amount || "");
   const validAmount = !isNaN(numericAmount) && numericAmount > 0;
 
   // Total que han puesto los pagadores seleccionados en modo multi
   const multiPayerTotal = [...multiPayerSelected].reduce((s, id) => {
-    const v = parseFloat((payerAmounts[id] || "0").replace(",", "."));
+    const v = parseAmountInput(payerAmounts[id] || "0");
     return s + (isNaN(v) ? 0 : v);
   }, 0);
 
@@ -1414,7 +1431,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
   };
 
   const participantIds = members.filter((m) => participants.has(m.id)).map((m) => m.id);
-  const exactTotal = participantIds.reduce((s, id) => s + (parseFloat((exactAmounts[id] || "0").replace(",", ".")) || 0), 0);
+  const exactTotal = participantIds.reduce((s, id) => s + (parseAmountInput(exactAmounts[id] || "0") || 0), 0);
   const percentTotal = participantIds.reduce((s, id) => s + (parseFloat(percentages[id] || "0") || 0), 0);
 
   // Construir objeto payers para guardar
@@ -1422,7 +1439,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
     if (payerMode === "single") return { [singlePayer]: numericAmount };
     const result = {};
     [...multiPayerSelected].forEach((id) => {
-      const v = parseFloat((payerAmounts[id] || "0").replace(",", "."));
+      const v = parseAmountInput(payerAmounts[id] || "0");
       if (!isNaN(v) && v > 0) result[id] = v;
     });
     return result;
@@ -1432,7 +1449,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
     if (splitMode === "equal") return computeShares({ splitMode: "equal", amount: numericAmount, participantIds });
     if (splitMode === "exact") {
       const exact = {};
-      participantIds.forEach((id) => (exact[id] = parseFloat((exactAmounts[id] || "0").replace(",", ".")) || 0));
+      participantIds.forEach((id) => (exact[id] = parseAmountInput(exactAmounts[id] || "0") || 0));
       return computeShares({ splitMode: "exact", amount: numericAmount, participantIds, exactAmounts: exact });
     }
     if (splitMode === "percent") {
@@ -1543,12 +1560,6 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
             {CURRENCY_LIST.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
-        {currency !== baseCurrency && (
-          <p style={{ ...styles.muted, padding: 0, marginTop: -8, display: "flex", alignItems: "center", gap: 5 }}>
-            <AlertCircle size={13} /> Se convertirá a {baseCurrency} para los balances. Configura la tasa en "Editar grupo" si aún no la tiene.
-          </p>
-        )}
-
         {/* Fila: Fecha + Categoría + icono Foto + icono Nota — se pone después de dividido en */}
 
         <p style={styles.label}>¿Quién pagó?</p>
@@ -1841,13 +1852,13 @@ function SettleUp({ group, prefill, onCancel, onSave }) {
   const [from, setFrom] = useState(prefill?.from || members[0]?.id || "");
   const [to, setTo] = useState(prefill?.to || members[1]?.id || "");
   const [amount, setAmount] = useState(prefill?.amount ? String(prefill.amount.toFixed(2)) : "");
-  const [currency, setCurrency] = useState(baseCurrency);
+  const [currency, setCurrency] = useState(prefill?.currency || baseCurrency);
   const [date, setDate] = useState(todayInputValue());
   const [note, setNote] = useState("");
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const numericAmount = parseFloat((amount || "").replace(",", "."));
+  const numericAmount = parseAmountInput(amount || "");
   const validAmount = !isNaN(numericAmount) && numericAmount > 0;
 
   const handleSave = async () => {
@@ -1928,7 +1939,6 @@ function SettleUp({ group, prefill, onCancel, onSave }) {
 
 function RecurringList({ group, onBack, onTogglePause, onRemove }) {
   const { recurring = [], members } = group;
-  const nameOf = (id) => members.find((m) => m.id === id)?.name || "—";
 
   const togglePause = (id, paused) => onTogglePause(id, paused);
   const remove = (id) => onRemove(id);
@@ -1950,7 +1960,7 @@ function RecurringList({ group, onBack, onTogglePause, onRemove }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={styles.expenseTitle}>{r.description}</p>
                 <p style={styles.expenseSub}>
-                  {money(r.amount, r.currency)} · {nameOf(r.paidBy)} paga · {freqLabel(r.frequency)} · próximo: {fmtDate(r.nextDate)}
+                  {money(r.amount, r.currency)} · {nameOf(members, r.paidBy)} paga · {freqLabel(r.frequency)} · próximo: {fmtDate(r.nextDate)}
                   {r.paused ? " · pausado" : ""}
                 </p>
               </div>

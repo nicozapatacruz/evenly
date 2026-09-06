@@ -37,6 +37,18 @@ export const money = (n, currency = "USD") => {
   return `${n < 0 ? "-" : ""}${sym}${fixed}`;
 };
 
+// Convierte lo que el usuario escribió en un input de monto a número.
+// money() muestra los montos en formato es-ES (punto = miles, coma = decimal), así que si el
+// texto trae una coma se asume ese formato y se limpian los puntos primero — si solo se
+// reemplazara la coma por un punto ("1.234,56" -> "1.234.56"), parseFloat cortaría en el
+// segundo punto y devolvería 1.234 en vez de 1234.56.
+export const parseAmountInput = (raw) => {
+  if (!raw) return NaN;
+  let s = String(raw).trim();
+  if (s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
+  return parseFloat(s);
+};
+
 // Mapa completo de íconos disponibles para categorías (string → componente)
 export const ICON_MAP = {
   Receipt, UtensilsCrossed, Car, Home: HomeIcon, Plug, PartyPopper, ShoppingBag,
@@ -101,40 +113,46 @@ export const initials = (name) =>
     .map((w) => w[0]?.toUpperCase() || "")
     .join("");
 
-export function toBase(amount, currency, group) {
-  if (!currency || currency === group.baseCurrency) return amount;
-  const rate = group.rates?.[currency];
-  if (!rate) return amount;
-  return amount * rate;
-}
+// Nombre de un miembro por id — compartido para que GroupView/ExpenseDetail/RecurringList
+// no repitan la misma búsqueda cada uno con su propio texto de fallback.
+export const nameOf = (members, id) => members.find((m) => m.id === id)?.name || "Alguien que ya no está";
 
+// Un balance independiente por cada moneda que aparezca en el grupo — sin conversión entre
+// ellas. Devuelve { [currency]: { [memberId]: balance } }. Evita a propósito el problema de
+// tasas de cambio: si alguien debe COP y le deben EUR, son dos deudas separadas, no una neta.
 export function computeBalances(group) {
   const { members, expenses = [], payments = [] } = group;
-  const bal = {};
-  members.forEach((m) => (bal[m.id] = 0));
+  const balances = {};
+
+  const ledgerFor = (currency) => {
+    if (!balances[currency]) {
+      balances[currency] = {};
+      members.forEach((m) => { balances[currency][m.id] = 0; });
+    }
+    return balances[currency];
+  };
 
   expenses.forEach((e) => {
     if (e.deleted) return;
+    const bal = ledgerFor(e.currency);
     // Retrocompatibilidad: paidBy (string) o payers (objeto {id: amount})
     const payers = e.payers || { [e.paidBy]: e.amount };
     Object.entries(payers).forEach(([payerId, paid]) => {
-      const paidBase = toBase(paid, e.currency, group);
-      bal[payerId] = (bal[payerId] || 0) + paidBase;
+      bal[payerId] = (bal[payerId] || 0) + paid;
     });
     Object.entries(e.shares).forEach(([memberId, shareAmt]) => {
-      const shareBase = toBase(shareAmt, e.currency, group);
-      bal[memberId] = (bal[memberId] || 0) - shareBase;
+      bal[memberId] = (bal[memberId] || 0) - shareAmt;
     });
   });
 
   payments.forEach((p) => {
     if (p.deleted) return;
-    const amtBase = toBase(p.amount, p.currency, group);
-    bal[p.from] = (bal[p.from] || 0) + amtBase;
-    bal[p.to] = (bal[p.to] || 0) - amtBase;
+    const bal = ledgerFor(p.currency);
+    bal[p.from] = (bal[p.from] || 0) + p.amount;
+    bal[p.to] = (bal[p.to] || 0) - p.amount;
   });
 
-  return bal;
+  return balances;
 }
 
 export function simplifyDebts(balances) {
@@ -158,49 +176,6 @@ export function simplifyDebts(balances) {
     if (creditors[j].amt < 0.005) j++;
   }
   return txns;
-}
-
-// Net que otherId le debe a memberId (positivo = otherId debe a memberId; negativo = memberId debe a otherId)
-// Fórmula: por cada gasto, memberId pagó una fracción de la parte de otherId,
-// y otherId pagó una fracción de la parte de memberId.
-export function pairwiseBalance(group, memberId, otherId) {
-  const { expenses = [], payments = [] } = group;
-  let net = 0;
-
-  expenses.forEach((e) => {
-    if (e.deleted) return;
-    const toB = (amt) => toBase(amt, e.currency, group);
-    const payers = e.payers || { [e.paidBy]: e.amount };
-
-    const paidM = toB(payers[memberId] || 0);
-    const paidO = toB(payers[otherId]  || 0);
-    const sharesM = toB(e.shares[memberId] || 0);
-    const sharesO = toB(e.shares[otherId]  || 0);
-    const totalShares = Object.values(e.shares).reduce((s, v) => s + toB(v), 0) || 1;
-
-    // memberId pagó de la parte de otherId: paidM * (sharesO / totalShares)
-    // otherId pagó de la parte de memberId: paidO * (sharesM / totalShares)
-    net += paidM * (sharesO / totalShares);
-    net -= paidO * (sharesM / totalShares);
-  });
-
-  // Pagos directos entre los dos
-  payments.forEach((p) => {
-    if (p.deleted) return;
-    const amtBase = toBase(p.amount, p.currency, group);
-    if (p.from === otherId && p.to === memberId) net -= amtBase;
-    if (p.from === memberId && p.to === otherId) net += amtBase;
-  });
-
-  return net;
-}
-
-// Distribuye `totalCents` enteros entre `n` personas de la forma más justa posible.
-// Devuelve un array de valores en centavos. Los primeros (totalCents % n) reciben 1 centavo extra.
-export function distributeCents(totalCents, n) {
-  const base = Math.floor(totalCents / n);
-  const extra = totalCents - base * n; // cuántas personas reciben 1 centavo más
-  return Array.from({ length: n }, (_, i) => (i < extra ? base + 1 : base));
 }
 
 // Convierte un monto float a centavos y de vuelta, distribuyendo sin perder ni ganar céntimos.
@@ -249,10 +224,20 @@ export function computeShares({ splitMode, amount, participantIds, exactAmounts,
 
 export function nextOccurrence(dateMs, frequency) {
   const d = new Date(dateMs);
-  if (frequency === "weekly") d.setDate(d.getDate() + 7);
-  else if (frequency === "biweekly") d.setDate(d.getDate() + 14);
-  else if (frequency === "monthly") d.setMonth(d.getMonth() + 1);
-  else if (frequency === "yearly") d.setFullYear(d.getFullYear() + 1);
+  if (frequency === "weekly") { d.setDate(d.getDate() + 7); return d.getTime(); }
+  if (frequency === "biweekly") { d.setDate(d.getDate() + 14); return d.getTime(); }
+  if (frequency === "monthly" || frequency === "yearly") {
+    // setMonth/setFullYear desbordan al mes siguiente cuando el día de anclaje (29-31) no
+    // existe en el mes destino (ej. 31 de enero + 1 mes = 3 de marzo, no fin de febrero).
+    // Se ancla al día 1 antes de sumar el mes/año, y se recorta al último día válido.
+    const day = d.getDate();
+    d.setDate(1);
+    if (frequency === "monthly") d.setMonth(d.getMonth() + 1);
+    else d.setFullYear(d.getFullYear() + 1);
+    const lastDayOfTargetMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    d.setDate(Math.min(day, lastDayOfTargetMonth));
+    return d.getTime();
+  }
   return d.getTime();
 }
 
@@ -276,7 +261,9 @@ export function generateDueRecurring(template, now = Date.now()) {
       notes: template.notes,
       recurringId: template.id,
     });
-    next = nextOccurrence(next, template.frequency);
+    const advanced = nextOccurrence(next, template.frequency);
+    if (advanced <= next) break; // frecuencia desconocida / no avanza: cortar en vez de duplicar
+    next = advanced;
     guard++;
   }
   return { instances, newNextDate: next };
@@ -288,9 +275,6 @@ export function freqLabel(f) {
 
 export function fmtDate(ms) {
   return new Date(ms).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
-}
-export function fmtDateShort(ms) {
-  return new Date(ms).toLocaleDateString("es-ES", { day: "2-digit", month: "short" });
 }
 export function todayInputValue() {
   const d = new Date();

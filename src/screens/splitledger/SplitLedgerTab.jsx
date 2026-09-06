@@ -553,8 +553,27 @@ function SortableCategoryRow({ cat, onEditIcon, onChangeLabel, onRemove }) {
   };
   return (
     <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 6, padding: "8px 10px" }}>
-      {/* Handle — touchAction:"none" es necesario para que el drag responda al dedo en vez del scroll */}
-      <span {...attributes} {...listeners} style={{ color: "#C9BBA0", display: "flex", alignItems: "center", paddingRight: 2, cursor: "grab", touchAction: "none" }}>
+      {/* Handle — más ancho y a todo el alto de la fila para que sea fácil agarrarlo con el dedo.
+          touchAction:"none" es necesario para que el drag responda al dedo en vez del scroll. */}
+      <span
+        {...attributes}
+        {...listeners}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          alignSelf: "stretch",
+          margin: "-8px 0 -8px -10px",
+          minWidth: 40,
+          padding: "0 10px",
+          background: "#F3EFE5",
+          borderRadius: "8px 0 0 8px",
+          color: "#A8967A",
+          fontSize: 20,
+          cursor: "grab",
+          touchAction: "none",
+        }}
+      >
         ⠿
       </span>
       <button

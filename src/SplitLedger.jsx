@@ -19,12 +19,12 @@ import {
 const uid = () => Math.random().toString(36).slice(2, 10);
 
 const CURRENCIES = {
-  USD: { symbol: "$", label: "USD" },
   EUR: { symbol: "€", label: "EUR" },
+  USD: { symbol: "$", label: "USD" },
+  COP: { symbol: "COL$", label: "COP" },
   GBP: { symbol: "£", label: "GBP" },
   MXN: { symbol: "MX$", label: "MXN" },
   ARS: { symbol: "AR$", label: "ARS" },
-  COP: { symbol: "COL$", label: "COP" },
   CLP: { symbol: "CLP$", label: "CLP" },
   PEN: { symbol: "S/", label: "PEN" },
   BRL: { symbol: "R$", label: "BRL" },
@@ -404,7 +404,10 @@ function useAuth() {
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: { data: { username: uname, display_name: displayName.trim() } },
+      options: {
+        data: { username: uname, display_name: displayName.trim() },
+        emailRedirectTo: window.location.origin + window.location.pathname,
+      },
     });
     if (error) {
       if (/duplicate key/i.test(error.message) && /username/i.test(error.message)) {
@@ -418,7 +421,12 @@ function useAuth() {
 
   const login = useCallback(async (email, password) => {
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    if (error) throw new Error("Email o contraseña incorrectos.");
+    if (error) {
+      if (/email.*not.*confirmed|confirm.*email/i.test(error.message)) {
+        throw new Error("Todavía no confirmas tu correo. Revisa tu bandeja de entrada y haz click en el enlace de confirmación.");
+      }
+      throw new Error("Email o contraseña incorrectos.");
+    }
   }, []);
 
   const logout = useCallback(async () => {
@@ -1136,7 +1144,7 @@ function Home({ groups, loading, session, invites = [], onOpen, onNew, onProfile
 function NewGroup({ onCancel, onCreate, session }) {
   const [name, setName] = useState("");
   const [members, setMembers] = useState([""]);
-  const [baseCurrency, setBaseCurrency] = useState("USD");
+  const [baseCurrency, setBaseCurrency] = useState("EUR");
   const [err, setErr] = useState("");
   const { previewUrl: photoUrl, pendingFile, removed, handleImageChange: handlePhoto, clear: clearPhoto } = useImageUpload(null, setErr);
   const [saving, setSaving] = useState(false);
@@ -2760,6 +2768,7 @@ function InviteScreen({ group, session, groupInvites = [], onBack, onSend, onCan
    ========================================================================= */
 
 function ProfileScreen({ session, invites = [], onBack, onLogout, onAcceptInvite, onRejectInvite, onSave }) {
+  const [editing, setEditing] = useState(false);
   const [displayName, setDisplayName] = useState(session.displayName || "");
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -2777,6 +2786,7 @@ function ProfileScreen({ session, invites = [], onBack, onLogout, onAcceptInvite
     try {
       const resolvedPhotoUrl = await resolvePhotoUrl({ pendingFile, removed, currentUrl: session.photoUrl });
       await onSave({ displayName: displayName.trim(), newPassword: null, photoUrl: resolvedPhotoUrl });
+      setEditing(false);
     } catch (e) { setErr(e?.message || "Error al guardar"); } finally { setSaving(false); }
   };
 
@@ -2799,34 +2809,60 @@ function ProfileScreen({ session, invites = [], onBack, onLogout, onAcceptInvite
       <TopBar title="Mi perfil" onBack={onBack} />
       <div style={styles.form}>
 
-        {/* Foto de perfil */}
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{ width: 72, height: 72, minWidth: 72, borderRadius: "50%", overflow: "hidden", background: photoUrl ? "transparent" : "#E8DFD0", display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #DDD2BE" }}>
-            {photoUrl
-              ? <img src={photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              : <User size={28} color="#A89A87" />
-            }
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <label style={{ ...styles.btnDashed, cursor: "pointer", fontSize: 13 }}>
-              <Camera size={14} /> {photoUrl ? "Cambiar foto" : "Añadir foto"}
-              <input type="file" accept="image/*" style={{ display: "none" }} onChange={handlePhoto} />
+        {!editing ? (
+          <>
+            {/* Vista de solo lectura */}
+            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+              <div style={{ width: 72, height: 72, minWidth: 72, borderRadius: "50%", overflow: "hidden", background: photoUrl ? "transparent" : "#E8DFD0", display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #DDD2BE" }}>
+                {photoUrl
+                  ? <img src={photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  : <User size={28} color="#A89A87" />
+                }
+              </div>
+              <div>
+                <p style={{ margin: 0, fontSize: 18, fontWeight: 700, fontFamily: "'Iowan Old Style', Georgia, serif" }}>{session.displayName}</p>
+                <p style={{ ...styles.muted, padding: 0, fontSize: 12 }}>@{session.username}</p>
+              </div>
+            </div>
+            <button style={styles.btnSecondary} onClick={() => setEditing(true)}>
+              <Pencil size={15} /> Editar perfil
+            </button>
+          </>
+        ) : (
+          <>
+            {/* Foto de perfil */}
+            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+              <div style={{ width: 72, height: 72, minWidth: 72, borderRadius: "50%", overflow: "hidden", background: photoUrl ? "transparent" : "#E8DFD0", display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #DDD2BE" }}>
+                {photoUrl
+                  ? <img src={photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  : <User size={28} color="#A89A87" />
+                }
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <label style={{ ...styles.btnDashed, cursor: "pointer", fontSize: 13 }}>
+                  <Camera size={14} /> {photoUrl ? "Cambiar foto" : "Añadir foto"}
+                  <input type="file" accept="image/*" style={{ display: "none" }} onChange={handlePhoto} />
+                </label>
+                {photoUrl && <button style={{ ...styles.btnGhostSmall, fontSize: 12 }} onClick={clearPhoto}>Quitar foto</button>}
+              </div>
+            </div>
+
+            <p style={{ ...styles.muted, padding: 0, fontSize: 12 }}>@{session.username}</p>
+
+            <label style={styles.label}>
+              Nombre visible
+              <input style={styles.input} value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Tu nombre" autoFocus />
             </label>
-            {photoUrl && <button style={{ ...styles.btnGhostSmall, fontSize: 12 }} onClick={clearPhoto}>Quitar foto</button>}
-          </div>
-        </div>
 
-        <p style={{ ...styles.muted, padding: 0, fontSize: 12 }}>@{session.username}</p>
-
-        <label style={styles.label}>
-          Nombre visible
-          <input style={styles.input} value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Tu nombre" />
-        </label>
-
-        {err && !showPasswordForm && <p style={styles.errText}>{err}</p>}
-        <button style={styles.btnPrimary} onClick={handleSave} disabled={saving}>
-          {saving ? "Guardando…" : "Guardar cambios"}
-        </button>
+            {err && !showPasswordForm && <p style={styles.errText}>{err}</p>}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={styles.btnGhostSmall} onClick={() => { setEditing(false); setErr(""); setDisplayName(session.displayName || ""); }}>Cancelar</button>
+              <button style={{ ...styles.btnPrimary, flex: 1 }} onClick={handleSave} disabled={saving}>
+                {saving ? "Guardando…" : "Guardar cambios"}
+              </button>
+            </div>
+          </>
+        )}
 
         {/* Cambio de contraseña colapsable */}
         <button style={styles.collapsibleHeader} onClick={() => { setShowPasswordForm(v => !v); setErr(""); setCurrentPassword(""); setNewPassword(""); setConfirmPassword(""); }}>
@@ -2897,7 +2933,8 @@ function ProfileScreen({ session, invites = [], onBack, onLogout, onAcceptInvite
 
 const globalCss = `
   * { box-sizing: border-box; }
-  body { margin: 0; }
+  html, body { margin: 0; height: 100%; overflow-x: hidden; overscroll-behavior-y: none; -webkit-text-size-adjust: 100%; background: #F7F2E9; }
+  #root { min-height: 100%; }
   input:focus, button:focus-visible, select:focus-visible, textarea:focus-visible {
     outline: 2px solid #C75D3B;
     outline-offset: 2px;

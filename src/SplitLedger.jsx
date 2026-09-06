@@ -504,6 +504,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           refreshProfile={refreshProfile}
           groups={groups}
           onCreateGroup={() => { setActiveTab("splitledger"); setSplitLedgerView({ screen: "newGroup" }); }}
+          onOpenGroup={(groupId) => { setActiveTab("splitledger"); setSplitLedgerView({ screen: "group", groupId }); }}
           showError={showError}
           showSuccess={showSuccess}
           changingPassword={changingPassword}

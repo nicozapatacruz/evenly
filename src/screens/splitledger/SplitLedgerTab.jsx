@@ -836,11 +836,14 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
 
       {showDeleteModal && (
         <Modal onClose={() => { setShowDeleteModal(false); setDeleteConfirmText(""); }}>
-          <p style={{ margin: "0 0 14px", fontSize: 15, fontFamily: "system-ui, sans-serif", color: "#2B2620" }}>
-            ¿Borrar "{group.name}" y todo su historial? Esta acción no se puede deshacer.
+          <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#2B2620" }}>
+            ¿Borrar "{group.name}"?
+          </p>
+          <p style={{ margin: "0 0 14px", fontSize: 14, fontFamily: "system-ui, sans-serif", color: "#6B6355" }}>
+            Esta acción no se puede deshacer.
           </p>
           <input
-            style={{ ...styles.input, fontSize: 14 }}
+            style={{ ...styles.input, fontSize: 14, width: "100%" }}
             placeholder='Escribe "Confirmar" para continuar'
             value={deleteConfirmText}
             onChange={e => setDeleteConfirmText(e.target.value)}
@@ -1650,11 +1653,11 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
           <label style={{ ...styles.label, flex: 1 }}>
             Fecha
-            <input style={styles.input} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            <input style={{ ...styles.input, height: 44, boxSizing: "border-box" }} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </label>
           <label style={{ ...styles.label, flex: 1 }}>
             Categoría
-            <select style={{ ...styles.input, paddingRight: 10 }} value={category} onChange={(e) => setCategory(e.target.value)}>
+            <select style={{ ...styles.input, height: 44, boxSizing: "border-box", paddingRight: 10 }} value={category} onChange={(e) => setCategory(e.target.value)}>
               {groupCategories(group).map((c) => (
                 <option key={c.id} value={c.id}>{c.label}</option>
               ))}

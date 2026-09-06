@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { User, Camera, LogOut, Bell, Plus } from "lucide-react";
+import { User, Camera, LogOut, Bell, Plus, ChevronRight } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, ConfirmInline, Footer } from "../../components/Shared.jsx";
@@ -14,7 +14,7 @@ import ComingSoon from "../moneymanager/ComingSoon.jsx";
 
 export default function ConfigScreen({
   session, invites = [], onAcceptInvite, onRejectInvite, onLogout, refreshProfile,
-  groups, onCreateGroup, showError, showSuccess,
+  groups, onCreateGroup, onOpenGroup, showError, showSuccess,
   changingPassword, setChangingPassword, viewingProfile, setViewingProfile,
 }) {
   const [section, setSection] = useState("splitledger"); // "moneymanager" | "splitledger"
@@ -70,6 +70,7 @@ export default function ConfigScreen({
           session={session}
           groups={groups}
           onCreateGroup={onCreateGroup}
+          onOpenGroup={onOpenGroup}
           refreshProfile={refreshProfile}
           showError={showError}
           showSuccess={showSuccess}
@@ -215,7 +216,7 @@ function ChangePasswordScreen({ session, onBack, onSave }) {
    defecto, tus grupos)
    ========================================================================= */
 
-function SplitLedgerSettings({ session, groups, onCreateGroup, refreshProfile, showError, showSuccess, invites, onAcceptInvite, onRejectInvite }) {
+function SplitLedgerSettings({ session, groups, onCreateGroup, onOpenGroup, refreshProfile, showError, showSuccess, invites, onAcceptInvite, onRejectInvite }) {
   const [displayName, setDisplayName] = useState(session.displayName || "");
   const [savingName, setSavingName] = useState(false);
   const [togglingEnabled, setTogglingEnabled] = useState(false);
@@ -266,24 +267,6 @@ function SplitLedgerSettings({ session, groups, onCreateGroup, refreshProfile, s
         </button>
       </div>
 
-      {/* Invitaciones pendientes */}
-      <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
-        <p style={{ margin: 0, padding: "12px 16px 8px", fontSize: 13, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#544A3C", borderBottom: invites.length ? "1px solid #F0EBE2" : "none", display: "flex", alignItems: "center", gap: 8 }}>
-          <Bell size={15} /> Invitaciones ({invites.length})
-        </p>
-        {invites.map((inv) => (
-          <div key={inv.inviteId} style={{ padding: "10px 16px", borderBottom: "1px solid #F0EBE2", display: "flex", flexDirection: "column", gap: 6 }}>
-            <p style={{ margin: 0, fontSize: 13.5, fontFamily: "system-ui, sans-serif" }}>
-              <strong>{inv.fromUsername}</strong> te invitó a <strong>{inv.groupName}</strong> como <strong>{inv.memberName}</strong>
-            </p>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button style={styles.btnGhostSmall} onClick={() => onRejectInvite(inv)}>Rechazar</button>
-              <button style={{ ...styles.btnDangerSmall, background: "#3B6E62" }} onClick={() => onAcceptInvite(inv)}>Aceptar</button>
-            </div>
-          </div>
-        ))}
-      </div>
-
       <label style={styles.label}>
         Nombre visible
         <input style={styles.input} value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Tu nombre" />
@@ -308,13 +291,32 @@ function SplitLedgerSettings({ session, groups, onCreateGroup, refreshProfile, s
         El botón de "+" en Split Ledger crea el gasto directo en este grupo.
       </p>
 
+      {/* Invitaciones pendientes */}
+      <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
+        <p style={{ margin: 0, padding: "12px 16px 8px", fontSize: 13, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#544A3C", borderBottom: invites.length ? "1px solid #F0EBE2" : "none", display: "flex", alignItems: "center", gap: 8 }}>
+          <Bell size={15} /> Invitaciones ({invites.length})
+        </p>
+        {invites.map((inv) => (
+          <div key={inv.inviteId} style={{ padding: "10px 16px", borderBottom: "1px solid #F0EBE2", display: "flex", flexDirection: "column", gap: 6 }}>
+            <p style={{ margin: 0, fontSize: 13.5, fontFamily: "system-ui, sans-serif" }}>
+              <strong>{inv.fromUsername}</strong> te invitó a <strong>{inv.groupName}</strong> como <strong>{inv.memberName}</strong>
+            </p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={styles.btnGhostSmall} onClick={() => onRejectInvite(inv)}>Rechazar</button>
+              <button style={{ ...styles.btnDangerSmall, background: "#3B6E62" }} onClick={() => onAcceptInvite(inv)}>Aceptar</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
       <p style={styles.label}>Tus grupos ({(groups || []).length})</p>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {(groups || []).map((g) => (
-          <div key={g.id} style={styles.shareRow}>
+          <button key={g.id} style={{ ...styles.shareRow, cursor: "pointer", textAlign: "left" }} onClick={() => onOpenGroup(g.id)}>
             <span style={{ ...styles.avatar, background: colorFor(g.id) }}>{initials(g.name)}</span>
             <span style={{ flex: 1 }}>{g.name}</span>
-          </div>
+            <ChevronRight size={18} color="#A89A87" />
+          </button>
         ))}
       </div>
       <button style={styles.btnDashed} onClick={onCreateGroup}><Plus size={16} /> Crear grupo</button>

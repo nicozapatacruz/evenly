@@ -1,10 +1,13 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "../../lib/supabaseClient.js";
 import {
   Plus, Receipt, X, ChevronRight, ArrowRight, Check, Trash2, Settings,
   RefreshCw, HandCoins, UserPlus, AlertCircle, Repeat, ChevronUp,
   ChevronDown as ChevronDownIcon, Camera, User, PenLine, Pencil, Send,
 } from "lucide-react";
+import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { styles } from "../../lib/styles.js";
 import { TopBar, ConfirmInline, Modal, Footer } from "../../components/Shared.jsx";
 import {
@@ -539,6 +542,41 @@ function NewGroup({ onCancel, onCreate, session }) {
   );
 }
 
+// Una fila arrastrable de la lista de categorías (dnd-kit: funciona con mouse y con touch,
+// a diferencia del drag & drop nativo de HTML que en celulares no responde al dedo).
+function SortableCategoryRow({ cat, onEditIcon, onChangeLabel, onRemove }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cat.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 6, padding: "8px 10px" }}>
+      {/* Handle — touchAction:"none" es necesario para que el drag responda al dedo en vez del scroll */}
+      <span {...attributes} {...listeners} style={{ color: "#C9BBA0", display: "flex", alignItems: "center", paddingRight: 2, cursor: "grab", touchAction: "none" }}>
+        ⠿
+      </span>
+      <button
+        onClick={onEditIcon}
+        style={{ width: 34, height: 34, minWidth: 34, borderRadius: 8, border: "1px solid #DDD2BE", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#544A3C", cursor: "pointer" }}
+        aria-label="Cambiar ícono"
+      >
+        <IconComp iconKey={cat.iconKey} size={16} />
+      </button>
+      <input
+        style={{ ...styles.input, flex: 1, padding: "7px 10px", fontSize: 14 }}
+        value={cat.label}
+        onChange={(e) => onChangeLabel(e.target.value)}
+        placeholder="Nombre de categoría"
+      />
+      <button style={styles.iconBtnGhost} onClick={onRemove} aria-label="Eliminar categoría">
+        <X size={15} />
+      </button>
+    </div>
+  );
+}
+
 /* =========================================================================
    EDIT GROUP (nombre, moneda, tasas, miembros)
    ========================================================================= */
@@ -557,7 +595,6 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
   const [catsOpen, setCatsOpen] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
-  const dragIdx = useRef(null);
   const balances = useMemo(() => computeBalances(group), [group]);
 
   const usedCurrencies = useMemo(() => {
@@ -649,20 +686,16 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
     setCategories(prev => prev.map(c => c.id === id ? { ...c, ...patch } : c));
   };
 
-  // Drag & drop handlers
-  const onDragStart = (idx) => { dragIdx.current = idx; };
-  const onDragOver = (e, idx) => {
-    e.preventDefault();
-    if (dragIdx.current === null || dragIdx.current === idx) return;
-    setCategories(prev => {
-      const next = [...prev];
-      const [moved] = next.splice(dragIdx.current, 1);
-      next.splice(idx, 0, moved);
-      dragIdx.current = idx;
-      return next;
+  // Reordenar categorías (dnd-kit: funciona igual con mouse y con touch)
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const handleCategoryDragEnd = ({ active, over }) => {
+    if (!over || active.id === over.id) return;
+    setCategories((prev) => {
+      const oldIndex = prev.findIndex((c) => c.id === active.id);
+      const newIndex = prev.findIndex((c) => c.id === over.id);
+      return arrayMove(prev, oldIndex, newIndex);
     });
   };
-  const onDragEnd = () => { dragIdx.current = null; };
 
   return (
     <div style={styles.screen}>
@@ -791,69 +824,54 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
 
         {catsOpen && (
           <>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {categories.map((cat, idx) => (
-                <div
-                  key={cat.id}
-                  draggable
-                  onDragStart={() => onDragStart(idx)}
-                  onDragOver={(e) => onDragOver(e, idx)}
-                  onDragEnd={onDragEnd}
-                  style={{ display: "flex", flexDirection: "column", cursor: "grab" }}
-                >
-                  <div style={{ ...styles.shareRow, gap: 6, padding: "8px 10px" }}>
-                    {/* Handle visual */}
-                    <span style={{ color: "#C9BBA0", display: "flex", alignItems: "center", paddingRight: 2, cursor: "grab" }}>
-                      ⠿
-                    </span>
-                    {/* Botón ícono */}
-                    <button
-                      onClick={() => setEditingCatId(editingCatId === cat.id ? null : cat.id)}
-                      style={{ width: 34, height: 34, minWidth: 34, borderRadius: 8, border: "1px solid #DDD2BE", background: editingCatId === cat.id ? "#C75D3B1a" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#544A3C", cursor: "pointer" }}
-                      aria-label="Cambiar ícono"
-                    >
-                      <IconComp iconKey={cat.iconKey} size={16} />
-                    </button>
-                    {/* Nombre */}
-                    <input
-                      style={{ ...styles.input, flex: 1, padding: "7px 10px", fontSize: 14 }}
-                      value={cat.label}
-                      onChange={e => updateCategory(cat.id, { label: e.target.value })}
-                      placeholder="Nombre de categoría"
+            <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleCategoryDragEnd}>
+              <SortableContext items={categories.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {categories.map((cat) => (
+                    <SortableCategoryRow
+                      key={cat.id}
+                      cat={cat}
+                      onEditIcon={() => setEditingCatId(cat.id)}
+                      onChangeLabel={(label) => updateCategory(cat.id, { label })}
+                      onRemove={() => removeCategory(cat.id)}
                     />
-                    {/* Borrar */}
-                    <button style={styles.iconBtnGhost} onClick={() => removeCategory(cat.id)} aria-label="Eliminar categoría">
-                      <X size={15} />
-                    </button>
-                  </div>
-                  {/* Picker de ícono inline */}
-                  {editingCatId === cat.id && (
-                    <div style={{ background: "#F7F2E9", border: "1px solid #E8DFD0", borderTop: "none", borderRadius: "0 0 10px 10px", padding: 10, display: "flex", flexWrap: "wrap", gap: 6 }}>
-                      {ICON_KEYS.map(key => {
-                        const usedByOther = categories.some(c => c.id !== cat.id && c.iconKey === key);
-                        return (
-                          <button
-                            key={key}
-                            onClick={() => { if (!usedByOther) { updateCategory(cat.id, { iconKey: key }); setEditingCatId(null); } }}
-                            disabled={usedByOther}
-                            title={usedByOther ? "Ya usado por otra categoría" : undefined}
-                            style={{ width: 34, height: 34, borderRadius: 8, border: cat.iconKey === key ? "2px solid #C75D3B" : "1px solid #DDD2BE", background: cat.iconKey === key ? "#C75D3B1a" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#544A3C", opacity: usedByOther ? 0.3 : 1, cursor: usedByOther ? "not-allowed" : "pointer" }}
-                            aria-label={key}
-                          >
-                            <IconComp iconKey={key} size={16} />
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+                  ))}
                 </div>
-              ))}
-            </div>
+              </SortableContext>
+            </DndContext>
             <button style={styles.btnDashed} onClick={addCategory}><Plus size={16} /> Nueva categoría</button>
           </>
         )}
 
       </div>
+
+      {editingCatId && (() => {
+        const editingCat = categories.find((c) => c.id === editingCatId);
+        return (
+          <Modal onClose={() => setEditingCatId(null)}>
+            <p style={{ margin: "0 0 12px", fontSize: 15, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#2B2620" }}>
+              Elegir ícono
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {ICON_KEYS.map((key) => {
+                const usedByOther = categories.some((c) => c.id !== editingCatId && c.iconKey === key);
+                return (
+                  <button
+                    key={key}
+                    onClick={() => { if (!usedByOther) { updateCategory(editingCatId, { iconKey: key }); setEditingCatId(null); } }}
+                    disabled={usedByOther}
+                    title={usedByOther ? "Ya usado por otra categoría" : undefined}
+                    style={{ width: 34, height: 34, borderRadius: 8, border: editingCat?.iconKey === key ? "2px solid #C75D3B" : "1px solid #DDD2BE", background: editingCat?.iconKey === key ? "#C75D3B1a" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#544A3C", opacity: usedByOther ? 0.3 : 1, cursor: usedByOther ? "not-allowed" : "pointer" }}
+                    aria-label={key}
+                  >
+                    <IconComp iconKey={key} size={16} />
+                  </button>
+                );
+              })}
+            </div>
+          </Modal>
+        );
+      })()}
 
       <Footer>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>

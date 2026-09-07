@@ -91,6 +91,11 @@ function useAuth() {
       }
       throw new Error("Email o contraseña incorrectos.");
     }
+    // Como esta app no tiene router (la URL nunca cambia), Safari/Chrome no ven
+    // ninguna "navegación" tras enviar el formulario — y eso es justo una de las
+    // señales que usan para ofrecer guardar/usar la contraseña. pushState no
+    // navega a ningún lado (misma URL), solo le da esa señal al gestor de contraseñas.
+    window.history.pushState({}, "", window.location.href);
   }, []);
 
   const logout = useCallback(async () => {

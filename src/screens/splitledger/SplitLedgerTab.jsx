@@ -1374,7 +1374,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
   const toggleParticipant = (id) => {
     setParticipants((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
+      if (next.has(id)) { if (next.size > 1) next.delete(id); }
       else next.add(id);
       return next;
     });
@@ -1540,8 +1540,17 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
             })}
             <p style={styles.muted}>
               Suma: {money(multiPayerTotal, currency)}{validAmount ? ` / ${money(numericAmount, currency)}` : ""}
-              {validAmount && Math.abs(multiPayerTotal - numericAmount) < 0.01 ? " ✓" : ""}
             </p>
+            {validAmount && (() => {
+              const remaining = numericAmount - multiPayerTotal;
+              if (Math.abs(remaining) < 0.01) return null;
+              const isOver = remaining < -0.01;
+              return (
+                <p style={{ ...styles.muted, marginTop: -6, fontWeight: 700, color: isOver ? "#B0473A" : "#6B6355" }}>
+                  {isOver ? "Sobra" : "Falta"}: {money(Math.abs(remaining), currency)}
+                </p>
+              );
+            })()}
           </div>
         )}
 
@@ -1579,10 +1588,10 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
                       const myAmt = isIn && validAmount && previewIdx >= 0 ? preview[previewIdx] : null;
                       return (
                         <button key={m.id} onClick={() => toggleParticipant(m.id)} style={{ ...styles.shareRow, opacity: isIn ? 1 : 0.45 }}>
+                          <span style={{ ...styles.checkbox, ...(isIn ? styles.checkboxOn : {}), flexShrink: 0 }}>{isIn && <Check size={12} color="#fff" strokeWidth={3} />}</span>
                           <span style={{ ...styles.avatar, background: colorFor(m.id) }}>{initials(m.name)}</span>
                           <span style={{ flex: 1, textAlign: "left" }}>{m.name}</span>
                           <span style={styles.shareAmount}>{myAmt !== null ? money(myAmt, currency) : "—"}</span>
-                          <span style={{ ...styles.checkbox, ...(isIn ? styles.checkboxOn : {}) }}>{isIn && <Check size={12} color="#fff" strokeWidth={3} />}</span>
                         </button>
                       );
                     });
@@ -1633,6 +1642,16 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
                     );
                   })}
                   <p style={styles.muted}>Suma: {percentTotal.toFixed(0)}% / 100%</p>
+                  {(() => {
+                    const remaining = 100 - percentTotal;
+                    if (Math.abs(remaining) < 0.5) return null;
+                    const isOver = remaining < -0.5;
+                    return (
+                      <p style={{ ...styles.muted, marginTop: -6, fontWeight: 700, color: isOver ? "#B0473A" : "#6B6355" }}>
+                        {isOver ? "Sobra" : "Falta"}: {Math.abs(remaining).toFixed(0)}%
+                      </p>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -1653,6 +1672,9 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
                     );
                   })}
                   <p style={styles.muted}>Las "partes" son proporciones — alguien con 2 partes paga el doble que alguien con 1.</p>
+                  {participantIds.reduce((s, id) => s + (parseFloat(shareUnits[id] || "0") || 0), 0) <= 0 && (
+                    <p style={styles.errText}>Asigna al menos una parte a alguien en el reparto.</p>
+                  )}
                 </div>
               )}
             </div>

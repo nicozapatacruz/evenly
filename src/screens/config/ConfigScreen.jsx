@@ -178,6 +178,7 @@ function ChangePasswordScreen({ session, onBack, onSave }) {
     if (!currentPassword) return setErr("Escribe tu contraseña actual.");
     if (!newPassword || newPassword.length < 4) return setErr("La nueva contraseña debe tener al menos 4 caracteres.");
     if (newPassword !== confirmPassword) return setErr("Las contraseñas no coinciden.");
+    if (newPassword === currentPassword) return setErr("La nueva contraseña debe ser diferente a la actual.");
     setSaving(true);
     try {
       const { error } = await supabase.auth.signInWithPassword({ email: session.email, password: currentPassword });

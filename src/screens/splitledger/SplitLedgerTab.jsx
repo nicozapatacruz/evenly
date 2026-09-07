@@ -70,6 +70,7 @@ export default function SplitLedgerTab({
         <NewGroup
           onCancel={() => setView({ screen: "home" })}
           session={session}
+          showError={showError}
           onCreate={async ({ name, baseCurrency, members, photoUrl }) => {
             try {
               const { data: groupRow, error: e1 } = await supabase
@@ -287,7 +288,8 @@ export default function SplitLedgerTab({
               if (e1) throw e1;
               await loadGroupInvites(activeGroup.id);
               showSuccess(`Invitación enviada a @${uname}`);
-            } catch (e) { showError(`No se pudo enviar la invitación: ${e?.message || e}`); }
+              return true;
+            } catch (e) { showError(`No se pudo enviar la invitación: ${e?.message || e}`); return false; }
           }}
           onCancelInvite={async (memberId) => {
             try {
@@ -401,22 +403,20 @@ function Home({ groups, loading, session, onOpen, onNewExpense }) {
    NEW GROUP
    ========================================================================= */
 
-function NewGroup({ onCancel, onCreate, session }) {
+function NewGroup({ onCancel, onCreate, session, showError }) {
   const [name, setName] = useState("");
   const [members, setMembers] = useState([""]);
   const [baseCurrency, setBaseCurrency] = useState("EUR");
-  const [err, setErr] = useState("");
-  const { previewUrl: photoUrl, pendingFile, removed, handleImageChange: handlePhoto, clear: clearPhoto } = useImageUpload(null, setErr);
+  const { previewUrl: photoUrl, pendingFile, removed, handleImageChange: handlePhoto, clear: clearPhoto } = useImageUpload(null, showError);
   const [saving, setSaving] = useState(false);
 
   const updateMember = (i, val) => setMembers((prev) => prev.map((m, idx) => (idx === i ? val : m)));
   const addMemberField = () => setMembers((prev) => [...prev, ""]);
   const removeMemberField = (i) => setMembers((prev) => prev.filter((_, idx) => idx !== i));
   const hasEnoughMembers = members.some((n) => n.trim());
+  const canCreate = name.trim() && hasEnoughMembers;
 
   const handleCreate = async () => {
-    if (!name.trim()) { setErr("Ponle un nombre al grupo."); return; }
-    if (!hasEnoughMembers) { setErr("El grupo necesita al menos dos personas."); return; }
     setSaving(true);
     try {
       const resolvedPhotoUrl = await resolvePhotoUrl({ pendingFile, removed, currentUrl: null });
@@ -430,7 +430,7 @@ function NewGroup({ onCancel, onCreate, session }) {
         photoUrl: resolvedPhotoUrl,
       });
     } catch (e) {
-      setErr(`No se pudo subir la foto: ${e?.message || e}`);
+      showError(`No se pudo guardar: ${e?.message || e}`);
     } finally {
       setSaving(false);
     }
@@ -484,8 +484,7 @@ function NewGroup({ onCancel, onCreate, session }) {
         </div>
         <button style={styles.btnDashed} onClick={addMemberField}><Plus size={16} /> Agregar persona</button>
 
-        {err && <p style={styles.errText}>{err}</p>}
-        <button style={{ ...styles.btnPrimary, opacity: (saving || !hasEnoughMembers) ? 0.5 : 1 }} onClick={handleCreate} disabled={saving || !hasEnoughMembers}>{saving ? "Creando…" : "Crear grupo"}</button>
+        <button style={{ ...styles.btnPrimary, opacity: (saving || !canCreate) ? 0.5 : 1 }} onClick={handleCreate} disabled={saving || !canCreate}>{saving ? "Creando…" : "Crear grupo"}</button>
       </div>
     </div>
   );
@@ -573,6 +572,7 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
     return false;
   }, [name, baseCurrency, pendingFile, removed, members, categories, group]);
   const hasEmptyCategory = categories.some((c) => !c.label.trim());
+  const canSave = name.trim() && members.length >= 2 && !hasEmptyCategory;
 
   const addMember = () => {
     const n = newMemberName.trim();
@@ -596,9 +596,6 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
   };
 
   const handleSave = async () => {
-    if (!name.trim()) return showError("Ponle un nombre al grupo.");
-    if (members.length < 2) return showError("El grupo necesita al menos dos personas.");
-    if (categories.some(c => !c.label.trim())) return showError("Todas las categorías deben tener un nombre.");
     setSaving(true);
     try {
       const resolvedPhotoUrl = await resolvePhotoUrl({ pendingFile, removed, currentUrl: group.photoUrl });
@@ -798,7 +795,7 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
 
       <Footer>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
-        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !isDirty || hasEmptyCategory) ? 0.5 : 1 }} onClick={handleSave} disabled={saving || !isDirty || hasEmptyCategory}>
+        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !isDirty || !canSave) ? 0.5 : 1 }} onClick={handleSave} disabled={saving || !isDirty || !canSave}>
           {saving ? "Guardando…" : "Guardar"}
         </button>
       </Footer>
@@ -1844,23 +1841,24 @@ function InviteScreen({ group, session, groupInvites = [], onBack, onSend, onCan
   const [cancelingId, setCancelingId] = useState(null);
 
   const invitableMembers = group.members.filter(m => !m.linkedUserId);
+  const canSend = selectedMemberId && targetUsername.trim();
 
   const handle = async () => {
-    if (!selectedMemberId) return setErr("Selecciona a qué miembro corresponde esta persona.");
-    if (!targetUsername.trim()) return setErr("Escribe el nombre de usuario a invitar.");
     if (targetUsername.trim().toLowerCase() === session.username) return setErr("No puedes invitarte a ti mismo.");
     setErr("");
     setSending(true);
-    await onSend({ memberId: selectedMemberId, targetUsername: targetUsername.trim().toLowerCase() });
-    setSelectedMemberId("");
-    setTargetUsername("");
+    const ok = await onSend({ memberId: selectedMemberId, targetUsername: targetUsername.trim().toLowerCase() });
+    if (ok) {
+      setSelectedMemberId("");
+      setTargetUsername("");
+    }
     setSending(false);
   };
 
   return (
     <div style={styles.screen}>
       <TopBar title="Invitar al grupo" onBack={onBack} />
-      <div style={styles.form}>
+      <div style={{ ...styles.form, paddingBottom: 100 }}>
         <p style={{ ...styles.muted, padding: 0 }}>
           Selecciona a qué miembro del grupo corresponde la persona que vas a invitar, y escribe su nombre de usuario en la app.
         </p>
@@ -1915,14 +1913,22 @@ function InviteScreen({ group, session, groupInvites = [], onBack, onSend, onCan
 
         <label style={styles.label}>
           Usuario a invitar
-          <input style={styles.input} value={targetUsername} onChange={e => setTargetUsername(e.target.value)} placeholder="nombre_de_usuario" autoCapitalize="none" onKeyDown={e => e.key === "Enter" && handle()} />
+          <input style={styles.input} value={targetUsername} onChange={e => setTargetUsername(e.target.value)} placeholder="nombre_de_usuario" autoCapitalize="none" onKeyDown={e => e.key === "Enter" && canSend && !sending && handle()} />
         </label>
 
         {err && <p style={styles.errText}>{err}</p>}
-        <button style={{ ...styles.btnPrimary, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: sending ? 0.6 : 1 }} onClick={handle} disabled={sending}>
+      </div>
+
+      <Footer>
+        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onBack}>Cancelar</button>
+        <button
+          style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: (sending || !canSend) ? 0.5 : 1 }}
+          onClick={handle}
+          disabled={sending || !canSend}
+        >
           <Send size={15} /> {sending ? "Enviando…" : "Enviar invitación"}
         </button>
-      </div>
+      </Footer>
     </div>
   );
 }

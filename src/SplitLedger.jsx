@@ -286,14 +286,8 @@ function AuthScreen({ onLogin, onRegister }) {
 
         {/* Un <form> real (no solo autoComplete suelto en inputs) es lo que hace que
             Safari clasifique esto como login o registro — sin <form>, cae en su
-            heurística genérica y sugiere crear contraseña nueva incluso en login.
-            key={mode}: WebKit clasifica cada <input> (current-password vs
-            new-password) una sola vez, cuando el nodo se monta — no vuelve a
-            reevaluarlo si solo le cambiamos el atributo por JS al alternar modo.
-            key={mode} fuerza a React a destruir y crear el <form> de nuevo al
-            cambiar de modo, para que WebKit lo vea "fresco" con los atributos
-            correctos desde su primer render. */}
-        <form key={mode} style={{ display: "flex", flexDirection: "column", gap: 12 }} onSubmit={e => { e.preventDefault(); if (!loading) handle(); }}>
+            heurística genérica y sugiere crear contraseña nueva incluso en login. */}
+        <form style={{ display: "flex", flexDirection: "column", gap: 12 }} onSubmit={e => { e.preventDefault(); if (!loading) handle(); }}>
           {mode === "register" && (
             <label style={styles.label}>
               Nombre que verán los demás

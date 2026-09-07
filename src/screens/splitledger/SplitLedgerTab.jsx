@@ -345,7 +345,7 @@ function Home({ groups, loading, session, onOpen, onNewExpense }) {
     <div style={styles.screen}>
       <RootHeader title="Tus grupos" />
 
-      {loading && <p style={styles.muted}>Abriendo los grupos…</p>}
+      {loading && <p style={{ ...styles.muted, paddingTop: 12 }}>Abriendo los grupos…</p>}
 
       {!loading && groups && groups.length === 0 && (
         <div style={styles.emptyState}>
@@ -887,7 +887,7 @@ function GroupView({ group, onBack, onAddExpense, onOpenExpense, onSettleUp, onE
         const visible = showAll ? members : members.slice(0, 4);
         const extra = members.length - 4;
         return (
-          <div style={{ padding: "8px 20px 4px" }}>
+          <div style={{ padding: "12px 20px 4px" }}>
             <div style={{ display: "flex", alignItems: showAll ? "flex-start" : "center", flexWrap: showAll ? "wrap" : "nowrap", gap: showAll ? 10 : 0 }}>
               {visible.map((m, idx) => (
                 <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, width: showAll ? 44 : "auto", marginLeft: showAll ? 0 : idx === 0 ? 0 : -6, zIndex: showAll ? 0 : 10 - idx, flexShrink: 0 }}>
@@ -1173,7 +1173,7 @@ function ExpenseDetail({ group, expenseId, onBack, onEdit }) {
     return (
       <div style={styles.screen}>
         <TopBar title="Gasto" onBack={onBack} />
-        <p style={styles.muted}>Este gasto ya no existe.</p>
+        <p style={{ ...styles.muted, paddingTop: 12 }}>Este gasto ya no existe.</p>
       </div>
     );
   }

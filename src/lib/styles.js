@@ -19,11 +19,28 @@ export const globalCss = `
   .spin { animation: spin 0.8s linear infinite; }
 `;
 
+// Base compartida por todos los headers "raíz" (fijos arriba, como el Footer
+// ya lo es abajo) — 100dvh/fixed en vez de 100vh porque en iOS (Safari móvil
+// y la Web App instalada) 100vh no coincide con el alto visible real, lo que
+// deja scroll fantasma y un hueco abajo cuando el contenido sí cabe.
+const fixedHeaderBase = {
+  position: "fixed",
+  top: 0,
+  left: "50%",
+  transform: "translateX(-50%)",
+  width: "100%",
+  maxWidth: 480,
+  zIndex: 5,
+  background: "#FBF8F2",
+  borderBottom: "1px solid #ECE3D3",
+  boxSizing: "border-box",
+};
+
 export const styles = {
   app: {
     fontFamily: "'Iowan Old Style', 'Georgia', 'Source Serif Pro', serif",
     background: "#F7F2E9",
-    minHeight: "100vh",
+    minHeight: "100dvh",
     color: "#2B2620",
     display: "flex",
     justifyContent: "center",
@@ -31,13 +48,15 @@ export const styles = {
   screen: {
     width: "100%",
     maxWidth: 480,
-    minHeight: "100vh",
+    minHeight: "100dvh",
     background: "#FBF8F2",
     position: "relative",
+    paddingTop: 110,
     paddingBottom: 100,
     boxShadow: "0 0 0 1px #ECE3D3",
   },
-  homeHeader: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", padding: "32px 20px 18px" },
+  homeHeader: { ...fixedHeaderBase, display: "flex", justifyContent: "space-between", alignItems: "flex-end", padding: "calc(32px + env(safe-area-inset-top)) 20px 18px" },
+  configHeader: { ...fixedHeaderBase, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "calc(32px + env(safe-area-inset-top)) 20px 8px" },
   eyebrow: { margin: 0, fontFamily: "'Courier New', monospace", fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "#A8754A" },
   h1: { margin: "4px 0 0", fontSize: 30, fontWeight: 600, letterSpacing: "-0.01em" },
   muted: { color: "#6B6355", fontSize: 14, padding: "0 20px", lineHeight: 1.5, fontFamily: "system-ui, sans-serif" },
@@ -51,7 +70,7 @@ export const styles = {
   avatar: { width: 32, height: 32, minWidth: 32, borderRadius: "50%", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, border: "2px solid #FBF8F2", fontFamily: "system-ui, sans-serif" },
   groupName: { margin: 0, fontWeight: 600, fontSize: 15.5, color: "#2B2620" },
   groupMeta: { margin: "2px 0 0", fontSize: 12.5, color: "#6B6355", fontFamily: "system-ui, sans-serif" },
-  topBar: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 14px 8px", gap: 8 },
+  topBar: { ...fixedHeaderBase, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "calc(20px + env(safe-area-inset-top)) 14px 8px", gap: 8 },
   topBarTitle: { margin: 0, fontSize: 18, fontWeight: 600, flex: 1, textAlign: "center" },
   iconBtnGhost: { width: 36, height: 36, borderRadius: "50%", border: "none", background: "transparent", color: "#544A3C", display: "flex", alignItems: "center", justifyContent: "center" },
   iconBtnPrimary: { width: 44, height: 44, borderRadius: "50%", border: "none", background: "#C75D3B", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 10px rgba(199,93,59,0.3)" },

@@ -52,7 +52,7 @@ export default function ConfigScreen({
 
   return (
     <div style={styles.screen}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "32px 20px 8px" }}>
+      <header style={styles.configHeader}>
         <h1 style={styles.h1}>Configuración</h1>
         <button style={styles.iconBtnGhost} onClick={() => setViewingProfile(true)} aria-label="Perfil">
           <User size={22} />

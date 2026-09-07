@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { User, LogOut, Bell, Plus, ChevronRight } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, ConfirmInline, Footer, PhotoPicker } from "../../components/Shared.jsx";
+import { TopBar, RootHeader, ConfirmInline, Footer, PhotoPicker } from "../../components/Shared.jsx";
 import { useImageUpload, resolvePhotoUrl, colorFor, initials } from "../../lib/helpers.jsx";
 import ComingSoon from "../moneymanager/ComingSoon.jsx";
 
@@ -52,12 +52,14 @@ export default function ConfigScreen({
 
   return (
     <div style={styles.screen}>
-      <header style={styles.configHeader}>
-        <h1 style={styles.h1}>Configuración</h1>
-        <button style={styles.iconBtnGhost} onClick={() => setViewingProfile(true)} aria-label="Perfil">
-          <User size={22} />
-        </button>
-      </header>
+      <RootHeader
+        title="Configuración"
+        right={
+          <button style={styles.iconBtnGhost} onClick={() => setViewingProfile(true)} aria-label="Perfil">
+            <User size={22} />
+          </button>
+        }
+      />
       <div style={styles.tabRow}>
         <button style={section === "moneymanager" ? styles.tabActive : styles.tab} onClick={() => setSection("moneymanager")}>Money Manager</button>
         <button style={section === "splitledger" ? styles.tabActive : styles.tab} onClick={() => setSection("splitledger")}>Split Ledger</button>

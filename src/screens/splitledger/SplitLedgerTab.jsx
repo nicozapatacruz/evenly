@@ -9,7 +9,7 @@ import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from 
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { styles } from "../../lib/styles.js";
-import { TopBar, ConfirmInline, Modal, Footer, PhotoPicker } from "../../components/Shared.jsx";
+import { TopBar, RootHeader, ConfirmInline, Modal, Footer, PhotoPicker } from "../../components/Shared.jsx";
 import {
   uid, CURRENCIES, CURRENCY_LIST, money, parseAmountInput, ICON_KEYS, IconComp,
   DEFAULT_CATEGORIES, groupCategories, catInfo, colorFor, initials, shortName, nameOf,
@@ -343,9 +343,7 @@ function groupCardLines(g, session) {
 function Home({ groups, loading, session, onOpen, onNewExpense }) {
   return (
     <div style={styles.screen}>
-      <header style={styles.homeHeader}>
-        <h1 style={styles.h1}>Tus grupos</h1>
-      </header>
+      <RootHeader title="Tus grupos" />
 
       {loading && <p style={styles.muted}>Abriendo los grupos…</p>}
 

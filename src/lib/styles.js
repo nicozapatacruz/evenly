@@ -1,7 +1,7 @@
 export const globalCss = `
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; overflow-x: hidden; overscroll-behavior-y: none; -webkit-text-size-adjust: 100%; background: #F7F2E9; }
-  #root { min-height: 100%; }
+  #root { height: 100%; }
   input:focus, button:focus-visible, select:focus-visible, textarea:focus-visible {
     outline: 2px solid #C75D3B;
     outline-offset: 2px;
@@ -19,28 +19,29 @@ export const globalCss = `
   .spin { animation: spin 0.8s linear infinite; }
 `;
 
-// Base compartida por todos los headers "raíz" (fijos arriba, como el Footer
-// ya lo es abajo) — 100dvh/fixed en vez de 100vh porque en iOS (Safari móvil
-// y la Web App instalada) 100vh no coincide con el alto visible real, lo que
-// deja scroll fantasma y un hueco abajo cuando el contenido sí cabe.
+// Base compartida por todos los headers — quedan pegados arriba al hacer
+// scroll (sticky, no fixed: así heredan el ancho de .screen directamente,
+// sin necesitar el truco de left:50%+translateX que "fixed" exige para
+// centrarse, el cual se desalinea en desktop cuando hay scrollbar de por
+// medio).
 const fixedHeaderBase = {
-  position: "fixed",
+  position: "sticky",
   top: 0,
-  left: "50%",
-  transform: "translateX(-50%)",
-  width: "100%",
-  maxWidth: 480,
   zIndex: 5,
   background: "#FBF8F2",
   borderBottom: "1px solid #ECE3D3",
   boxSizing: "border-box",
 };
 
+// minHeight: "100%" en vez de una unidad vh/dvh — en la Web App instalada de
+// iOS, vh/dvh a veces reportan un alto mayor al visible real y dejan un hueco
+// fantasma abajo; "100%" hereda de html/body (height:100% en globalCss), que
+// sí refleja el alto visible correcto ahí.
 export const styles = {
   app: {
     fontFamily: "'Iowan Old Style', 'Georgia', 'Source Serif Pro', serif",
     background: "#F7F2E9",
-    minHeight: "100dvh",
+    minHeight: "100%",
     color: "#2B2620",
     display: "flex",
     justifyContent: "center",
@@ -48,15 +49,17 @@ export const styles = {
   screen: {
     width: "100%",
     maxWidth: 480,
-    minHeight: "100dvh",
+    minHeight: "100%",
     background: "#FBF8F2",
     position: "relative",
-    paddingTop: 110,
     paddingBottom: 100,
     boxShadow: "0 0 0 1px #ECE3D3",
   },
-  homeHeader: { ...fixedHeaderBase, display: "flex", justifyContent: "space-between", alignItems: "flex-end", padding: "calc(32px + env(safe-area-inset-top)) 20px 18px" },
-  configHeader: { ...fixedHeaderBase, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "calc(32px + env(safe-area-inset-top)) 20px 8px" },
+  // Header "principal" — único, compartido por las 2 pantallas raíz (Tus
+  // grupos / Configuración) vía el componente <RootHeader>. Que sea un solo
+  // objeto en vez de uno por pantalla es a propósito: así no se puede volver
+  // a desalinear un padding entre los dos sin querer.
+  rootHeader: { ...fixedHeaderBase, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "calc(32px + env(safe-area-inset-top)) 20px 18px" },
   eyebrow: { margin: 0, fontFamily: "'Courier New', monospace", fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "#A8754A" },
   h1: { margin: "4px 0 0", fontSize: 30, fontWeight: 600, letterSpacing: "-0.01em" },
   muted: { color: "#6B6355", fontSize: 14, padding: "0 20px", lineHeight: 1.5, fontFamily: "system-ui, sans-serif" },

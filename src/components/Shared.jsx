@@ -12,6 +12,18 @@ export function TopBar({ title, onBack, right }) {
   );
 }
 
+// Header "principal" — el único que usan las pantallas raíz de cada tab
+// (Tus grupos, Configuración). Un solo componente para las dos así no puede
+// volver a haber una diferencia de estilo entre ambas.
+export function RootHeader({ title, right }) {
+  return (
+    <header style={styles.rootHeader}>
+      <h1 style={styles.h1}>{title}</h1>
+      {right}
+    </header>
+  );
+}
+
 // Regla de fricción para acciones destructivas (a propósito, dos niveles):
 // 1) Confirmación de un clic (este componente): para acciones de alcance acotado
 //    y que no borran historial compartido — borrar un gasto, quitar un miembro,

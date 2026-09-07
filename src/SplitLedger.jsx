@@ -91,11 +91,6 @@ function useAuth() {
       }
       throw new Error("Email o contraseña incorrectos.");
     }
-    // Como esta app no tiene router (la URL nunca cambia), Safari/Chrome no ven
-    // ninguna "navegación" tras enviar el formulario — y eso es justo una de las
-    // señales que usan para ofrecer guardar/usar la contraseña. pushState no
-    // navega a ningún lado (misma URL), solo le da esa señal al gestor de contraseñas.
-    window.history.pushState({}, "", window.location.href);
   }, []);
 
   const logout = useCallback(async () => {
@@ -296,27 +291,27 @@ function AuthScreen({ onLogin, onRegister }) {
           {mode === "register" && (
             <label style={styles.label}>
               Nombre que verán los demás
-              <input style={styles.input} value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Tu nombre" autoComplete="name" autoFocus />
+              <input style={styles.input} name="name" value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Tu nombre" autoComplete="name" autoFocus />
             </label>
           )}
           {mode === "register" && (
             <label style={styles.label}>
               Usuario
-              <input style={styles.input} value={username} onChange={e => setUsername(e.target.value)} placeholder="nombre_de_usuario" autoCapitalize="none" autoComplete="username" />
+              <input style={styles.input} name="new-username" value={username} onChange={e => setUsername(e.target.value)} placeholder="nombre_de_usuario" autoCapitalize="none" autoComplete="username" />
             </label>
           )}
           <label style={styles.label}>
             Email
-            <input style={styles.input} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="tu@email.com" autoCapitalize="none" autoComplete={mode === "login" ? "username" : "email"} autoFocus={mode === "login"} />
+            <input style={styles.input} type="email" name="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="tu@email.com" autoCapitalize="none" autoComplete={mode === "login" ? "username" : "email"} autoFocus={mode === "login"} />
           </label>
           <label style={styles.label}>
             Contraseña
-            <input style={styles.input} type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••" autoComplete={mode === "login" ? "current-password" : "new-password"} />
+            <input style={styles.input} type="password" name={mode === "login" ? "current-password" : "new-password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••" autoComplete={mode === "login" ? "current-password" : "new-password"} />
           </label>
           {mode === "register" && (
             <label style={styles.label}>
               Confirmar contraseña
-              <input style={styles.input} type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••" autoComplete="new-password" />
+              <input style={styles.input} type="password" name="confirm-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••" autoComplete="new-password" />
             </label>
           )}
           {err && <p style={styles.errText}>{err}</p>}

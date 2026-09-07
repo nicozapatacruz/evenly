@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { supabase } from "./lib/supabaseClient.js";
 import { BookOpen, BarChart3, Coins, Divide, MoreHorizontal } from "lucide-react";
 import { styles, globalCss } from "./lib/styles.js";
-import { generateDueRecurring } from "./lib/helpers.jsx";
 import SplitLedgerTab from "./screens/splitledger/SplitLedgerTab.jsx";
 import ConfigScreen from "./screens/config/ConfigScreen.jsx";
 
@@ -115,13 +114,12 @@ const GROUP_SELECT = `
   id, name, base_currency, rates, photo_url, creator_id, created_at,
   group_members(id, name, linked_user_id),
   categories(id, label, icon_key, sort_order),
-  expenses(id, description, amount, currency, category_id, date, notes, image_url, split_mode, payers, shares, recurring_id, deleted, created_at),
-  payments(id, from_member_id, to_member_id, amount, currency, date, note, deleted, created_at),
-  recurring_expenses(id, description, amount, currency, category_id, split_mode, payers, shares, frequency, next_date, paused)
+  expenses(id, description, amount, currency, category_id, date, notes, image_url, split_mode, payers, shares, deleted, created_at),
+  payments(id, from_member_id, to_member_id, amount, currency, date, note, deleted, created_at)
 `;
 
 // Traduce una fila de Supabase (snake_case, numeric como string, timestamptz como ISO)
-// al shape en memoria que ya consumen GroupView/NewExpense/SettleUp/EditGroup/RecurringList.
+// al shape en memoria que ya consumen GroupView/NewExpense/SettleUp/EditGroup.
 function toClientGroup(row) {
   return {
     id: row.id,
@@ -153,7 +151,6 @@ function toClientGroup(row) {
       splitMode: e.split_mode,
       payers: e.payers,
       shares: e.shares,
-      recurringId: e.recurring_id,
       deleted: e.deleted,
     })),
     payments: (row.payments || []).map((p) => ({
@@ -166,20 +163,6 @@ function toClientGroup(row) {
       createdAt: new Date(p.created_at).getTime(),
       note: p.note || "",
       deleted: p.deleted,
-    })),
-    recurring: (row.recurring_expenses || []).map((r) => ({
-      id: r.id,
-      description: r.description,
-      amount: Number(r.amount),
-      currency: r.currency,
-      category: r.category_id,
-      splitMode: r.split_mode,
-      payers: r.payers,
-      paidBy: Object.keys(r.payers || {})[0], // RecurringList lo muestra directo, sin fallback
-      shares: r.shares,
-      frequency: r.frequency,
-      nextDate: new Date(r.next_date).getTime(),
-      paused: r.paused,
     })),
   };
 }
@@ -354,7 +337,6 @@ function AppShell({ session, onLogout, refreshProfile }) {
   const [viewingProfile, setViewingProfile] = useState(false);
   const [toast, setToast] = useState(null); // { message, type: "error" | "success" | "info" }
   const [invites, setInvites] = useState([]); // invitaciones que ME llegaron (bandeja)
-  const processedRecurring = useRef(new Set());
 
   const showError = (msg) => setToast({ message: msg, type: "error" });
   const showSuccess = (msg) => setToast({ message: msg, type: "success" });
@@ -384,53 +366,6 @@ function AppShell({ session, onLogout, refreshProfile }) {
   }, [session.userId]);
 
   useEffect(() => { loadInvites(); }, [loadInvites]);
-
-  // Procesa gastos recurrentes vencidos, una vez por grupo por sesión — corre acá (no
-  // dentro del tab de Split Ledger) porque depende de groups/reloadGroup, que también
-  // viven acá, y no tiene sentido que dependa de qué tab está mirando el usuario.
-  useEffect(() => {
-    if (!groups) return;
-    groups.forEach((g) => {
-      if (processedRecurring.current.has(g.id)) return;
-      processedRecurring.current.add(g.id);
-      const recurring = g.recurring || [];
-      if (recurring.length === 0) return;
-      (async () => {
-        const newInstanceRows = [];
-        const nextDateUpdates = [];
-        for (const tpl of recurring) {
-          if (tpl.paused) continue;
-          const { instances, newNextDate } = generateDueRecurring(tpl);
-          if (instances.length === 0) continue;
-          for (const inst of instances) {
-            newInstanceRows.push({
-              group_id: g.id,
-              description: inst.description,
-              amount: inst.amount,
-              currency: inst.currency,
-              category_id: inst.category,
-              date: new Date(inst.date).toISOString(),
-              notes: inst.notes || null,
-              split_mode: inst.splitMode,
-              payers: inst.payers,
-              shares: inst.shares,
-              recurring_id: tpl.id,
-            });
-          }
-          nextDateUpdates.push({ id: tpl.id, next_date: new Date(newNextDate).toISOString() });
-        }
-        if (newInstanceRows.length === 0) return;
-        try {
-          const { error } = await supabase.from("expenses").insert(newInstanceRows);
-          if (error) throw error;
-          await Promise.all(nextDateUpdates.map((u) =>
-            supabase.from("recurring_expenses").update({ next_date: u.next_date }).eq("id", u.id)
-          ));
-          await reloadGroup(g.id);
-        } catch { /* silencioso, igual que antes */ }
-      })();
-    });
-  }, [groups, reloadGroup]);
 
   const handleAcceptInvite = useCallback(async (invite) => {
     try {

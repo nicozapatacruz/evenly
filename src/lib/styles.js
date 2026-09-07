@@ -65,8 +65,6 @@ export const styles = {
   btnGhostSmall: { padding: "8px 14px", borderRadius: 8, border: "1px solid #DDD2BE", background: "#fff", fontSize: 13, fontFamily: "system-ui, sans-serif", display: "flex", alignItems: "center", gap: 6, color: "#76695A" },
   btnDangerSmall: { padding: "8px 14px", borderRadius: 8, border: "none", background: "#B0473A", color: "#fff", fontSize: 13, fontFamily: "system-ui, sans-serif", fontWeight: 600 },
   confirmBox: { margin: "0 20px 12px", padding: 14, borderRadius: 12, background: "#FBEDE7", border: "1px solid #EBC9BA", fontFamily: "system-ui, sans-serif" },
-  quickActions: { display: "flex", justifyContent: "space-between", padding: "4px 20px 8px", gap: 8 },
-  quickActionBtn: { display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 8, border: "1px solid #ECE3D3", background: "#fff", fontSize: 12.5, fontFamily: "system-ui, sans-serif", fontWeight: 600, color: "#76695A" },
   avatarRow: { display: "flex", gap: 8, overflowX: "auto", padding: "10px 20px 4px" },
   memberChip: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 52 },
   memberChipName: { fontSize: 10.5, color: "#6B6355", fontFamily: "system-ui, sans-serif", maxWidth: 56, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
@@ -173,7 +171,6 @@ export const styles = {
   checkbox: { width: 20, height: 20, minWidth: 20, borderRadius: 6, border: "1.5px solid #D9CFC1", display: "flex", alignItems: "center", justifyContent: "center" },
   checkboxOn: { background: "#C75D3B", borderColor: "#C75D3B" },
   customInput: { width: 80, fontFamily: "system-ui, sans-serif", fontSize: 14, padding: "7px 9px", borderRadius: 8, border: "1px solid #DDD2BE", textAlign: "right" },
-  recurringToggle: { display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", padding: "6px 0", fontSize: 13.5, fontWeight: 600, color: "#544A3C", fontFamily: "system-ui, sans-serif" },
   errText: { color: "#B0473A", fontSize: 13, fontFamily: "system-ui, sans-serif", margin: 0, background: "#FBEDE7", padding: "8px 12px", borderRadius: 8 },
   toast: { position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)", background: "#2B2620", color: "#fff", padding: "10px 18px", borderRadius: 10, fontSize: 13, fontFamily: "system-ui, sans-serif", zIndex: 50, maxWidth: "90%", textAlign: "center" },
 

@@ -23,8 +23,8 @@ export function ConfirmInline({ message, confirmLabel = "Confirmar", onCancel, o
     <div style={{ ...styles.confirmBox, ...style }}>
       <p style={{ margin: 0, fontSize: 14 }}>{message}</p>
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-        <button style={styles.btnGhostSmall} onClick={onCancel}>Cancelar</button>
-        <button style={styles.btnDangerSmall} onClick={onConfirm}>{confirmLabel}</button>
+        <button style={{ ...styles.btnGhostSmall, flex: 1, justifyContent: "center" }} onClick={onCancel}>Cancelar</button>
+        <button style={{ ...styles.btnDangerSmall, flex: 1 }} onClick={onConfirm}>{confirmLabel}</button>
       </div>
     </div>
   );

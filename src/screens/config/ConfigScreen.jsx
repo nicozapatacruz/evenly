@@ -186,10 +186,12 @@ function ChangePasswordScreen({ session, onBack, onSave }) {
     } catch (e) { setErr(e?.message || "Error al guardar"); setSaving(false); }
   };
 
+  const canSave = currentPassword && newPassword && confirmPassword;
+
   return (
     <div style={styles.screen}>
       <TopBar title="Cambiar contraseña" onBack={onBack} />
-      <div style={styles.form}>
+      <div style={{ ...styles.form, paddingBottom: 100 }}>
         <label style={styles.label}>
           Contraseña actual
           <input style={styles.input} type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="••••••" />
@@ -203,10 +205,17 @@ function ChangePasswordScreen({ session, onBack, onSave }) {
           <input style={styles.input} type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••" />
         </label>
         {err && <p style={styles.errText}>{err}</p>}
-        <button style={styles.btnPrimary} onClick={handleSave} disabled={saving}>
-          {saving ? "Guardando…" : "Actualizar contraseña"}
-        </button>
       </div>
+      <Footer>
+        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onBack}>Cancelar</button>
+        <button
+          style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }}
+          onClick={handleSave}
+          disabled={saving || !canSave}
+        >
+          {saving ? "Actualizando…" : "Actualizar contraseña"}
+        </button>
+      </Footer>
     </div>
   );
 }

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "../../lib/supabaseClient.js";
 import {
   Plus, Receipt, X, ChevronRight, ArrowRight, Check, Trash2, Settings,
-  RefreshCw, HandCoins, UserPlus, Repeat, ChevronUp,
+  RefreshCw, HandCoins, UserPlus, ChevronUp,
   ChevronDown as ChevronDownIcon, Camera, User, PenLine, Pencil, Send, GripVertical,
 } from "lucide-react";
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
@@ -14,7 +14,7 @@ import {
   uid, CURRENCIES, CURRENCY_LIST, money, parseAmountInput, ICON_KEYS, IconComp,
   DEFAULT_CATEGORIES, groupCategories, catInfo, colorFor, initials, shortName, nameOf,
   computeBalances, simplifyDebts, fairSplit, computeShares,
-  dateInputValue, todayInputValue, fmtDate, freqLabel,
+  dateInputValue, todayInputValue, fmtDate,
   useImageUpload, resolvePhotoUrl,
 } from "../../lib/helpers.jsx";
 
@@ -104,7 +104,6 @@ export default function SplitLedgerTab({
           onOpenExpense={(expenseId) => setView({ screen: "expenseDetail", groupId: activeGroup.id, expenseId })}
           onSettleUp={(prefill) => setView({ screen: "settleUp", groupId: activeGroup.id, prefill })}
           onEditGroup={() => setView({ screen: "editGroup", groupId: activeGroup.id })}
-          onRecurring={() => setView({ screen: "recurring", groupId: activeGroup.id })}
           onSoftDeleteExpense={async (expenseId) => {
             try {
               const { error } = await supabase.from("expenses").update({ deleted: true }).eq("id", expenseId);
@@ -176,26 +175,6 @@ export default function SplitLedgerTab({
               await reloadGroup(activeGroup.id);
               setView({ screen: "group", groupId: activeGroup.id });
             } catch (e) { showError(`No se pudo borrar el gasto: ${e?.message || e}`); }
-          }}
-          onSaveRecurring={async (template) => {
-            const groupId = activeGroup?.id ?? template.groupId;
-            try {
-              const { error } = await supabase.from("recurring_expenses").insert({
-                group_id: groupId,
-                description: template.description,
-                amount: template.amount,
-                currency: template.currency,
-                category_id: template.category,
-                split_mode: template.splitMode,
-                payers: template.payers,
-                shares: template.shares,
-                frequency: template.frequency,
-                next_date: new Date(template.nextDate).toISOString(),
-              });
-              if (error) throw error;
-              await reloadGroup(groupId);
-              setView({ screen: "group", groupId });
-            } catch (e) { showError(`No se pudo crear el gasto recurrente: ${e?.message || e}`); }
           }}
         />
       )}
@@ -323,26 +302,6 @@ export default function SplitLedgerTab({
         />
       )}
 
-      {view.screen === "recurring" && activeGroup && (
-        <RecurringList
-          group={activeGroup}
-          onBack={() => setView({ screen: "group", groupId: activeGroup.id })}
-          onTogglePause={async (recurringId, paused) => {
-            try {
-              const { error } = await supabase.from("recurring_expenses").update({ paused }).eq("id", recurringId);
-              if (error) throw error;
-              await reloadGroup(activeGroup.id);
-            } catch (e) { showError(`No se pudo actualizar: ${e?.message || e}`); }
-          }}
-          onRemove={async (recurringId) => {
-            try {
-              const { error } = await supabase.from("recurring_expenses").delete().eq("id", recurringId);
-              if (error) throw error;
-              await reloadGroup(activeGroup.id);
-            } catch (e) { showError(`No se pudo actualizar: ${e?.message || e}`); }
-          }}
-        />
-      )}
     </>
   );
 }
@@ -912,7 +871,7 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
    GROUP VIEW
    ========================================================================= */
 
-function GroupView({ group, onBack, onAddExpense, onOpenExpense, onSettleUp, onEditGroup, onRecurring, onSoftDeleteExpense }) {
+function GroupView({ group, onBack, onAddExpense, onOpenExpense, onSettleUp, onEditGroup, onSoftDeleteExpense }) {
   const [tab, setTab] = useState("activity"); // activity | balances | individual
   const [selectedMember, setSelectedMember] = useState(group.members[0]?.id || null);
   const { members, expenses, payments = [] } = group;
@@ -955,12 +914,6 @@ function GroupView({ group, onBack, onAddExpense, onOpenExpense, onSettleUp, onE
           </button>
         }
       />
-
-      <div style={styles.quickActions}>
-        <button style={styles.quickActionBtn} onClick={onRecurring}>
-          <Repeat size={15} /> Recurrentes {group.recurring?.length ? `(${group.recurring.filter(r=>!r.paused).length})` : ""}
-        </button>
-      </div>
 
       {/* Fila de miembros con avatares coloreados y expandible */}
       {(() => {
@@ -1075,11 +1028,11 @@ function GroupView({ group, onBack, onAddExpense, onOpenExpense, onSettleUp, onE
             const perCurrency = currencies.map((currency) => {
               const bal = balancesByCurrency[currency][selectedMember] || 0;
               const myTxns = txnsByCurrency[currency].filter(t => t.from === selectedMember || t.to === selectedMember);
+              // Total que puso de su bolsillo: lo que pagó en cada gasto, no lo que le queda
+              // después de descontar su propia parte (eso ya lo muestra el balance de arriba).
               const totalLent = activeExpenses.filter(e => e.currency === currency).reduce((sum, e) => {
                 const payers = e.payers || { [e.paidBy]: e.amount };
-                const paid = payers[selectedMember] || 0;
-                const owes = e.shares[selectedMember] || 0;
-                return sum + Math.max(0, paid - owes);
+                return sum + (payers[selectedMember] || 0);
               }, 0);
               return { currency, bal, myTxns, totalLent };
             }).filter(({ bal, totalLent }) => Math.abs(bal) > 0.01 || totalLent > 0.01);
@@ -1195,7 +1148,6 @@ function GroupView({ group, onBack, onAddExpense, onOpenExpense, onSettleUp, onE
                       <p style={{ ...styles.expenseTitle, display: "flex", alignItems: "center", gap: 4 }}>
                         {e.imageUrl ? <Camera size={11} color="#A8967A" style={{ flexShrink: 0 }} /> : null}
                         <span>{e.description}</span>
-                        {e.recurringId ? <Repeat size={11} color="#A8967A" style={{ flexShrink: 0 }} /> : null}
                       </p>
                       <p style={styles.expenseSub}>
                         {(() => {
@@ -1356,7 +1308,7 @@ function ExpenseDetail({ group, expenseId, onBack, onEdit }) {
 // El wrapper `NewExpense` (al final del archivo) decide si ese grupo viene
 // dado (abierto desde dentro de un grupo) o hay que elegirlo primero (abierto
 // desde el FAB del listado principal, sin grupo en contexto).
-function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onDelete, onSaveRecurring }) {
+function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onDelete }) {
   const { members, baseCurrency } = group;
   const existing = expenseId ? group.expenses.find((e) => e.id === expenseId) : null;
 
@@ -1394,8 +1346,6 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
   const [shareUnits, setShareUnits] = useState(
     () => Object.fromEntries(members.map((m) => [m.id, existing?.splitMode === "shares" ? String(existing.shares[m.id] || "") : "1"]))
   );
-  const [makeRecurring, setMakeRecurring] = useState(false);
-  const [frequency, setFrequency] = useState("monthly");
   const [splitExpanded, setSplitExpanded] = useState(false);
   const [notesOpen, setNotesOpen] = useState(!!(existing?.notes));
   const [err, setErr] = useState("");
@@ -1473,6 +1423,10 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
       return `Los montos suman ${money(exactTotal, currency)}, pero el gasto es de ${money(numericAmount, currency)}.`;
     if (splitMode === "percent" && Math.abs(percentTotal - 100) > 0.5)
       return `Los porcentajes suman ${percentTotal.toFixed(0)}%, deben sumar 100%.`;
+    if (splitMode === "shares") {
+      const totalUnits = participantIds.reduce((s, id) => s + (parseFloat(shareUnits[id] || "0") || 0), 0);
+      if (totalUnits <= 0) return "Asigna al menos una parte a alguien en el reparto.";
+    }
     return "";
   };
 
@@ -1483,22 +1437,6 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
     const payers = buildPayers();
     setSaving(true);
     try {
-      if (makeRecurring && !existing) {
-        await onSaveRecurring({
-          groupId: group.id,
-          description: description.trim(),
-          amount: numericAmount,
-          currency,
-          category,
-          payers,
-          splitMode,
-          shares: buildShares(),
-          frequency,
-          nextDate: dateMs,
-        });
-        return;
-      }
-
       const resolvedImageUrl = await resolvePhotoUrl({ pendingFile, removed, currentUrl: existing?.imageUrl });
       await onSave({
         id: existing?.id,
@@ -1557,7 +1495,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
             value={currency}
             onChange={(e) => setCurrency(e.target.value)}
           >
-            {CURRENCY_LIST.map((c) => <option key={c} value={c}>{c}</option>)}
+            {[baseCurrency, ...CURRENCY_LIST.filter((c) => c !== baseCurrency)].map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
         {/* Fila: Fecha + Categoría + icono Foto + icono Nota — se pone después de dividido en */}
@@ -1673,7 +1611,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
                     const isOver = remaining < -0.01;
                     return (
                       <p style={{ ...styles.muted, marginTop: -6, fontWeight: 700, color: isOver ? "#B0473A" : "#6B6355" }}>
-                        Falta: {money(remaining, currency)}
+                        {isOver ? "Sobra" : "Falta"}: {money(Math.abs(remaining), currency)}
                       </p>
                     );
                   })()}
@@ -1757,32 +1695,17 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
           <textarea style={{ ...styles.input, minHeight: 60, resize: "vertical", fontFamily: "system-ui, sans-serif" }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas adicionales…" autoFocus={notesOpen && !notes} />
         )}
 
-        {!existing && (
-          <button style={styles.recurringToggle} onClick={() => setMakeRecurring((v) => !v)}>
-            <span style={{ ...styles.checkbox, ...(makeRecurring ? styles.checkboxOn : {}) }}>{makeRecurring && <Check size={12} color="#fff" strokeWidth={3} />}</span>
-            <Repeat size={15} /> Hacer este gasto recurrente
-          </button>
-        )}
-        {makeRecurring && !existing && (
-          <select style={styles.input} value={frequency} onChange={(e) => setFrequency(e.target.value)}>
-            <option value="weekly">Cada semana</option>
-            <option value="biweekly">Cada 2 semanas</option>
-            <option value="monthly">Cada mes</option>
-            <option value="yearly">Cada año</option>
-          </select>
-        )}
-
         {err && <p style={styles.errText}>{err}</p>}
       </div>
 
       <Footer>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
         <button
-          style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !description.trim() || !validAmount) ? 0.5 : 1 }}
+          style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !description.trim() || !validAmount || !!validate()) ? 0.5 : 1 }}
           onClick={handleSave}
-          disabled={saving || !description.trim() || !validAmount}
+          disabled={saving || !description.trim() || !validAmount || !!validate()}
         >
-          {saving ? "Guardando…" : existing ? "Guardar" : makeRecurring ? "Crear recurrente" : "Guardar"}
+          {saving ? "Guardando…" : "Guardar"}
         </button>
       </Footer>
     </div>
@@ -1794,7 +1717,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
 // Si no (abierto desde el FAB del listado principal), muestra un selector de
 // grupo arriba del formulario; ExpenseForm recién se monta cuando hay un
 // grupo elegido, con key={group.id} para arrancar limpio si lo cambian.
-function NewExpense({ group, groups, defaultGroupId, expenseId, onCancel, onSave, onDelete, onSaveRecurring }) {
+function NewExpense({ group, groups, defaultGroupId, expenseId, onCancel, onSave, onDelete }) {
   const [pickedGroupId, setPickedGroupId] = useState(group?.id ?? defaultGroupId ?? "");
 
   if (group) {
@@ -1805,7 +1728,6 @@ function NewExpense({ group, groups, defaultGroupId, expenseId, onCancel, onSave
         onCancel={onCancel}
         onSave={onSave}
         onDelete={onDelete}
-        onSaveRecurring={onSaveRecurring}
       />
     );
   }
@@ -1838,7 +1760,6 @@ function NewExpense({ group, groups, defaultGroupId, expenseId, onCancel, onSave
       extraHeaderField={groupPicker}
       onCancel={onCancel}
       onSave={onSave}
-      onSaveRecurring={onSaveRecurring}
     />
   );
 }
@@ -1933,50 +1854,6 @@ function SettleUp({ group, prefill, onCancel, onSave }) {
   );
 }
 
-/* =========================================================================
-   RECURRING LIST
-   ========================================================================= */
-
-function RecurringList({ group, onBack, onTogglePause, onRemove }) {
-  const { recurring = [], members } = group;
-
-  const togglePause = (id, paused) => onTogglePause(id, paused);
-  const remove = (id) => onRemove(id);
-
-  return (
-    <div style={styles.screen}>
-      <TopBar title="Gastos recurrentes" onBack={onBack} />
-      <div style={{ padding: "10px 20px", display: "flex", flexDirection: "column", gap: 8 }}>
-        {recurring.length === 0 && (
-          <p style={styles.muted}>
-            No tienes gastos recurrentes en este grupo. Puedes crear uno marcando "Hacer este gasto recurrente" al agregar un gasto nuevo.
-          </p>
-        )}
-        {recurring.map((r) => {
-          const cat = catInfo(r.category, group);
-          return (
-            <div key={r.id} style={{ ...styles.expenseCard, cursor: "default", opacity: r.paused ? 0.55 : 1 }}>
-              <div style={{ ...styles.expenseIcon, background: colorFor(cat.id) }}><IconComp iconKey={cat.iconKey} size={16} /></div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={styles.expenseTitle}>{r.description}</p>
-                <p style={styles.expenseSub}>
-                  {money(r.amount, r.currency)} · {nameOf(members, r.paidBy)} paga · {freqLabel(r.frequency)} · próximo: {fmtDate(r.nextDate)}
-                  {r.paused ? " · pausado" : ""}
-                </p>
-              </div>
-              <div style={{ display: "flex", gap: 4 }}>
-                <button style={styles.iconBtnGhost} onClick={() => togglePause(r.id, !r.paused)} aria-label={r.paused ? "Reanudar" : "Pausar"}>
-                  {r.paused ? <RefreshCw size={15} /> : <X size={15} />}
-                </button>
-                <button style={styles.iconBtnGhost} onClick={() => remove(r.id)} aria-label="Eliminar recurrente"><Trash2 size={15} /></button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 function InviteScreen({ group, session, groupInvites = [], onBack, onSend, onCancelInvite }) {
   const [selectedMemberId, setSelectedMemberId] = useState("");

@@ -113,8 +113,8 @@ export const initials = (name) =>
     .map((w) => w[0]?.toUpperCase() || "")
     .join("");
 
-// Nombre de un miembro por id — compartido para que GroupView/ExpenseDetail/RecurringList
-// no repitan la misma búsqueda cada uno con su propio texto de fallback.
+// Nombre de un miembro por id — compartido para que GroupView/ExpenseDetail no repitan
+// la misma búsqueda cada uno con su propio texto de fallback.
 export const nameOf = (members, id) => members.find((m) => m.id === id)?.name || "Alguien que ya no está";
 
 // Un balance independiente por cada moneda que aparezca en el grupo — sin conversión entre
@@ -220,57 +220,6 @@ export function computeShares({ splitMode, amount, participantIds, exactAmounts,
   }
 
   return shares;
-}
-
-export function nextOccurrence(dateMs, frequency) {
-  const d = new Date(dateMs);
-  if (frequency === "weekly") { d.setDate(d.getDate() + 7); return d.getTime(); }
-  if (frequency === "biweekly") { d.setDate(d.getDate() + 14); return d.getTime(); }
-  if (frequency === "monthly" || frequency === "yearly") {
-    // setMonth/setFullYear desbordan al mes siguiente cuando el día de anclaje (29-31) no
-    // existe en el mes destino (ej. 31 de enero + 1 mes = 3 de marzo, no fin de febrero).
-    // Se ancla al día 1 antes de sumar el mes/año, y se recorta al último día válido.
-    const day = d.getDate();
-    d.setDate(1);
-    if (frequency === "monthly") d.setMonth(d.getMonth() + 1);
-    else d.setFullYear(d.getFullYear() + 1);
-    const lastDayOfTargetMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-    d.setDate(Math.min(day, lastDayOfTargetMonth));
-    return d.getTime();
-  }
-  return d.getTime();
-}
-
-export function generateDueRecurring(template, now = Date.now()) {
-  const instances = [];
-  let next = template.nextDate;
-  let guard = 0;
-  while (next <= now && guard < 36) {
-    instances.push({
-      id: uid(),
-      description: template.description,
-      amount: template.amount,
-      currency: template.currency,
-      category: template.category,
-      paidBy: template.paidBy,
-      payers: template.payers,
-      shares: template.shares,
-      splitMode: template.splitMode,
-      date: next,
-      createdAt: Date.now(),
-      notes: template.notes,
-      recurringId: template.id,
-    });
-    const advanced = nextOccurrence(next, template.frequency);
-    if (advanced <= next) break; // frecuencia desconocida / no avanza: cortar en vez de duplicar
-    next = advanced;
-    guard++;
-  }
-  return { instances, newNextDate: next };
-}
-
-export function freqLabel(f) {
-  return { weekly: "Cada semana", biweekly: "Cada 2 semanas", monthly: "Cada mes", yearly: "Cada año" }[f] || f;
 }
 
 export function fmtDate(ms) {

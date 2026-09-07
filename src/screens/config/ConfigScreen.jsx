@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { User, Camera, LogOut, Bell, Plus, ChevronRight } from "lucide-react";
+import { User, LogOut, Bell, Plus, ChevronRight } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, ConfirmInline, Footer } from "../../components/Shared.jsx";
+import { TopBar, ConfirmInline, Footer, PhotoPicker } from "../../components/Shared.jsx";
 import { useImageUpload, resolvePhotoUrl, colorFor, initials } from "../../lib/helpers.jsx";
 import ComingSoon from "../moneymanager/ComingSoon.jsx";
 
@@ -109,21 +109,7 @@ function ProfileScreen({ session, onBack, onLogout, onChangePassword, onSave }) 
     <div style={styles.screen}>
       <TopBar title="Perfil" onBack={onBack} />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{ width: 72, height: 72, minWidth: 72, borderRadius: "50%", overflow: "hidden", background: photoUrl ? "transparent" : "#E8DFD0", display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #DDD2BE" }}>
-            {photoUrl
-              ? <img src={photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              : <User size={28} color="#A89A87" />
-            }
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <label style={{ ...styles.btnDashed, cursor: "pointer", fontSize: 13 }}>
-              <Camera size={14} /> {photoUrl ? "Cambiar foto" : "Añadir foto"}
-              <input type="file" accept="image/*" style={{ display: "none" }} onChange={handlePhoto} />
-            </label>
-            {photoUrl && <button style={{ ...styles.btnGhostSmall, fontSize: 12 }} onClick={clearPhoto}>Quitar foto</button>}
-          </div>
-        </div>
+        <PhotoPicker previewUrl={photoUrl} onChange={handlePhoto} onClear={clearPhoto} shape="circle" />
 
         <p style={{ ...styles.muted, padding: 0, fontSize: 12 }}>@{session.username}</p>
 

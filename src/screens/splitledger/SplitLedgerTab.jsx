@@ -9,7 +9,7 @@ import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from 
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { styles } from "../../lib/styles.js";
-import { TopBar, ConfirmInline, Modal, Footer } from "../../components/Shared.jsx";
+import { TopBar, ConfirmInline, Modal, Footer, PhotoPicker } from "../../components/Shared.jsx";
 import {
   uid, CURRENCIES, CURRENCY_LIST, money, parseAmountInput, ICON_KEYS, IconComp,
   DEFAULT_CATEGORIES, groupCategories, catInfo, colorFor, initials, shortName, nameOf,
@@ -443,23 +443,7 @@ function NewGroup({ onCancel, onCreate, session }) {
       <TopBar title="Nuevo grupo" onBack={onCancel} />
       <div style={styles.form}>
         {/* Foto del grupo */}
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 72, height: 72, minWidth: 72, borderRadius: 16, overflow: "hidden", background: photoUrl ? "transparent" : "#E8DFD0", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #DDD2BE" }}>
-            {photoUrl
-              ? <img src={photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              : <User size={28} color="#A89A87" />
-            }
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <label style={{ ...styles.btnDashed, cursor: "pointer", fontSize: 13 }}>
-              <Camera size={14} /> {photoUrl ? "Cambiar foto" : "Añadir foto"}
-              <input type="file" accept="image/*" style={{ display: "none" }} onChange={handlePhoto} />
-            </label>
-            {photoUrl && (
-              <button style={{ ...styles.btnGhostSmall, fontSize: 12 }} onClick={clearPhoto}>Quitar foto</button>
-            )}
-          </div>
-        </div>
+        <PhotoPicker previewUrl={photoUrl} onChange={handlePhoto} onClear={clearPhoto} shape="square" />
 
         <label style={styles.label}>
           Nombre del grupo
@@ -689,23 +673,7 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
       />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
         {/* Foto del grupo */}
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 72, height: 72, minWidth: 72, borderRadius: 16, overflow: "hidden", background: photoUrl ? "transparent" : "#E8DFD0", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #DDD2BE" }}>
-            {photoUrl
-              ? <img src={photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              : <User size={28} color="#A89A87" />
-            }
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <label style={{ ...styles.btnDashed, cursor: "pointer", fontSize: 13 }}>
-              <Camera size={14} /> {photoUrl ? "Cambiar foto" : "Añadir foto"}
-              <input type="file" accept="image/*" style={{ display: "none" }} onChange={handlePhoto} />
-            </label>
-            {photoUrl && (
-              <button style={{ ...styles.btnGhostSmall, fontSize: 12 }} onClick={clearPhoto}>Quitar foto</button>
-            )}
-          </div>
-        </div>
+        <PhotoPicker previewUrl={photoUrl} onChange={handlePhoto} onClear={clearPhoto} shape="square" />
 
         <label style={styles.label}>
           Nombre del grupo
@@ -758,8 +726,8 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
           ))}
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <input style={{ ...styles.input, flex: 1 }} value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} placeholder="Nombre de la nueva persona" onKeyDown={(e) => e.key === "Enter" && addMember()} />
-          <button style={styles.btnSecondarySmall} onClick={addMember}><UserPlus size={16} /></button>
+          <input style={{ ...styles.input, flex: 1 }} value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} placeholder="Nombre de la nueva persona" onKeyDown={(e) => e.key === "Enter" && newMemberName.trim() && addMember()} />
+          <button style={{ ...styles.btnSecondarySmall, opacity: newMemberName.trim() ? 1 : 0.5 }} onClick={addMember} disabled={!newMemberName.trim()}><UserPlus size={16} /></button>
         </div>
 
         {/* Invitar personas */}
@@ -1412,27 +1380,20 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
     return computeShares({ splitMode: "shares", amount: numericAmount, participantIds, shareUnits: units });
   };
 
-  const validate = () => {
-    if (!description.trim()) return "Dale una descripción al gasto.";
-    if (!validAmount) return "Ingresa un monto válido.";
-    if (payerMode === "single" && !singlePayer) return "Indica quién pagó.";
-    if (payerMode === "multi" && Math.abs(multiPayerTotal - numericAmount) > 0.01)
-      return `Los pagadores suman ${money(multiPayerTotal, currency)}, pero el gasto es de ${money(numericAmount, currency)}.`;
-    if (participantIds.length === 0) return "Selecciona al menos una persona en el reparto.";
-    if (splitMode === "exact" && Math.abs(exactTotal - numericAmount) > 0.01)
-      return `Los montos suman ${money(exactTotal, currency)}, pero el gasto es de ${money(numericAmount, currency)}.`;
-    if (splitMode === "percent" && Math.abs(percentTotal - 100) > 0.5)
-      return `Los porcentajes suman ${percentTotal.toFixed(0)}%, deben sumar 100%.`;
-    if (splitMode === "shares") {
-      const totalUnits = participantIds.reduce((s, id) => s + (parseFloat(shareUnits[id] || "0") || 0), 0);
-      if (totalUnits <= 0) return "Asigna al menos una parte a alguien en el reparto.";
-    }
-    return "";
-  };
+  // Ya no devuelve mensajes: el botón de Guardar se deshabilita con esta misma condición,
+  // así que para cuando handleSave llega a ejecutarse esto siempre es true — es solo un
+  // respaldo silencioso, no hace falta mostrar ningún error acá.
+  const canSave =
+    !!description.trim() &&
+    validAmount &&
+    (payerMode === "single" ? !!singlePayer : Math.abs(multiPayerTotal - numericAmount) < 0.01) &&
+    participantIds.length > 0 &&
+    (splitMode !== "exact" || Math.abs(exactTotal - numericAmount) < 0.01) &&
+    (splitMode !== "percent" || Math.abs(percentTotal - 100) < 0.5) &&
+    (splitMode !== "shares" || participantIds.reduce((s, id) => s + (parseFloat(shareUnits[id] || "0") || 0), 0) > 0);
 
   const handleSave = async () => {
-    const v = validate();
-    if (v) return setErr(v);
+    if (!canSave) return;
     const dateMs = new Date(date + "T12:00:00").getTime();
     const payers = buildPayers();
     setSaving(true);
@@ -1723,9 +1684,9 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
       <Footer>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
         <button
-          style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !description.trim() || !validAmount || !!validate()) ? 0.5 : 1 }}
+          style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }}
           onClick={handleSave}
-          disabled={saving || !description.trim() || !validAmount || !!validate()}
+          disabled={saving || !canSave}
         >
           {saving ? "Guardando…" : "Guardar"}
         </button>

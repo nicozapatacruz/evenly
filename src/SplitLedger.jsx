@@ -112,7 +112,7 @@ function useAuth() {
 // de esa tabla hija (is_group_member en todas), así que basta con pedir "groups".
 const GROUP_SELECT = `
   id, name, base_currency, rates, photo_url, creator_id, created_at,
-  group_members(id, name, linked_user_id),
+  group_members(id, name, linked_user_id, sort_order),
   categories(id, label, icon_key, sort_order),
   expenses(id, description, amount, currency, category_id, date, notes, image_url, split_mode, payers, shares, deleted, created_at),
   payments(id, from_member_id, to_member_id, amount, currency, date, note, deleted, created_at)
@@ -133,6 +133,7 @@ function toClientGroup(row) {
       id: m.id,
       name: m.name,
       linkedUserId: m.linked_user_id,
+      sortOrder: m.sort_order,
     })),
     categories: (row.categories || [])
       .slice()
@@ -167,6 +168,21 @@ function toClientGroup(row) {
   };
 }
 
+// Orden de "tus grupos": el que cada usuario arma a mano arrastrando en
+// Configuración (sort_order en su propia fila de group_members). Los grupos
+// que todavía no tienen ese valor (nunca se reordenaron) van al final, en el
+// orden en que se crearon.
+function sortGroupsForUser(list, userId) {
+  return list.slice().sort((a, b) => {
+    const oa = a.members.find((m) => m.linkedUserId === userId)?.sortOrder;
+    const ob = b.members.find((m) => m.linkedUserId === userId)?.sortOrder;
+    if (oa == null && ob == null) return a.createdAt - b.createdAt;
+    if (oa == null) return 1;
+    if (ob == null) return -1;
+    return oa - ob;
+  });
+}
+
 function useGroups(userId) {
   const [groups, setGroups] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -179,7 +195,7 @@ function useGroups(userId) {
         .select(GROUP_SELECT)
         .order("created_at", { ascending: true });
       if (error) throw error;
-      setGroups(data.map(toClientGroup));
+      setGroups(sortGroupsForUser(data.map(toClientGroup), userId));
     } catch {
       setGroups([]);
     } finally {
@@ -261,7 +277,7 @@ function AuthScreen({ onLogin, onRegister }) {
   };
 
   return (
-    <div style={{ ...styles.app, alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#F7F2E9" }}>
+    <div style={{ ...styles.app, alignItems: "center", justifyContent: "center" }}>
       <div style={{ width: "100%", maxWidth: 400, background: "#FBF8F2", borderRadius: 20, padding: "36px 28px", boxShadow: "0 4px 32px rgba(0,0,0,0.08)", margin: "0 16px" }}>
         <h1 style={{ ...styles.h1, textAlign: "center", marginBottom: 4 }}>Evenly</h1>
         <p style={{ ...styles.muted, padding: 0, textAlign: "center", marginBottom: 28 }}>
@@ -272,27 +288,27 @@ function AuthScreen({ onLogin, onRegister }) {
           {mode === "register" && (
             <label style={styles.label}>
               Nombre que verán los demás
-              <input style={styles.input} value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Tu nombre" autoFocus />
+              <input style={styles.input} value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Tu nombre" autoComplete="name" autoFocus />
             </label>
           )}
           {mode === "register" && (
             <label style={styles.label}>
               Usuario
-              <input style={styles.input} value={username} onChange={e => setUsername(e.target.value)} placeholder="nombre_de_usuario" autoCapitalize="none" />
+              <input style={styles.input} value={username} onChange={e => setUsername(e.target.value)} placeholder="nombre_de_usuario" autoCapitalize="none" autoComplete="username" />
             </label>
           )}
           <label style={styles.label}>
             Email
-            <input style={styles.input} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="tu@email.com" autoCapitalize="none" autoFocus={mode === "login"} onKeyDown={e => e.key === "Enter" && handle()} />
+            <input style={styles.input} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="tu@email.com" autoCapitalize="none" autoComplete="email" autoFocus={mode === "login"} onKeyDown={e => e.key === "Enter" && handle()} />
           </label>
           <label style={styles.label}>
             Contraseña
-            <input style={styles.input} type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••" onKeyDown={e => e.key === "Enter" && handle()} />
+            <input style={styles.input} type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••" autoComplete={mode === "login" ? "current-password" : "new-password"} onKeyDown={e => e.key === "Enter" && handle()} />
           </label>
           {mode === "register" && (
             <label style={styles.label}>
               Confirmar contraseña
-              <input style={styles.input} type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••" onKeyDown={e => e.key === "Enter" && handle()} />
+              <input style={styles.input} type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••" autoComplete="new-password" onKeyDown={e => e.key === "Enter" && handle()} />
             </label>
           )}
           {err && <p style={styles.errText}>{err}</p>}
@@ -330,7 +346,7 @@ const TABS = [
    ========================================================================= */
 
 function AppShell({ session, onLogout, refreshProfile }) {
-  const { groups, loading, reloadGroup, deleteGroup } = useGroups(session.userId);
+  const { groups, loading, reloadGroup, deleteGroup, reload: reloadGroups } = useGroups(session.userId);
   const [activeTab, setActiveTab] = useState(() => (session.splitLedgerEnabled ? "splitledger" : "config"));
   const [splitLedgerView, setSplitLedgerView] = useState({ screen: "home" });
   const [changingPassword, setChangingPassword] = useState(false);
@@ -440,6 +456,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           onLogout={onLogout}
           refreshProfile={refreshProfile}
           groups={groups}
+          reloadGroups={reloadGroups}
           onCreateGroup={() => { setActiveTab("splitledger"); setSplitLedgerView({ screen: "newGroup" }); }}
           onOpenGroup={(groupId) => { setActiveTab("splitledger"); setSplitLedgerView({ screen: "group", groupId }); }}
           showError={showError}

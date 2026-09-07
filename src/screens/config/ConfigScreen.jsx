@@ -1,5 +1,8 @@
-import React, { useState } from "react";
-import { User, LogOut, Bell, Plus, ChevronRight } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { User, LogOut, Bell, Plus, ChevronRight, Menu } from "lucide-react";
+import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, RootHeader, ConfirmInline, Footer, PhotoPicker } from "../../components/Shared.jsx";
@@ -14,7 +17,7 @@ import ComingSoon from "../moneymanager/ComingSoon.jsx";
 
 export default function ConfigScreen({
   session, invites = [], onAcceptInvite, onRejectInvite, onLogout, refreshProfile,
-  groups, onCreateGroup, onOpenGroup, showError, showSuccess,
+  groups, reloadGroups, onCreateGroup, onOpenGroup, showError, showSuccess,
   changingPassword, setChangingPassword, viewingProfile, setViewingProfile,
 }) {
   const [section, setSection] = useState("splitledger"); // "moneymanager" | "splitledger"
@@ -71,6 +74,7 @@ export default function ConfigScreen({
         <SplitLedgerSettings
           session={session}
           groups={groups}
+          reloadGroups={reloadGroups}
           onCreateGroup={onCreateGroup}
           onOpenGroup={onOpenGroup}
           refreshProfile={refreshProfile}
@@ -214,12 +218,42 @@ function ChangePasswordScreen({ session, onBack, onSave }) {
    defecto, tus grupos)
    ========================================================================= */
 
-function SplitLedgerSettings({ session, groups, onCreateGroup, onOpenGroup, refreshProfile, showError, showSuccess, invites, onAcceptInvite, onRejectInvite }) {
+function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onOpenGroup, refreshProfile, showError, showSuccess, invites, onAcceptInvite, onRejectInvite }) {
   const [displayName, setDisplayName] = useState(session.displayName || "");
   const [savingName, setSavingName] = useState(false);
   const [togglingEnabled, setTogglingEnabled] = useState(false);
   const [savingDefault, setSavingDefault] = useState(false);
   const nameDirty = displayName.trim() !== (session.displayName || "");
+
+  // Orden local de "tus grupos" (dnd-kit necesita el array de ids ya en el
+  // orden visible). Se resincroniza con `groups` cada vez que cambian desde
+  // afuera (crear/aceptar invitación, y el reloadGroups() de más abajo).
+  const [groupOrder, setGroupOrder] = useState(() => (groups || []).map((g) => g.id));
+  useEffect(() => {
+    setGroupOrder((groups || []).map((g) => g.id));
+  }, [groups]);
+
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const handleGroupDragEnd = async ({ active, over }) => {
+    if (!over || active.id === over.id) return;
+    const oldIndex = groupOrder.indexOf(active.id);
+    const newIndex = groupOrder.indexOf(over.id);
+    const newOrder = arrayMove(groupOrder, oldIndex, newIndex);
+    setGroupOrder(newOrder);
+    try {
+      const results = await Promise.all(newOrder.map((groupId, i) => {
+        const g = groups.find((x) => x.id === groupId);
+        const memberId = g.members.find((m) => m.linkedUserId === session.userId)?.id;
+        return supabase.from("group_members").update({ sort_order: i }).eq("id", memberId);
+      }));
+      const failed = results.find((r) => r.error);
+      if (failed) throw failed.error;
+      await reloadGroups();
+    } catch (e) {
+      showError(`No se pudo guardar el orden: ${e?.message || e}`);
+      await reloadGroups();
+    }
+  };
 
   const handleSaveName = async () => {
     if (!displayName.trim()) return showError("El nombre no puede estar vacío.");
@@ -309,16 +343,54 @@ function SplitLedgerSettings({ session, groups, onCreateGroup, onOpenGroup, refr
         ))}
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {(groups || []).map((g) => (
-          <button key={g.id} style={{ ...styles.shareRow, cursor: "pointer", textAlign: "left" }} onClick={() => onOpenGroup(g.id)}>
-            <span style={{ ...styles.avatar, background: colorFor(g.id) }}>{initials(g.name)}</span>
-            <span style={{ flex: 1 }}>{g.name}</span>
-            <ChevronRight size={18} color="#A89A87" />
-          </button>
-        ))}
-      </div>
+      <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleGroupDragEnd}>
+        <SortableContext items={groupOrder} strategy={verticalListSortingStrategy}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {groupOrder.map((groupId) => {
+              const g = groups.find((x) => x.id === groupId);
+              if (!g) return null;
+              return <SortableGroupRow key={g.id} group={g} onOpen={() => onOpenGroup(g.id)} />;
+            })}
+          </div>
+        </SortableContext>
+      </DndContext>
       <button style={styles.btnDashed} onClick={onCreateGroup}><Plus size={16} /> Crear grupo</button>
+    </div>
+  );
+}
+
+// Una fila arrastrable de "tus grupos" (mismo mecanismo — dnd-kit — que las
+// categorías de EditGroup, y mismo ícono de agarre: 3 líneas horizontales).
+function SortableGroupRow({ group, onOpen }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: group.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 6, padding: "8px 10px 8px 4px" }}>
+      <span
+        {...attributes}
+        {...listeners}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          alignSelf: "stretch",
+          width: 28,
+          color: "#C9BBA0",
+          cursor: "grab",
+          touchAction: "none",
+        }}
+      >
+        <Menu size={18} />
+      </span>
+      <button style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left", font: "inherit", color: "inherit" }} onClick={onOpen}>
+        <span style={{ ...styles.avatar, background: colorFor(group.id) }}>{initials(group.name)}</span>
+        <span style={{ flex: 1, minWidth: 0 }}>{group.name}</span>
+        <ChevronRight size={18} color="#A89A87" />
+      </button>
     </div>
   );
 }

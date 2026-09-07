@@ -3,7 +3,7 @@ import { supabase } from "../../lib/supabaseClient.js";
 import {
   Plus, Receipt, X, ChevronRight, ArrowRight, Check, Trash2, Settings,
   RefreshCw, HandCoins, UserPlus, ChevronUp,
-  ChevronDown as ChevronDownIcon, Camera, User, PenLine, Pencil, Send, GripVertical,
+  ChevronDown as ChevronDownIcon, Camera, User, PenLine, Pencil, Send, Menu,
 } from "lucide-react";
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
@@ -518,7 +518,7 @@ function SortableCategoryRow({ cat, onEditIcon, onChangeLabel, onRemove }) {
           touchAction: "none",
         }}
       >
-        <GripVertical size={18} />
+        <Menu size={18} />
       </span>
       <button
         onClick={onEditIcon}

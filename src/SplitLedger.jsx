@@ -284,7 +284,10 @@ function AuthScreen({ onLogin, onRegister }) {
           {mode === "login" ? "Bienvenido de vuelta" : "Crea tu cuenta"}
         </p>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {/* Un <form> real (no solo autoComplete suelto en inputs) es lo que hace que
+            Safari clasifique esto como login o registro — sin <form>, cae en su
+            heurística genérica y sugiere crear contraseña nueva incluso en login. */}
+        <form style={{ display: "flex", flexDirection: "column", gap: 12 }} onSubmit={e => { e.preventDefault(); if (!loading) handle(); }}>
           {mode === "register" && (
             <label style={styles.label}>
               Nombre que verán los demás
@@ -299,30 +302,31 @@ function AuthScreen({ onLogin, onRegister }) {
           )}
           <label style={styles.label}>
             Email
-            <input style={styles.input} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="tu@email.com" autoCapitalize="none" autoComplete="email" autoFocus={mode === "login"} onKeyDown={e => e.key === "Enter" && handle()} />
+            <input style={styles.input} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="tu@email.com" autoCapitalize="none" autoComplete={mode === "login" ? "username" : "email"} autoFocus={mode === "login"} />
           </label>
           <label style={styles.label}>
             Contraseña
-            <input style={styles.input} type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••" autoComplete={mode === "login" ? "current-password" : "new-password"} onKeyDown={e => e.key === "Enter" && handle()} />
+            <input style={styles.input} type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••" autoComplete={mode === "login" ? "current-password" : "new-password"} />
           </label>
           {mode === "register" && (
             <label style={styles.label}>
               Confirmar contraseña
-              <input style={styles.input} type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••" autoComplete="new-password" onKeyDown={e => e.key === "Enter" && handle()} />
+              <input style={styles.input} type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••" autoComplete="new-password" />
             </label>
           )}
           {err && <p style={styles.errText}>{err}</p>}
           {info && <p style={{ ...styles.muted, padding: 0, color: "#3B6E62" }}>{info}</p>}
-          <button style={{ ...styles.btnPrimary, marginTop: 4 }} onClick={handle} disabled={loading}>
+          <button type="submit" style={{ ...styles.btnPrimary, marginTop: 4 }} disabled={loading}>
             {loading ? "Un momento…" : mode === "login" ? "Entrar" : "Crear cuenta"}
           </button>
           <button
+            type="button"
             style={{ background: "none", border: "none", fontSize: 13.5, fontFamily: "system-ui, sans-serif", color: "#A8754A", cursor: "pointer", textAlign: "center", padding: "4px 0" }}
             onClick={() => { setMode(mode === "login" ? "register" : "login"); setErr(""); setInfo(""); setConfirmPassword(""); }}
           >
             {mode === "login" ? "¿No tienes cuenta? Regístrate" : "¿Ya tienes cuenta? Entra"}
           </button>
-        </div>
+        </form>
       </div>
     </div>
   );
@@ -422,7 +426,6 @@ function AppShell({ session, onLogout, refreshProfile }) {
 
   return (
     <div style={styles.app}>
-      <style>{globalCss}</style>
       {toast && (
         <div
           style={{ ...styles.toast, background: toast.type === "success" ? "#3B6E62" : "#2B2620" }}
@@ -494,13 +497,18 @@ function AppShell({ session, onLogout, refreshProfile }) {
 export default function SplitLedger() {
   const { session, authLoading, register, login, logout, refreshProfile } = useAuth();
 
-  if (authLoading) {
-    return <div style={{ ...styles.app, alignItems: "center", justifyContent: "center", minHeight: "100vh" }}><p style={styles.muted}>Cargando…</p></div>;
-  }
-
-  if (!session) {
-    return <AuthScreen onLogin={login} onRegister={register} />;
-  }
-
-  return <AppShell session={session} onLogout={logout} refreshProfile={refreshProfile} />;
+  // El <style> con html/body/#root { height: 100% } vive acá, en la raíz que
+  // siempre se monta (antes vivía solo dentro de AppShell, así que en la
+  // pantalla de login —sin sesión— nunca se inyectaba y el minHeight:"100%"
+  // de AuthScreen no tenía de qué heredar).
+  return (
+    <>
+      <style>{globalCss}</style>
+      {authLoading
+        ? <div style={{ ...styles.app, alignItems: "center", justifyContent: "center" }}><p style={styles.muted}>Cargando…</p></div>
+        : !session
+          ? <AuthScreen onLogin={login} onRegister={register} />
+          : <AppShell session={session} onLogout={logout} refreshProfile={refreshProfile} />}
+    </>
+  );
 }

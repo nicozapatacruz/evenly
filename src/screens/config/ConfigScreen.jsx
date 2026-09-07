@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { User, LogOut, Bell, Plus, ChevronRight, Menu } from "lucide-react";
-import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
+import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
@@ -233,7 +233,12 @@ function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onO
     setGroupOrder((groups || []).map((g) => g.id));
   }, [groups]);
 
-  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  // MouseSensor + TouchSensor en vez de PointerSensor — ver comentario en
+  // SplitLedgerTab.jsx (mismo fix, mismo bug de touch en iOS Safari).
+  const dndSensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+  );
   const handleGroupDragEnd = async ({ active, over }) => {
     if (!over || active.id === over.id) return;
     const oldIndex = groupOrder.indexOf(active.id);

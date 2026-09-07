@@ -5,7 +5,7 @@ import {
   RefreshCw, HandCoins, UserPlus, ChevronUp,
   ChevronDown as ChevronDownIcon, Camera, User, PenLine, Pencil, Send, Menu,
 } from "lucide-react";
-import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
+import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { styles } from "../../lib/styles.js";
@@ -644,8 +644,14 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
     setCategories(prev => prev.map(c => c.id === id ? { ...c, ...patch } : c));
   };
 
-  // Reordenar categorías (dnd-kit: funciona igual con mouse y con touch)
-  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  // Reordenar categorías (dnd-kit: MouseSensor + TouchSensor en vez de PointerSensor —
+  // PointerSensor depende de que Safari/iOS respete touch-action:none vía CSS para
+  // suprimir el scroll nativo, y en listas con varios ítems lo hace de forma inconsistente
+  // ahí; TouchSensor intercepta el touch directamente y llama preventDefault(), más confiable).
+  const dndSensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+  );
   const handleCategoryDragEnd = ({ active, over }) => {
     if (!over || active.id === over.id) return;
     setCategories((prev) => {

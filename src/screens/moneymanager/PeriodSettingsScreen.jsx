@@ -6,7 +6,7 @@ import { WEEKDAY_OPTIONS } from "../../lib/moneyManagerData.js";
 
 const STARTUP_TAB_OPTIONS = [
   { value: "", label: "Sin preferencia" },
-  { value: "ledger", label: "Hoy" },
+  { value: "ledger", label: "Transacciones" },
   { value: "stats", label: "Estadísticas" },
   { value: "accounts", label: "Cuentas" },
   { value: "splitledger", label: "Split Ledger" },

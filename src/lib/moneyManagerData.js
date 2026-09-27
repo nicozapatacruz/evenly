@@ -110,23 +110,27 @@ export function useMoneyManager(userId) {
   const [groups, setGroups] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [transactions, setTransactions] = useState([]);
+  const [accountTotals, setAccountTotals] = useState([]);
   const [recurring, setRecurring] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     if (!userId) { setLoading(false); return; }
     await generateDueRecurring(userId);
-    const [s, g, a, c, t, r] = await Promise.all([
+    // Los balances se agregan del lado del servidor (vista mm_account_totals,
+    // ver .mm_views.sql) en vez de traer cada transacción y sumar acá — así
+    // esta consulta siempre trae unas pocas filas (una por cuenta×moneda),
+    // sin importar si tenés 2 mil o 20 mil transacciones.
+    const [s, g, a, c, at, r] = await Promise.all([
       supabase.from("mm_settings").select("*").eq("user_id", userId).maybeSingle(),
       supabase.from("mm_account_groups").select("*").eq("user_id", userId).eq("deleted", false).order("sort_order"),
       supabase.from("mm_accounts").select("*").eq("user_id", userId).eq("deleted", false).order("sort_order"),
       supabase.from("mm_categories").select("*").eq("user_id", userId).eq("deleted", false).order("sort_order"),
-      supabase.from("mm_transactions").select("*").eq("user_id", userId).eq("deleted", false),
+      supabase.from("mm_account_totals").select("*").eq("user_id", userId),
       supabase.from("mm_recurring").select("*").eq("user_id", userId).eq("deleted", false).order("next_date"),
     ]);
     setSettings(s.data || DEFAULT_SETTINGS);
-    setTransactions(t.data || []);
+    setAccountTotals(at.data || []);
     setRecurring(r.data || []);
 
     // Cuenta recién creada, nunca usada — la sembramos con lo que trae la
@@ -151,7 +155,65 @@ export function useMoneyManager(userId) {
 
   useEffect(() => { load(); }, [load]);
 
-  return { settings, groups, accounts, categories, transactions, recurring, loading, reload: load };
+  return { settings, groups, accounts, categories, accountTotals, recurring, loading, reload: load };
+}
+
+// Transacciones del mes visible (Transacciones/Diario) — se pide acotado por
+// rango de fechas en vez de traer toda la tabla y filtrar en el navegador.
+// Se refetchea cuando cambia el mes.
+export function useMonthTransactions(userId, viewMonth) {
+  const year = viewMonth.getFullYear();
+  const month = viewMonth.getMonth();
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    if (!userId) { setLoading(false); return; }
+    setLoading(true);
+    const start = new Date(year, month, 1);
+    const end = new Date(year, month + 1, 1);
+    const { data } = await supabase
+      .from("mm_transactions")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("deleted", false)
+      .gte("date", start.toISOString())
+      .lt("date", end.toISOString());
+    setTransactions(data || []);
+    setLoading(false);
+  }, [userId, year, month]);
+
+  useEffect(() => { load(); }, [load]);
+
+  return { transactions, loading, reload: load };
+}
+
+// Totales por categoría del mes visible (Estadísticas) — agregados del lado
+// del servidor (vista mm_category_month_totals, ver .mm_views.sql), filtrados
+// por tipo (ingreso/gasto) + año/mes. Se refetchea al cambiar mes o tipo.
+export function useCategoryMonthTotals(userId, viewMonth, type) {
+  const year = viewMonth.getFullYear();
+  const month = viewMonth.getMonth() + 1;
+  const [totals, setTotals] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    if (!userId) { setLoading(false); return; }
+    setLoading(true);
+    const { data } = await supabase
+      .from("mm_category_month_totals")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("type", type)
+      .eq("year", year)
+      .eq("month", month);
+    setTotals(data || []);
+    setLoading(false);
+  }, [userId, year, month, type]);
+
+  useEffect(() => { load(); }, [load]);
+
+  return { totals, loading };
 }
 
 // Se corre en silencio antes de cada carga: por cada recurrente vencida,
@@ -198,21 +260,17 @@ export function toMainCurrency(amount, currency, settings) {
   return amount;
 }
 
-export function accountBalance(accountId, transactions, settings) {
-  let total = 0;
-  for (const t of transactions) {
-    const amt = toMainCurrency(t.amount, t.currency, settings);
-    if (t.account_id === accountId) {
-      if (t.type === "income") total += amt;
-      else total -= amt; // expense o transfer saliente
-    }
-    if (t.type === "transfer" && t.to_account_id === accountId) total += amt;
-  }
-  return total;
+// accountTotals: filas de la vista mm_account_totals (una por cuenta×moneda,
+// ya con el signo aplicado según ingreso/gasto/transferencia) — acá solo
+// falta convertir cada moneda a la principal y sumar.
+export function accountBalance(accountId, accountTotals, settings) {
+  return accountTotals
+    .filter((t) => t.account_id === accountId)
+    .reduce((sum, t) => sum + toMainCurrency(t.total, t.currency, settings), 0);
 }
 
-export function groupBalance(groupId, accounts, transactions, settings) {
+export function groupBalance(groupId, accounts, accountTotals, settings) {
   return accounts
     .filter((a) => a.group_id === groupId)
-    .reduce((sum, a) => sum + accountBalance(a.id, transactions, settings), 0);
+    .reduce((sum, a) => sum + accountBalance(a.id, accountTotals, settings), 0);
 }

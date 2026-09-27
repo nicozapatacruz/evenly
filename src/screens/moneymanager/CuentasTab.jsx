@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { Pencil, Plus, X, ChevronRight, Menu } from "lucide-react";
+import { Pencil, Plus, X, ChevronRight, Menu, Eye, EyeOff } from "lucide-react";
 import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
-import { RootHeader, TopBar, ConfirmInline } from "../../components/Shared.jsx";
+import { RootHeader, TopBar, ConfirmInline, Footer } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
-import { ACCOUNT_TYPES, accountBalance, groupBalance } from "../../lib/moneyManagerData.js";
+import { accountBalance, groupBalance } from "../../lib/moneyManagerData.js";
 
 /* =========================================================================
    CUENTAS — tab de Money Manager. Aislado de Split Ledger (tablas mm_*).
@@ -15,39 +15,23 @@ import { ACCOUNT_TYPES, accountBalance, groupBalance } from "../../lib/moneyMana
    manageGroups / manageAccounts: pantallas de edición (TopBar).
    ========================================================================= */
 
-export default function CuentasTab({ session, settings, groups, accounts, transactions, reload, showError, view, setView }) {
+export default function CuentasTab({ session, settings, groups, accounts, accountTotals, reload, showError, view, setView }) {
   const balanceColor = (n) => (n > 0.004 ? "#3B6E62" : n < -0.004 ? "#B0473A" : "#6B6355");
 
-  if (view.screen === "manageGroups") {
+  if (view.screen === "manageAllAccounts") {
     return (
-      <ManageGroups
+      <ManageAllAccounts
         session={session}
         groups={groups}
         accounts={accounts}
         reload={reload}
         showError={showError}
         onBack={() => setView({ screen: "list" })}
-        onOpenGroup={(groupId) => setView({ screen: "manageAccounts", groupId })}
       />
     );
   }
 
-  if (view.screen === "manageAccounts") {
-    const group = groups.find((g) => g.id === view.groupId);
-    if (!group) { setView({ screen: "manageGroups" }); return null; }
-    return (
-      <ManageAccounts
-        session={session}
-        group={group}
-        accounts={accounts}
-        reload={reload}
-        showError={showError}
-        onBack={() => setView({ screen: "manageGroups" })}
-      />
-    );
-  }
-
-  const balances = accounts.map((a) => ({ account: a, balance: accountBalance(a.id, transactions, settings) }));
+  const balances = accounts.map((a) => ({ account: a, balance: accountBalance(a.id, accountTotals, settings) }));
   const capital = balances.filter((b) => b.balance > 0).reduce((s, b) => s + b.balance, 0);
   const debt = balances.filter((b) => b.balance < 0).reduce((s, b) => s + b.balance, 0);
 
@@ -57,7 +41,7 @@ export default function CuentasTab({ session, settings, groups, accounts, transa
         title="Cuentas"
         right={
           <div style={{ display: "flex", gap: 4 }}>
-            <button style={styles.iconBtnGhost} onClick={() => setView({ screen: "manageGroups" })} aria-label="Editar cuentas">
+            <button style={styles.iconBtnGhost} onClick={() => setView({ screen: "manageAllAccounts" })} aria-label="Editar cuentas">
               <Pencil size={19} />
             </button>
           </div>
@@ -89,17 +73,18 @@ export default function CuentasTab({ session, settings, groups, accounts, transa
         {groups.map((g) => {
           const groupAccounts = accounts.filter((a) => a.group_id === g.id);
           if (groupAccounts.length === 0) return null;
-          const gBalance = groupBalance(g.id, accounts, transactions, settings);
+          const visibleAccounts = groupAccounts.filter((a) => !a.hidden);
+          const gBalance = groupBalance(g.id, accounts, accountTotals, settings);
           return (
             <div key={g.id} style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "#FAF7F2", borderBottom: "1px solid #F0EBE2" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "#FAF7F2", borderBottom: visibleAccounts.length ? "1px solid #F0EBE2" : "none" }}>
                 <span style={{ fontWeight: 700, fontSize: 13.5, fontFamily: "system-ui, sans-serif" }}>{g.name}</span>
                 <span style={{ fontWeight: 700, fontSize: 13.5, fontFamily: "system-ui, sans-serif", color: balanceColor(gBalance) }}>{money(gBalance, settings.main_currency)}</span>
               </div>
-              {groupAccounts.map((a) => (
+              {visibleAccounts.map((a) => (
                 <div key={a.id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14 }}>
                   <span>{a.name}</span>
-                  <span style={{ color: balanceColor(accountBalance(a.id, transactions, settings)) }}>{money(accountBalance(a.id, transactions, settings), settings.main_currency)}</span>
+                  <span style={{ color: balanceColor(accountBalance(a.id, accountTotals, settings)) }}>{money(accountBalance(a.id, accountTotals, settings), settings.main_currency)}</span>
                 </div>
               ))}
             </div>
@@ -115,12 +100,10 @@ export default function CuentasTab({ session, settings, groups, accounts, transa
    ========================================================================= */
 
 export function ManageGroups({ session, groups, accounts, reload, showError, onBack, onOpenGroup }) {
+  const [creating, setCreating] = useState(false);
   const [names, setNames] = useState(() => Object.fromEntries(groups.map((g) => [g.id, g.name])));
-  const [newName, setNewName] = useState("");
-  const [newType, setNewType] = useState("other");
   const [confirmRemoveId, setConfirmRemoveId] = useState(null);
   const [order, setOrder] = useState(() => groups.map((g) => g.id));
-  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setOrder(groups.map((g) => g.id));
@@ -164,24 +147,26 @@ export function ManageGroups({ session, groups, accounts, reload, showError, onB
     setConfirmRemoveId(null);
   };
 
-  const createGroup = async () => {
-    if (!newName.trim()) return;
-    setSaving(true);
-    try {
-      const { error } = await supabase.from("mm_account_groups").insert({
-        user_id: session.userId, name: newName.trim(), type: newType, sort_order: groups.length,
-      });
-      if (error) throw error;
-      setNewName("");
-      setNewType("other");
-      await reload();
-    } catch (e) { showError(`No se pudo crear: ${e?.message || e}`); }
-    setSaving(false);
-  };
+  if (creating) {
+    return (
+      <NewGroupForm
+        session={session}
+        groups={groups}
+        reload={reload}
+        showError={showError}
+        onCancel={() => setCreating(false)}
+        onCreated={() => setCreating(false)}
+      />
+    );
+  }
 
   return (
     <div style={styles.screen}>
-      <TopBar title="Gestionar cuentas" onBack={onBack} />
+      <TopBar
+        title="Tipos de cuentas"
+        onBack={onBack}
+        right={<button style={styles.iconBtnGhost} onClick={() => setCreating(true)} aria-label="Nuevo grupo"><Plus size={20} /></button>}
+      />
       <div style={styles.form}>
         <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={order} strategy={verticalListSortingStrategy}>
@@ -215,16 +200,48 @@ export function ManageGroups({ session, groups, accounts, reload, showError, onB
             </div>
           </SortableContext>
         </DndContext>
-
-        <p style={styles.label}>Nuevo grupo</p>
-        <input style={styles.input} value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Nombre (ej: Santander, Efectivo)" />
-        <select style={styles.input} value={newType} onChange={(e) => setNewType(e.target.value)}>
-          {ACCOUNT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </select>
-        <button style={{ ...styles.btnPrimary, opacity: (saving || !newName.trim()) ? 0.5 : 1 }} onClick={createGroup} disabled={saving || !newName.trim()}>
-          <Plus size={16} /> Crear grupo
-        </button>
       </div>
+    </div>
+  );
+}
+
+// Formulario de "nuevo grupo" propio (TopBar + Footer), mismo patrón que
+// NewAccountForm — reemplaza el input+select+botón sueltos que había abajo.
+function NewGroupForm({ session, groups, reload, showError, onCancel, onCreated }) {
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const canSave = !!name.trim();
+
+  const create = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase.from("mm_account_groups").insert({
+        user_id: session.userId, name: name.trim(), type: "other", sort_order: groups.length,
+      });
+      if (error) throw error;
+      await reload();
+      onCreated();
+    } catch (e) { showError(`No se pudo crear: ${e?.message || e}`); }
+    setSaving(false);
+  };
+
+  return (
+    <div style={styles.screen}>
+      <TopBar title="Nuevo grupo" onBack={onCancel} />
+      <div style={{ ...styles.form, paddingBottom: 100 }}>
+        <label style={styles.label}>
+          Nombre
+          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre (ej: Santander, Efectivo)" autoFocus onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
+        </label>
+      </div>
+      <Footer>
+        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
+        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }} onClick={create} disabled={saving || !canSave}>
+          {saving ? "Creando…" : "Crear"}
+        </button>
+      </Footer>
     </div>
   );
 }
@@ -253,12 +270,138 @@ function SortableGroupRow({ group, name, onChangeName, onBlur, onOpen, onRemove,
    ========================================================================= */
 
 export function ManageAccounts({ session, group, accounts, reload, showError, onBack }) {
+  const [creating, setCreating] = useState(false);
+
+  if (creating) {
+    return (
+      <NewAccountForm
+        session={session}
+        groups={[group]}
+        defaultGroupId={group.id}
+        reload={reload}
+        showError={showError}
+        onCancel={() => setCreating(false)}
+        onCreated={() => setCreating(false)}
+      />
+    );
+  }
+
+  return (
+    <div style={styles.screen}>
+      <TopBar
+        title={group.name}
+        onBack={onBack}
+        right={<button style={styles.iconBtnGhost} onClick={() => setCreating(true)} aria-label="Nueva cuenta"><Plus size={20} /></button>}
+      />
+      <div style={styles.form}>
+        <AccountGroupEditor group={group} accounts={accounts} reload={reload} showError={showError} />
+      </div>
+    </div>
+  );
+}
+
+// GESTOR DE CUENTAS — todos los grupos juntos en una sola pantalla plana
+// (como en la app original: el lápiz de la tab Cuentas va directo acá, no a
+// "Tipos de cuentas"). Cada grupo es solo un encabezado de sección — para
+// renombrar/reordenar/crear GRUPOS está la pantalla separada "Tipos de
+// cuentas", reachable únicamente desde Configuración.
+export function ManageAllAccounts({ session, groups, accounts, reload, showError, onBack }) {
+  const [creating, setCreating] = useState(false);
+
+  if (creating) {
+    return (
+      <NewAccountForm
+        session={session}
+        groups={groups}
+        reload={reload}
+        showError={showError}
+        onCancel={() => setCreating(false)}
+        onCreated={() => setCreating(false)}
+      />
+    );
+  }
+
+  return (
+    <div style={styles.screen}>
+      <TopBar
+        title="Gestor de cuentas"
+        onBack={onBack}
+        right={<button style={styles.iconBtnGhost} onClick={() => setCreating(true)} aria-label="Nueva cuenta"><Plus size={20} /></button>}
+      />
+      <div style={{ ...styles.form, paddingBottom: 100 }}>
+        {groups.filter((g) => accounts.some((a) => a.group_id === g.id)).map((g) => (
+          <div key={g.id}>
+            <p style={styles.label}>{g.name}</p>
+            <AccountGroupEditor group={g} accounts={accounts} reload={reload} showError={showError} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Formulario de "nueva cuenta" propio (TopBar + Footer, como el resto de la
+// app) — reemplaza el input+botón sueltos que había repetidos por cada grupo.
+// El select de grupo solo aparece si hay más de uno para elegir (en
+// ManageAccounts, llamado desde un solo grupo, no hace falta preguntarlo).
+function NewAccountForm({ session, groups, defaultGroupId, reload, showError, onCancel, onCreated }) {
+  const [groupId, setGroupId] = useState(defaultGroupId || groups[0]?.id || "");
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const canSave = !!groupId && !!name.trim();
+
+  const create = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase.from("mm_accounts").insert({
+        user_id: session.userId, group_id: groupId, name: name.trim(), sort_order: 999,
+      });
+      if (error) throw error;
+      await reload();
+      onCreated();
+    } catch (e) { showError(`No se pudo crear: ${e?.message || e}`); }
+    setSaving(false);
+  };
+
+  return (
+    <div style={styles.screen}>
+      <TopBar title="Nueva cuenta" onBack={onCancel} />
+      <div style={{ ...styles.form, paddingBottom: 100 }}>
+        {groups.length > 1 && (
+          <label style={styles.label}>
+            Tipo de cuenta
+            <select style={styles.input} value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+              {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+          </label>
+        )}
+        <label style={styles.label}>
+          Nombre
+          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre (ej: Saldo, Ahorros)" autoFocus onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
+        </label>
+      </div>
+      <Footer>
+        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
+        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }} onClick={create} disabled={saving || !canSave}>
+          {saving ? "Creando…" : "Crear"}
+        </button>
+      </Footer>
+    </div>
+  );
+}
+
+// Todas las cuentas de un grupo (arrastrar, renombrar, ocultar, borrar, crear
+// nueva) — sin el TopBar/wrapper de pantalla, para poder repetirlo una vez
+// por grupo en "Gestor de cuentas" (todos los grupos juntos en una sola
+// pantalla) y también solo, en ManageAccounts (cuando se llega desde "Tipos
+// de cuentas" y elegís un único grupo).
+function AccountGroupEditor({ group, accounts, reload, showError }) {
   const groupAccounts = accounts.filter((a) => a.group_id === group.id);
   const [names, setNames] = useState(() => Object.fromEntries(groupAccounts.map((a) => [a.id, a.name])));
-  const [newName, setNewName] = useState("");
   const [confirmRemoveId, setConfirmRemoveId] = useState(null);
   const [order, setOrder] = useState(() => groupAccounts.map((a) => a.id));
-  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setOrder(groupAccounts.map((a) => a.id));
@@ -293,6 +436,15 @@ export function ManageAccounts({ session, group, accounts, reload, showError, on
     } catch (e) { showError(`No se pudo renombrar: ${e?.message || e}`); }
   };
 
+  const toggleHidden = async (id) => {
+    const acc = groupAccounts.find((a) => a.id === id);
+    try {
+      const { error } = await supabase.from("mm_accounts").update({ hidden: !acc.hidden }).eq("id", id);
+      if (error) throw error;
+      await reload();
+    } catch (e) { showError(`No se pudo actualizar: ${e?.message || e}`); }
+  };
+
   const removeAccount = async (id) => {
     try {
       const { error } = await supabase.from("mm_accounts").update({ deleted: true }).eq("id", id);
@@ -302,65 +454,44 @@ export function ManageAccounts({ session, group, accounts, reload, showError, on
     setConfirmRemoveId(null);
   };
 
-  const createAccount = async () => {
-    if (!newName.trim()) return;
-    setSaving(true);
-    try {
-      const { error } = await supabase.from("mm_accounts").insert({
-        user_id: session.userId, group_id: group.id, name: newName.trim(), sort_order: groupAccounts.length,
-      });
-      if (error) throw error;
-      setNewName("");
-      await reload();
-    } catch (e) { showError(`No se pudo crear: ${e?.message || e}`); }
-    setSaving(false);
-  };
-
   return (
-    <div style={styles.screen}>
-      <TopBar title={group.name} onBack={onBack} />
-      <div style={styles.form}>
-        <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={order} strategy={verticalListSortingStrategy}>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {order.map((id) => {
-                const a = groupAccounts.find((x) => x.id === id);
-                if (!a) return null;
-                return (
-                  <div key={id}>
-                    <SortableAccountRow
-                      id={id}
-                      name={names[id] ?? a.name}
-                      onChangeName={(v) => setNames((prev) => ({ ...prev, [id]: v }))}
-                      onBlur={() => renameAccount(id)}
-                      onRemove={() => setConfirmRemoveId(id)}
+    <>
+      <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={order} strategy={verticalListSortingStrategy}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {order.map((id) => {
+              const a = groupAccounts.find((x) => x.id === id);
+              if (!a) return null;
+              return (
+                <div key={id}>
+                  <SortableAccountRow
+                    id={id}
+                    name={names[id] ?? a.name}
+                    hidden={a.hidden}
+                    onChangeName={(v) => setNames((prev) => ({ ...prev, [id]: v }))}
+                    onBlur={() => renameAccount(id)}
+                    onToggleHidden={() => toggleHidden(id)}
+                    onRemove={() => setConfirmRemoveId(id)}
+                  />
+                  {confirmRemoveId === id && (
+                    <ConfirmInline
+                      message={`¿Borrar "${a.name}"?`}
+                      confirmLabel="Borrar"
+                      onCancel={() => setConfirmRemoveId(null)}
+                      onConfirm={() => removeAccount(id)}
                     />
-                    {confirmRemoveId === id && (
-                      <ConfirmInline
-                        message={`¿Borrar "${a.name}"?`}
-                        confirmLabel="Borrar"
-                        onCancel={() => setConfirmRemoveId(null)}
-                        onConfirm={() => removeAccount(id)}
-                      />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </SortableContext>
-        </DndContext>
-
-        <p style={styles.label}>Nueva cuenta</p>
-        <input style={styles.input} value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Nombre (ej: Saldo, Ahorros)" onKeyDown={(e) => e.key === "Enter" && newName.trim() && createAccount()} />
-        <button style={{ ...styles.btnPrimary, opacity: (saving || !newName.trim()) ? 0.5 : 1 }} onClick={createAccount} disabled={saving || !newName.trim()}>
-          <Plus size={16} /> Crear cuenta
-        </button>
-      </div>
-    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </SortableContext>
+      </DndContext>
+    </>
   );
 }
 
-function SortableAccountRow({ id, name, onChangeName, onBlur, onRemove }) {
+function SortableAccountRow({ id, name, hidden, onChangeName, onBlur, onToggleHidden, onRemove }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   return (
@@ -368,7 +499,10 @@ function SortableAccountRow({ id, name, onChangeName, onBlur, onRemove }) {
       <span {...attributes} {...listeners} style={{ display: "flex", alignItems: "center", justifyContent: "center", alignSelf: "stretch", width: 28, color: "#C9BBA0", cursor: "grab", touchAction: "none" }}>
         <Menu size={18} />
       </span>
-      <input style={{ ...styles.input, flex: 1, padding: "7px 10px", fontSize: 14 }} value={name} onChange={(e) => onChangeName(e.target.value)} onBlur={onBlur} />
+      <input style={{ ...styles.input, flex: 1, padding: "7px 10px", fontSize: 14, opacity: hidden ? 0.5 : 1 }} value={name} onChange={(e) => onChangeName(e.target.value)} onBlur={onBlur} />
+      <button style={styles.iconBtnGhost} onClick={onToggleHidden} aria-label={hidden ? "Mostrar cuenta" : "Ocultar cuenta"}>
+        {hidden ? <EyeOff size={16} /> : <Eye size={16} />}
+      </button>
       <button style={styles.iconBtnGhost} onClick={onRemove} aria-label="Borrar cuenta">
         <X size={16} />
       </button>

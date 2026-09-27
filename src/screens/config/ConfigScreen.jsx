@@ -9,7 +9,7 @@ import { TopBar, RootHeader, ConfirmInline, Footer, PhotoPicker, ToggleField } f
 import { useImageUpload, resolvePhotoUrl, colorFor, initials } from "../../lib/helpers.jsx";
 import RecurringScreen from "../moneymanager/RecurringScreen.jsx";
 import TransactionForm, { ManageCategories } from "../moneymanager/TransactionForm.jsx";
-import { ManageGroups, ManageAccounts } from "../moneymanager/CuentasTab.jsx";
+import { ManageGroups, ManageAccounts, ManageAllAccounts } from "../moneymanager/CuentasTab.jsx";
 import PeriodSettingsScreen from "../moneymanager/PeriodSettingsScreen.jsx";
 import CurrencySettingsScreen from "../moneymanager/CurrencySettingsScreen.jsx";
 
@@ -103,9 +103,22 @@ export default function ConfigScreen({
     );
   }
 
-  if (moneyManagerScreen === "accounts") {
+  if (moneyManagerScreen === "accountTypes") {
     return (
       <AccountsSettingsScreen
+        session={session}
+        groups={moneyManager.groups}
+        accounts={moneyManager.accounts}
+        reload={moneyManager.reload}
+        showError={showError}
+        onBack={() => setMoneyManagerScreen(null)}
+      />
+    );
+  }
+
+  if (moneyManagerScreen === "accounts") {
+    return (
+      <ManageAllAccounts
         session={session}
         groups={moneyManager.groups}
         accounts={moneyManager.accounts}
@@ -168,6 +181,7 @@ export default function ConfigScreen({
           <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
             <MenuRow label="Categorías de ingreso" onClick={() => setMoneyManagerScreen("categoriesIncome")} />
             <MenuRow label="Categorías de gasto" onClick={() => setMoneyManagerScreen("categoriesExpense")} />
+            <MenuRow label="Tipos de cuentas" onClick={() => setMoneyManagerScreen("accountTypes")} />
             <MenuRow label="Gestor de cuentas" onClick={() => setMoneyManagerScreen("accounts")} last />
           </div>
 

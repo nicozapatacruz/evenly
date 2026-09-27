@@ -307,12 +307,11 @@ function RecurringFields({ type, date, freqValue, setFreqValue, freqInterval, se
    ========================================================================= */
 
 export function ManageCategories({ session, type, categories, reload, showError, onBack }) {
+  const [creating, setCreating] = useState(false);
   const typeCategories = categories.filter((c) => c.type === type);
   const [names, setNames] = useState(() => Object.fromEntries(typeCategories.map((c) => [c.id, c.name])));
-  const [newName, setNewName] = useState("");
   const [confirmRemoveId, setConfirmRemoveId] = useState(null);
   const [order, setOrder] = useState(() => typeCategories.map((c) => c.id));
-  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setOrder(typeCategories.map((c) => c.id));
@@ -357,23 +356,27 @@ export function ManageCategories({ session, type, categories, reload, showError,
     setConfirmRemoveId(null);
   };
 
-  const createCategory = async () => {
-    if (!newName.trim()) return;
-    setSaving(true);
-    try {
-      const { error } = await supabase.from("mm_categories").insert({
-        user_id: session.userId, type, name: newName.trim(), sort_order: typeCategories.length,
-      });
-      if (error) throw error;
-      setNewName("");
-      await reload();
-    } catch (e) { showError(`No se pudo crear: ${e?.message || e}`); }
-    setSaving(false);
-  };
+  if (creating) {
+    return (
+      <NewCategoryForm
+        session={session}
+        type={type}
+        categories={categories}
+        reload={reload}
+        showError={showError}
+        onCancel={() => setCreating(false)}
+        onCreated={() => setCreating(false)}
+      />
+    );
+  }
 
   return (
     <div style={styles.screen}>
-      <TopBar title={type === "income" ? "Categorías de ingreso" : "Categorías de gasto"} onBack={onBack} />
+      <TopBar
+        title={type === "income" ? "Categorías de ingreso" : "Categorías de gasto"}
+        onBack={onBack}
+        right={<button style={styles.iconBtnGhost} onClick={() => setCreating(true)} aria-label="Nueva categoría"><Plus size={20} /></button>}
+      />
       <div style={styles.form}>
         <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={order} strategy={verticalListSortingStrategy}>
@@ -404,13 +407,47 @@ export function ManageCategories({ session, type, categories, reload, showError,
             </div>
           </SortableContext>
         </DndContext>
-
-        <p style={styles.label}>Nueva categoría</p>
-        <input style={styles.input} value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Nombre" onKeyDown={(e) => e.key === "Enter" && newName.trim() && createCategory()} />
-        <button style={{ ...styles.btnPrimary, opacity: (saving || !newName.trim()) ? 0.5 : 1 }} onClick={createCategory} disabled={saving || !newName.trim()}>
-          <Plus size={16} /> Crear categoría
-        </button>
       </div>
+    </div>
+  );
+}
+
+// Formulario de "nueva categoría" propio (TopBar + Footer), mismo patrón que
+// NewGroupForm/NewAccountForm — reemplaza el input+botón sueltos de abajo.
+function NewCategoryForm({ session, type, categories, reload, showError, onCancel, onCreated }) {
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const canSave = !!name.trim();
+
+  const create = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase.from("mm_categories").insert({
+        user_id: session.userId, type, name: name.trim(), sort_order: categories.filter((c) => c.type === type).length,
+      });
+      if (error) throw error;
+      await reload();
+      onCreated();
+    } catch (e) { showError(`No se pudo crear: ${e?.message || e}`); }
+    setSaving(false);
+  };
+
+  return (
+    <div style={styles.screen}>
+      <TopBar title="Nueva categoría" onBack={onCancel} />
+      <div style={{ ...styles.form, paddingBottom: 100 }}>
+        <label style={styles.label}>
+          Nombre
+          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre" autoFocus onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
+        </label>
+      </div>
+      <Footer>
+        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
+        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }} onClick={create} disabled={saving || !canSave}>
+          {saving ? "Creando…" : "Crear"}
+        </button>
+      </Footer>
     </div>
   );
 }

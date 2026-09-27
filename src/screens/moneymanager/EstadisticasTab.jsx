@@ -1,9 +1,8 @@
 import React, { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { styles } from "../../lib/styles.js";
-import { RootHeader } from "../../components/Shared.jsx";
+import { RootHeader, MonthNav, TodayButton } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
-import { toMainCurrency } from "../../lib/moneyManagerData.js";
+import { toMainCurrency, useCategoryMonthTotals } from "../../lib/moneyManagerData.js";
 
 const MONTH_LABEL = (d) => d.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
 
@@ -25,32 +24,34 @@ function arcPath(cx, cy, r, startAngle, endAngle) {
   return `M ${cx} ${cy} L ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 0 ${end.x} ${end.y} Z`;
 }
 
-export default function EstadisticasTab({ settings, categories, transactions, viewMonth, setViewMonth }) {
+export default function EstadisticasTab({ userId, settings, categories, viewMonth, setViewMonth }) {
   const [type, setType] = useState("expense");
 
-  const monthTx = useMemo(() => transactions.filter((t) => {
-    const d = new Date(t.date);
-    return t.type === type && d.getFullYear() === viewMonth.getFullYear() && d.getMonth() === viewMonth.getMonth();
-  }), [transactions, viewMonth, type]);
+  // Totales ya agregados por categoría del lado del servidor (vista
+  // mm_category_month_totals) — no traemos transacción por transacción.
+  const { totals } = useCategoryMonthTotals(userId, viewMonth, type);
 
-  const total = monthTx.reduce((s, t) => s + toMainCurrency(t.amount, t.currency, settings), 0);
-
-  const slices = useMemo(() => {
+  const { rows, total } = useMemo(() => {
     const byCategory = new Map();
-    for (const t of monthTx) {
-      const amt = toMainCurrency(t.amount, t.currency, settings);
+    for (const t of totals) {
+      const amt = toMainCurrency(t.total, t.currency, settings);
       byCategory.set(t.category_id, (byCategory.get(t.category_id) || 0) + amt);
     }
     const rows = [...byCategory.entries()]
       .map(([categoryId, amount]) => ({ categoryId, name: categories.find((c) => c.id === categoryId)?.name || "Sin categoría", amount }))
       .sort((a, b) => b.amount - a.amount);
+    const total = rows.reduce((s, r) => s + r.amount, 0);
+    return { rows, total };
+  }, [totals, categories, settings]);
+
+  const slices = useMemo(() => {
     const head = rows.slice(0, 8).map((r, i) => ({ ...r, color: SLICE_COLORS[i] }));
     const tail = rows.slice(8);
     if (tail.length) {
       head.push({ name: "Otros", amount: tail.reduce((s, r) => s + r.amount, 0), color: OTHER_COLOR });
     }
     return head;
-  }, [monthTx, categories, settings]);
+  }, [rows]);
 
   let angle = 0;
   const arcs = slices.map((s) => {
@@ -63,17 +64,9 @@ export default function EstadisticasTab({ settings, categories, transactions, vi
 
   return (
     <div style={styles.screen}>
-      <RootHeader title="Estadísticas" />
+      <RootHeader title="Estadísticas" right={<TodayButton viewMonth={viewMonth} setViewMonth={setViewMonth} />} />
       <div style={{ ...styles.form, paddingTop: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <button style={styles.iconBtnGhost} onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1))} aria-label="Mes anterior">
-            <ChevronLeft size={20} />
-          </button>
-          <span style={{ fontWeight: 600, fontFamily: "system-ui, sans-serif", textTransform: "capitalize" }}>{MONTH_LABEL(viewMonth)}</span>
-          <button style={styles.iconBtnGhost} onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1))} aria-label="Mes siguiente">
-            <ChevronRight size={20} />
-          </button>
-        </div>
+        <MonthNav viewMonth={viewMonth} setViewMonth={setViewMonth} />
 
         <div style={styles.tabRow}>
           <button style={type === "income" ? { ...styles.tabActive, background: "#3B6E62", borderColor: "#3B6E62" } : styles.tab} onClick={() => setType("income")}>

@@ -84,6 +84,7 @@ export const styles = {
   btnPrimary: { display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 8, padding: "14px", borderRadius: 12, border: "none", background: "#C75D3B", color: "#fff", fontSize: 15, fontWeight: 700, fontFamily: "system-ui, sans-serif", boxShadow: "0 6px 14px rgba(199,93,59,0.25)" },
   btnSecondary: { display: "flex", alignItems: "center", justifyContent: "center", gap: 7, marginTop: 4, width: "100%", padding: "12px", borderRadius: 12, border: "1px solid #DDD2BE", background: "#fff", color: "#544A3C", fontSize: 14, fontWeight: 600, fontFamily: "system-ui, sans-serif" },
   btnSecondarySmall: { width: 44, borderRadius: 10, border: "1px solid #DDD2BE", background: "#fff", color: "#544A3C", display: "flex", alignItems: "center", justifyContent: "center" },
+  btnToday: { padding: "4px 10px", borderRadius: 20, border: "1px solid #DDD2BE", background: "#fff", color: "#544A3C", fontSize: 12, fontWeight: 600, fontFamily: "system-ui, sans-serif" },
   btnGhostSmall: { padding: "8px 14px", borderRadius: 8, border: "1px solid #DDD2BE", background: "#fff", fontSize: 13, fontFamily: "system-ui, sans-serif", display: "flex", alignItems: "center", gap: 6, color: "#76695A" },
   btnDangerSmall: { padding: "8px 14px", borderRadius: 8, border: "none", background: "#B0473A", color: "#fff", fontSize: 13, fontFamily: "system-ui, sans-serif", fontWeight: 600 },
   // Sin margen lateral por defecto — la mayoría de los usos ya están anidados

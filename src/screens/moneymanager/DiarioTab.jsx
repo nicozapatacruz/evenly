@@ -1,29 +1,26 @@
 import React, { useMemo } from "react";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { styles } from "../../lib/styles.js";
-import { RootHeader } from "../../components/Shared.jsx";
+import { RootHeader, MonthNav, TodayButton } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
-import { toMainCurrency } from "../../lib/moneyManagerData.js";
+import { toMainCurrency, useMonthTransactions } from "../../lib/moneyManagerData.js";
 
-const MONTH_LABEL = (d) => d.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
 const DAY_LABEL = (d) => d.toLocaleDateString("es-ES", { weekday: "short" }).replace(".", "");
 
 /* =========================================================================
-   HOY (Diario) — lista de transacciones del mes, agrupadas por día. Ojo:
-   simplificado a propósito frente a la app original — ahí este tab también
-   tiene sub-vistas de Calendario/Mensual/Resumen que acá no replicamos.
+   TRANSACCIONES (ex "Hoy"/Diario) — lista de transacciones del mes,
+   agrupadas por día. Ojo: simplificado a propósito frente a la app
+   original — ahí este tab también tiene sub-vistas de Calendario/Mensual/
+   Resumen que acá no replicamos.
    ========================================================================= */
 
-export default function DiarioTab({ settings, groups, accounts, categories, transactions, viewMonth, setViewMonth, onNewTransaction }) {
+export default function DiarioTab({ userId, settings, groups, accounts, categories, viewMonth, setViewMonth, onNewTransaction }) {
   const accountName = (id) => accounts.find((a) => a.id === id)?.name || "—";
   const categoryName = (id) => categories.find((c) => c.id === id)?.name || "—";
 
-  const monthTx = useMemo(() => {
-    return transactions.filter((t) => {
-      const d = new Date(t.date);
-      return d.getFullYear() === viewMonth.getFullYear() && d.getMonth() === viewMonth.getMonth();
-    });
-  }, [transactions, viewMonth]);
+  // Solo pedimos las transacciones del mes visible (no toda la tabla) — se
+  // refetchea solo cuando cambiás de mes.
+  const { transactions: monthTx } = useMonthTransactions(userId, viewMonth);
 
   const monthIncome = monthTx.filter((t) => t.type === "income").reduce((s, t) => s + toMainCurrency(t.amount, t.currency, settings), 0);
   const monthExpense = monthTx.filter((t) => t.type === "expense").reduce((s, t) => s + toMainCurrency(t.amount, t.currency, settings), 0);
@@ -40,17 +37,9 @@ export default function DiarioTab({ settings, groups, accounts, categories, tran
 
   return (
     <div style={styles.screen}>
-      <RootHeader title="Hoy" />
+      <RootHeader title="Transacciones" right={<TodayButton viewMonth={viewMonth} setViewMonth={setViewMonth} />} />
       <div style={{ ...styles.form, paddingTop: 12, paddingBottom: 100 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <button style={styles.iconBtnGhost} onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1))} aria-label="Mes anterior">
-            <ChevronLeft size={20} />
-          </button>
-          <span style={{ fontWeight: 600, fontFamily: "system-ui, sans-serif", textTransform: "capitalize" }}>{MONTH_LABEL(viewMonth)}</span>
-          <button style={styles.iconBtnGhost} onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1))} aria-label="Mes siguiente">
-            <ChevronRight size={20} />
-          </button>
-        </div>
+        <MonthNav viewMonth={viewMonth} setViewMonth={setViewMonth} />
 
         <div style={{ display: "flex", justifyContent: "space-between", textAlign: "center", padding: "0 4px" }}>
           <div style={{ flex: 1 }}>

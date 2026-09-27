@@ -1,6 +1,8 @@
 import React from "react";
-import { ArrowLeft, Camera, User } from "lucide-react";
+import { ArrowLeft, Camera, ChevronLeft, ChevronRight, User } from "lucide-react";
 import { styles } from "../lib/styles.js";
+
+const MONTH_LABEL = (d) => d.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
 
 // Único toggle de la app — label arriba (igual que cualquier otro campo),
 // switch dentro de una caja con el mismo estilo que un input. Componentizado
@@ -44,6 +46,37 @@ export function RootHeader({ title, right }) {
       <h1 style={styles.h1}>{title}</h1>
       {right}
     </header>
+  );
+}
+
+// Selector de mes (Transacciones y Estadísticas) — solo flechas + nombre
+// del mes. El botón para volver al mes actual vive en el header (ver
+// TodayButton), no acá adentro.
+export function MonthNav({ viewMonth, setViewMonth }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <button style={styles.iconBtnGhost} onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1))} aria-label="Mes anterior">
+        <ChevronLeft size={20} />
+      </button>
+      <span style={{ fontWeight: 600, fontFamily: "system-ui, sans-serif", textTransform: "capitalize" }}>{MONTH_LABEL(viewMonth)}</span>
+      <button style={styles.iconBtnGhost} onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1))} aria-label="Mes siguiente">
+        <ChevronRight size={20} />
+      </button>
+    </div>
+  );
+}
+
+// Botón "Hoy" para el header (misma posición que el lápiz de Cuentas) — solo
+// aparece si te alejaste del mes actual, para volver de un salto sin tener
+// que contar flechitas.
+export function TodayButton({ viewMonth, setViewMonth }) {
+  const now = new Date();
+  const isCurrentMonth = viewMonth.getFullYear() === now.getFullYear() && viewMonth.getMonth() === now.getMonth();
+  if (isCurrentMonth) return null;
+  return (
+    <button style={styles.btnToday} onClick={() => setViewMonth(new Date(now.getFullYear(), now.getMonth(), 1))}>
+      Hoy
+    </button>
   );
 }
 

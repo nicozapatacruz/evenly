@@ -661,7 +661,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           settings={moneyManager.settings}
           groups={moneyManager.groups}
           accounts={moneyManager.accounts}
-          transactions={moneyManager.transactions}
+          accountTotals={moneyManager.accountTotals}
           reload={moneyManager.reload}
           showError={showError}
           view={accountsView}
@@ -671,9 +671,9 @@ function AppShell({ session, onLogout, refreshProfile }) {
 
       {activeTab === "stats" && (
         <EstadisticasTab
+          userId={session.userId}
           settings={moneyManager.settings}
           categories={moneyManager.categories}
-          transactions={moneyManager.transactions}
           viewMonth={ledgerMonth}
           setViewMonth={setLedgerMonth}
         />
@@ -681,11 +681,11 @@ function AppShell({ session, onLogout, refreshProfile }) {
 
       {activeTab === "ledger" && ledgerView.screen === "list" && (
         <DiarioTab
+          userId={session.userId}
           settings={moneyManager.settings}
           groups={moneyManager.groups}
           accounts={moneyManager.accounts}
           categories={moneyManager.categories}
-          transactions={moneyManager.transactions}
           viewMonth={ledgerMonth}
           setViewMonth={setLedgerMonth}
           onNewTransaction={() => setLedgerView({ screen: "newTransaction" })}

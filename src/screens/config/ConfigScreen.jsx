@@ -5,9 +5,13 @@ import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } 
 import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, RootHeader, ConfirmInline, Footer, PhotoPicker } from "../../components/Shared.jsx";
+import { TopBar, RootHeader, ConfirmInline, Footer, PhotoPicker, ToggleField } from "../../components/Shared.jsx";
 import { useImageUpload, resolvePhotoUrl, colorFor, initials } from "../../lib/helpers.jsx";
-import ComingSoon from "../moneymanager/ComingSoon.jsx";
+import RecurringScreen from "../moneymanager/RecurringScreen.jsx";
+import TransactionForm, { ManageCategories } from "../moneymanager/TransactionForm.jsx";
+import { ManageGroups, ManageAccounts } from "../moneymanager/CuentasTab.jsx";
+import PeriodSettingsScreen from "../moneymanager/PeriodSettingsScreen.jsx";
+import CurrencySettingsScreen from "../moneymanager/CurrencySettingsScreen.jsx";
 
 /* =========================================================================
    CONFIG — toggle de 2 secciones (Money Manager / Split Ledger) + un botón
@@ -19,8 +23,98 @@ export default function ConfigScreen({
   session, invites = [], onAcceptInvite, onRejectInvite, onLogout, refreshProfile,
   groups, reloadGroups, onCreateGroup, onOpenGroup, showError, showSuccess,
   changingPassword, setChangingPassword, viewingProfile, setViewingProfile,
+  moneyManager, onSaveMoneyTransaction, creatingRecurring, setCreatingRecurring,
+  moneyManagerScreen, setMoneyManagerScreen,
 }) {
   const [section, setSection] = useState("splitledger"); // "moneymanager" | "splitledger"
+
+  if (creatingRecurring) {
+    return (
+      <TransactionForm
+        session={session}
+        settings={moneyManager.settings}
+        groups={moneyManager.groups}
+        accounts={moneyManager.accounts}
+        categories={moneyManager.categories}
+        reloadCategories={moneyManager.reload}
+        showError={showError}
+        forceRecurringOpen
+        hideRemoveRecurring
+        onCancel={() => setCreatingRecurring(false)}
+        onSave={async (tx) => {
+          const ok = await onSaveMoneyTransaction(tx);
+          if (ok) setCreatingRecurring(false);
+        }}
+      />
+    );
+  }
+
+  if (moneyManagerScreen === "recurring") {
+    return (
+      <div style={styles.screen}>
+        <TopBar title="Transacciones repetidas" onBack={() => setMoneyManagerScreen(null)} />
+        <div style={{ ...styles.form, paddingBottom: 100 }}>
+          <RecurringScreen
+            accounts={moneyManager.accounts}
+            recurring={moneyManager.recurring}
+            reload={moneyManager.reload}
+            showError={showError}
+            onCreateNew={() => setCreatingRecurring(true)}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (moneyManagerScreen === "period") {
+    return (
+      <PeriodSettingsScreen
+        session={session}
+        settings={moneyManager.settings}
+        reload={moneyManager.reload}
+        showError={showError}
+        onBack={() => setMoneyManagerScreen(null)}
+      />
+    );
+  }
+
+  if (moneyManagerScreen === "currency") {
+    return (
+      <CurrencySettingsScreen
+        session={session}
+        settings={moneyManager.settings}
+        reload={moneyManager.reload}
+        showError={showError}
+        onBack={() => setMoneyManagerScreen(null)}
+      />
+    );
+  }
+
+  if (moneyManagerScreen === "categoriesIncome" || moneyManagerScreen === "categoriesExpense") {
+    return (
+      <ManageCategories
+        session={session}
+        type={moneyManagerScreen === "categoriesIncome" ? "income" : "expense"}
+        categories={moneyManager.categories}
+        reload={moneyManager.reload}
+        showError={showError}
+        onBack={() => setMoneyManagerScreen(null)}
+      />
+    );
+  }
+
+  if (moneyManagerScreen === "accounts") {
+    return (
+      <AccountsSettingsScreen
+        session={session}
+        groups={moneyManager.groups}
+        accounts={moneyManager.accounts}
+        reload={moneyManager.reload}
+        showError={showError}
+        onBack={() => setMoneyManagerScreen(null)}
+      />
+    );
+  }
 
   if (changingPassword) {
     return (
@@ -68,7 +162,29 @@ export default function ConfigScreen({
         <button style={section === "splitledger" ? styles.tabActive : styles.tab} onClick={() => setSection("splitledger")}>Split Ledger</button>
       </div>
 
-      {section === "moneymanager" && <ComingSoon title="Money Manager" />}
+      {section === "moneymanager" && (
+        <div style={{ ...styles.form, paddingTop: 12 }}>
+          <p style={styles.label}>Categoría/Cuentas</p>
+          <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
+            <MenuRow label="Categorías de ingreso" onClick={() => setMoneyManagerScreen("categoriesIncome")} />
+            <MenuRow label="Categorías de gasto" onClick={() => setMoneyManagerScreen("categoriesExpense")} />
+            <MenuRow label="Gestor de cuentas" onClick={() => setMoneyManagerScreen("accounts")} last />
+          </div>
+
+          <p style={styles.label}>Transacciones</p>
+          <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
+            <MenuRow label="Detalles del período" onClick={() => setMoneyManagerScreen("period")} />
+            <MenuRow label="Transacciones repetidas" onClick={() => setMoneyManagerScreen("recurring")} last />
+          </div>
+
+          <p style={styles.label}>Ajustes</p>
+          <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
+            <MenuRow label="Ajustes de moneda" onClick={() => setMoneyManagerScreen("currency")} />
+            <MenuRow label="Respaldo" badge="Próximamente" />
+            <MenuRow label="Apariencia" badge="Próximamente" last />
+          </div>
+        </div>
+      )}
 
       {section === "splitledger" && (
         <SplitLedgerSettings
@@ -86,6 +202,69 @@ export default function ConfigScreen({
         />
       )}
     </div>
+  );
+}
+
+// Fila de menú genérica para la lista de Money Manager en Config — o navega
+// (onClick) o muestra un badge "Próximamente" (Respaldo/Apariencia, sin
+// construir todavía), nunca las dos cosas.
+function MenuRow({ label, onClick, badge, last }) {
+  return (
+    <button
+      style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%",
+        padding: "12px 14px", background: "none", border: "none", borderBottom: last ? "none" : "1px solid #F0EBE2",
+        fontSize: 14, fontFamily: "system-ui, sans-serif", color: badge ? "#A89A87" : "#2B2620",
+        cursor: onClick ? "pointer" : "default", textAlign: "left",
+      }}
+      onClick={onClick}
+      disabled={!onClick}
+    >
+      <span>{label}</span>
+      {badge ? (
+        <span style={{ fontSize: 11, fontWeight: 600, color: "#A8754A", background: "#F0E6D6", padding: "3px 8px", borderRadius: 20, fontFamily: "system-ui, sans-serif" }}>{badge}</span>
+      ) : (
+        <ChevronRight size={18} color="#A89A87" />
+      )}
+    </button>
+  );
+}
+
+/* =========================================================================
+   GESTOR DE CUENTAS (desde Config) — mismo ManageGroups/ManageAccounts que
+   usa el tab Cuentas, con su propio ida-y-vuelta grupo → cuentas acá adentro
+   (el tab Cuentas guarda ese estado en AppShell porque también lo necesita
+   para el botón de "editar" propio; acá alcanza con un estado local).
+   ========================================================================= */
+
+function AccountsSettingsScreen({ session, groups, accounts, reload, showError, onBack }) {
+  const [view, setView] = useState({ screen: "groups" });
+
+  if (view.screen === "accounts") {
+    const group = groups.find((g) => g.id === view.groupId);
+    if (!group) { setView({ screen: "groups" }); return null; }
+    return (
+      <ManageAccounts
+        session={session}
+        group={group}
+        accounts={accounts}
+        reload={reload}
+        showError={showError}
+        onBack={() => setView({ screen: "groups" })}
+      />
+    );
+  }
+
+  return (
+    <ManageGroups
+      session={session}
+      groups={groups}
+      accounts={accounts}
+      reload={reload}
+      showError={showError}
+      onBack={onBack}
+      onOpenGroup={(groupId) => setView({ screen: "accounts", groupId })}
+    />
   );
 }
 
@@ -292,17 +471,13 @@ function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onO
 
   return (
     <div style={{ ...styles.form, paddingBottom: 100 }}>
-      <div style={{ ...styles.shareRow, justifyContent: "space-between" }}>
-        <span style={{ fontWeight: 600 }}>Use Split Ledger</span>
-        <button
-          onClick={toggleEnabled}
-          disabled={togglingEnabled}
-          style={{ width: 44, height: 26, borderRadius: 13, border: "none", background: session.splitLedgerEnabled ? "#C75D3B" : "#D9CFC1", position: "relative", cursor: "pointer", flexShrink: 0, opacity: togglingEnabled ? 0.6 : 1 }}
-          aria-label="Use Split Ledger"
-        >
-          <span style={{ position: "absolute", top: 3, left: session.splitLedgerEnabled ? 21 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.15s" }} />
-        </button>
-      </div>
+      <ToggleField
+        label="Use Split Ledger"
+        description="Activar la sección de Split Ledger"
+        checked={session.splitLedgerEnabled}
+        onChange={toggleEnabled}
+        disabled={togglingEnabled}
+      />
 
       <label style={styles.label}>
         Nombre visible

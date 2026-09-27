@@ -4,6 +4,11 @@ import { BookOpen, BarChart3, Coins, Divide, MoreHorizontal, MailCheck } from "l
 import { styles, globalCss } from "./lib/styles.js";
 import SplitLedgerTab from "./screens/splitledger/SplitLedgerTab.jsx";
 import ConfigScreen from "./screens/config/ConfigScreen.jsx";
+import CuentasTab from "./screens/moneymanager/CuentasTab.jsx";
+import DiarioTab from "./screens/moneymanager/DiarioTab.jsx";
+import TransactionForm from "./screens/moneymanager/TransactionForm.jsx";
+import EstadisticasTab from "./screens/moneymanager/EstadisticasTab.jsx";
+import { useMoneyManager } from "./lib/moneyManagerData.js";
 
 /* =========================================================================
    AUTH — usuarios, sesión, invitaciones
@@ -477,9 +482,9 @@ function RecoverPasswordScreen({ onComplete, onCancel }) {
    ========================================================================= */
 
 const TABS = [
-  { key: "ledger", icon: BookOpen, comingSoon: true, label: () => new Date().toLocaleDateString("es-ES", { day: "numeric", month: "short" }) },
-  { key: "stats", icon: BarChart3, comingSoon: true, label: () => "Estadísticas" },
-  { key: "accounts", icon: Coins, comingSoon: true, label: () => "Cuentas" },
+  { key: "ledger", icon: BookOpen, comingSoon: false, label: () => new Date().toLocaleDateString("es-ES", { day: "numeric", month: "short" }) },
+  { key: "stats", icon: BarChart3, comingSoon: false, label: () => "Estadísticas" },
+  { key: "accounts", icon: Coins, comingSoon: false, label: () => "Cuentas" },
   { key: "splitledger", icon: Divide, comingSoon: false, label: () => "Split Ledger" },
   { key: "config", icon: MoreHorizontal, comingSoon: false, label: () => "Config" },
 ];
@@ -491,16 +496,54 @@ const TABS = [
 
 function AppShell({ session, onLogout, refreshProfile }) {
   const { groups, loading, reloadGroup, deleteGroup, reload: reloadGroups } = useGroups(session.userId);
+  const moneyManager = useMoneyManager(session.userId);
   const [activeTab, setActiveTab] = useState(() => (session.splitLedgerEnabled ? "splitledger" : "config"));
   const [splitLedgerView, setSplitLedgerView] = useState({ screen: "home" });
+  const [accountsView, setAccountsView] = useState({ screen: "list" });
+  const [ledgerView, setLedgerView] = useState({ screen: "list" });
+  const [ledgerMonth, setLedgerMonth] = useState(() => new Date());
   const [changingPassword, setChangingPassword] = useState(false);
   const [viewingProfile, setViewingProfile] = useState(false);
+  const [creatingRecurring, setCreatingRecurring] = useState(false);
+  const [moneyManagerScreen, setMoneyManagerScreen] = useState(null);
   const [toast, setToast] = useState(null); // { message, type: "error" | "success" | "info" }
   const [invites, setInvites] = useState([]); // invitaciones que ME llegaron (bandeja)
 
   const showError = (msg) => setToast({ message: msg, type: "error" });
   const showSuccess = (msg) => setToast({ message: msg, type: "success" });
   const showInfo = (msg) => setToast({ message: msg, type: "info" });
+
+  // Guarda una transacción de Money Manager y, si venía con recurrencia
+  // activada, también crea su plantilla en mm_recurring. Un solo lugar para
+  // esto porque lo usan tanto "Hoy" (FAB) como "Transacciones repetidas" en Config.
+  const saveMoneyTransaction = async ({ recurring, ...tx }) => {
+    try {
+      const { error } = await supabase
+        .from("mm_transactions")
+        .insert({ user_id: session.userId, ...tx, date: new Date(tx.date).toISOString() });
+      if (error) throw error;
+      if (recurring) {
+        const { error: recError } = await supabase.from("mm_recurring").insert({
+          user_id: session.userId,
+          type: tx.type,
+          account_id: tx.account_id,
+          to_account_id: tx.to_account_id,
+          category_id: tx.category_id,
+          currency: tx.currency,
+          amount: tx.amount,
+          title: tx.title,
+          memo: tx.memo,
+          ...recurring,
+        });
+        if (recError) throw recError;
+      }
+      await moneyManager.reload();
+      return true;
+    } catch (e) {
+      showError(`No se pudo guardar: ${e?.message || e}`);
+      return false;
+    }
+  };
 
   useEffect(() => {
     if (!toast) return;
@@ -556,13 +599,35 @@ function AppShell({ session, onLogout, refreshProfile }) {
     if (!session.splitLedgerEnabled && activeTab === "splitledger") setActiveTab("config");
   }, [session.splitLedgerEnabled, activeTab]);
 
+  // "Pantalla de inicio" de Money Manager (Detalles del período) — se aplica
+  // una sola vez, apenas termina de cargar por primera vez (moneyManager.loading
+  // solo pasa de true a false una vez en la vida del hook, reload() no lo
+  // vuelve a poner en true), para no pisar la pestaña donde ya estés parado.
+  useEffect(() => {
+    if (moneyManager.loading) return;
+    const tab = moneyManager.settings.startup_tab;
+    const valid = ["ledger", "stats", "accounts", "splitledger"];
+    if (tab && valid.includes(tab) && (tab !== "splitledger" || session.splitLedgerEnabled)) {
+      setActiveTab(tab);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moneyManager.loading]);
+
   const handleTabClick = (tab) => {
     if (tab.comingSoon) { showInfo("Próximamente"); return; }
     setActiveTab(tab.key);
   };
 
   const visibleTabs = TABS.filter((t) => t.key !== "splitledger" || session.splitLedgerEnabled);
-  const showTabBar = activeTab === "config" ? (!changingPassword && !viewingProfile) : splitLedgerView.screen === "home";
+  const showTabBar = activeTab === "config"
+    ? (!changingPassword && !viewingProfile && !creatingRecurring && !moneyManagerScreen)
+    : activeTab === "accounts"
+      ? accountsView.screen === "list"
+      : activeTab === "ledger"
+        ? ledgerView.screen === "list"
+        : activeTab === "stats"
+          ? true
+          : splitLedgerView.screen === "home";
 
   return (
     <div style={styles.app}>
@@ -590,6 +655,60 @@ function AppShell({ session, onLogout, refreshProfile }) {
         />
       )}
 
+      {activeTab === "accounts" && (
+        <CuentasTab
+          session={session}
+          settings={moneyManager.settings}
+          groups={moneyManager.groups}
+          accounts={moneyManager.accounts}
+          transactions={moneyManager.transactions}
+          reload={moneyManager.reload}
+          showError={showError}
+          view={accountsView}
+          setView={setAccountsView}
+        />
+      )}
+
+      {activeTab === "stats" && (
+        <EstadisticasTab
+          settings={moneyManager.settings}
+          categories={moneyManager.categories}
+          transactions={moneyManager.transactions}
+          viewMonth={ledgerMonth}
+          setViewMonth={setLedgerMonth}
+        />
+      )}
+
+      {activeTab === "ledger" && ledgerView.screen === "list" && (
+        <DiarioTab
+          settings={moneyManager.settings}
+          groups={moneyManager.groups}
+          accounts={moneyManager.accounts}
+          categories={moneyManager.categories}
+          transactions={moneyManager.transactions}
+          viewMonth={ledgerMonth}
+          setViewMonth={setLedgerMonth}
+          onNewTransaction={() => setLedgerView({ screen: "newTransaction" })}
+        />
+      )}
+
+      {activeTab === "ledger" && ledgerView.screen === "newTransaction" && (
+        <TransactionForm
+          session={session}
+          settings={moneyManager.settings}
+          groups={moneyManager.groups}
+          accounts={moneyManager.accounts}
+          categories={moneyManager.categories}
+          reloadCategories={moneyManager.reload}
+          showError={showError}
+          onCancel={() => setLedgerView({ screen: "list" })}
+          onSave={async (tx) => {
+            const ok = await saveMoneyTransaction(tx);
+            if (ok) setLedgerView({ screen: "list" });
+          }}
+        />
+      )}
+
       {activeTab === "config" && (
         <ConfigScreen
           session={session}
@@ -608,6 +727,12 @@ function AppShell({ session, onLogout, refreshProfile }) {
           setChangingPassword={setChangingPassword}
           viewingProfile={viewingProfile}
           setViewingProfile={setViewingProfile}
+          moneyManager={moneyManager}
+          onSaveMoneyTransaction={saveMoneyTransaction}
+          creatingRecurring={creatingRecurring}
+          setCreatingRecurring={setCreatingRecurring}
+          moneyManagerScreen={moneyManagerScreen}
+          setMoneyManagerScreen={setMoneyManagerScreen}
         />
       )}
 

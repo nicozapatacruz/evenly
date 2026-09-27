@@ -1437,6 +1437,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
           confirmLabel="Borrar"
           onCancel={() => setConfirmDelete(false)}
           onConfirm={() => onDelete(existing.id)}
+          style={{ margin: "6px 20px 12px" }}
         />
       )}
 

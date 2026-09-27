@@ -2,6 +2,29 @@ import React from "react";
 import { ArrowLeft, Camera, User } from "lucide-react";
 import { styles } from "../lib/styles.js";
 
+// Único toggle de la app — label arriba (igual que cualquier otro campo),
+// switch dentro de una caja con el mismo estilo que un input. Componentizado
+// a propósito: ya se desalineó dos veces por copiarlo a mano (uno quedó en
+// negrilla por error, otro heredó la negrilla del label sin querer).
+export function ToggleField({ label, description, checked, onChange, disabled }) {
+  return (
+    <label style={styles.label}>
+      {label}
+      <div style={{ ...styles.input, display: "flex", alignItems: "center", justifyContent: "space-between", fontWeight: 400, padding: "7px 13px" }}>
+        <span>{description}</span>
+        <button
+          onClick={() => onChange(!checked)}
+          disabled={disabled}
+          style={{ width: 44, height: 26, borderRadius: 13, border: "none", background: checked ? "#C75D3B" : "#D9CFC1", position: "relative", cursor: "pointer", flexShrink: 0, opacity: disabled ? 0.6 : 1 }}
+          aria-label={label}
+        >
+          <span style={{ position: "absolute", top: 3, left: checked ? 21 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.15s" }} />
+        </button>
+      </div>
+    </label>
+  );
+}
+
 export function TopBar({ title, onBack, right }) {
   return (
     <div style={styles.topBar}>

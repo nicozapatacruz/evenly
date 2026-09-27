@@ -81,12 +81,16 @@ export const styles = {
   label: { fontSize: 13, fontWeight: 600, color: "#544A3C", display: "flex", flexDirection: "column", gap: 6, fontFamily: "system-ui, sans-serif" },
   input: { fontFamily: "system-ui, sans-serif", fontSize: 15, padding: "11px 13px", borderRadius: 10, border: "1px solid #DDD2BE", background: "#fff", color: "#2B2620" },
   btnDashed: { display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px", borderRadius: 10, border: "1px dashed #C9BBA0", background: "transparent", color: "#8A7253", fontSize: 13.5, fontFamily: "system-ui, sans-serif", fontWeight: 600 },
-  btnPrimary: { marginTop: 8, padding: "14px", borderRadius: 12, border: "none", background: "#C75D3B", color: "#fff", fontSize: 15, fontWeight: 700, fontFamily: "system-ui, sans-serif", boxShadow: "0 6px 14px rgba(199,93,59,0.25)" },
+  btnPrimary: { display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 8, padding: "14px", borderRadius: 12, border: "none", background: "#C75D3B", color: "#fff", fontSize: 15, fontWeight: 700, fontFamily: "system-ui, sans-serif", boxShadow: "0 6px 14px rgba(199,93,59,0.25)" },
   btnSecondary: { display: "flex", alignItems: "center", justifyContent: "center", gap: 7, marginTop: 4, width: "100%", padding: "12px", borderRadius: 12, border: "1px solid #DDD2BE", background: "#fff", color: "#544A3C", fontSize: 14, fontWeight: 600, fontFamily: "system-ui, sans-serif" },
   btnSecondarySmall: { width: 44, borderRadius: 10, border: "1px solid #DDD2BE", background: "#fff", color: "#544A3C", display: "flex", alignItems: "center", justifyContent: "center" },
   btnGhostSmall: { padding: "8px 14px", borderRadius: 8, border: "1px solid #DDD2BE", background: "#fff", fontSize: 13, fontFamily: "system-ui, sans-serif", display: "flex", alignItems: "center", gap: 6, color: "#76695A" },
   btnDangerSmall: { padding: "8px 14px", borderRadius: 8, border: "none", background: "#B0473A", color: "#fff", fontSize: 13, fontFamily: "system-ui, sans-serif", fontWeight: 600 },
-  confirmBox: { margin: "0 20px 12px", padding: 14, borderRadius: 12, background: "#FBEDE7", border: "1px solid #EBC9BA", fontFamily: "system-ui, sans-serif" },
+  // Sin margen lateral por defecto — la mayoría de los usos ya están anidados
+  // dentro de un contenedor con su propio padding (styles.form); el único que
+  // no lo está (borrar un gasto, pegado directo a styles.screen) le pasa su
+  // propio margen lateral por afuera.
+  confirmBox: { margin: "6px 0 12px", padding: 14, borderRadius: 12, background: "#FBEDE7", border: "1px solid #EBC9BA", fontFamily: "system-ui, sans-serif" },
   avatarRow: { display: "flex", gap: 8, overflowX: "auto", padding: "10px 20px 4px" },
   memberChip: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 52 },
   memberChipName: { fontSize: 10.5, color: "#6B6355", fontFamily: "system-ui, sans-serif", maxWidth: 56, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },

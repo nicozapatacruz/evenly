@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { supabase } from "./lib/supabaseClient.js";
-import { BookOpen, BarChart3, Coins, Divide, MoreHorizontal } from "lucide-react";
+import { BookOpen, BarChart3, Coins, Divide, MoreHorizontal, MailCheck } from "lucide-react";
 import { styles, globalCss } from "./lib/styles.js";
 import SplitLedgerTab from "./screens/splitledger/SplitLedgerTab.jsx";
 import ConfigScreen from "./screens/config/ConfigScreen.jsx";
@@ -281,6 +281,7 @@ function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
   const [err, setErr] = useState("");
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sent, setSent] = useState(false); // true tras mandar el correo de recuperación
 
   const canSubmit = mode === "login"
     ? !!email.trim() && !!password
@@ -289,7 +290,7 @@ function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
       : !!displayName.trim() && !!username.trim() && !!email.trim() && !!password && !!confirmPassword;
 
   const switchMode = (next) => {
-    setMode(next); setErr(""); setInfo(""); setPassword(""); setConfirmPassword("");
+    setMode(next); setErr(""); setInfo(""); setPassword(""); setConfirmPassword(""); setSent(false);
   };
 
   const handle = async () => {
@@ -297,7 +298,7 @@ function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
     try {
       if (mode === "forgot") {
         await onForgotPassword(email);
-        setInfo("Te enviamos un correo con un enlace para elegir una nueva contraseña.");
+        setSent(true);
       } else if (mode === "register" && password !== confirmPassword) {
         throw new Error("Las contraseñas no coinciden.");
       } else if (mode === "login") {
@@ -315,6 +316,33 @@ function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
       setLoading(false);
     }
   };
+
+  // Tras mandar el correo, reemplaza el formulario entero por una confirmación
+  // — dejar el campo de email editable y el botón de "Enviar enlace" activo
+  // como si nada hubiera pasado es confuso, no comunica que ya se envió.
+  if (mode === "forgot" && sent) {
+    return (
+      <div style={{ ...styles.app, alignItems: "center", justifyContent: "center" }}>
+        <div style={{ width: "100%", maxWidth: 400, background: "#FBF8F2", borderRadius: 20, padding: "36px 28px", boxShadow: "0 4px 32px rgba(0,0,0,0.08)", margin: "0 16px", textAlign: "center" }}>
+          <div style={{ ...styles.emptyIcon, margin: "0 auto 16px" }}><MailCheck size={26} strokeWidth={1.5} /></div>
+          <h1 style={{ ...styles.h1, fontSize: 22, marginBottom: 8 }}>Revisa tu correo</h1>
+          <p style={{ ...styles.muted, padding: 0, marginBottom: 28 }}>
+            Te enviamos un enlace a <strong>{email}</strong> para elegir una nueva contraseña.
+          </p>
+          <button style={{ ...styles.btnPrimary, marginTop: 0 }} onClick={() => switchMode("login")}>
+            Volver a iniciar sesión
+          </button>
+          <button
+            type="button"
+            style={{ background: "none", border: "none", fontSize: 13.5, fontFamily: "system-ui, sans-serif", color: "#A8754A", cursor: "pointer", padding: "12px 0 0" }}
+            onClick={async () => { setSent(false); await handle(); }}
+          >
+            ¿No te llegó? Reenviar
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ ...styles.app, alignItems: "center", justifyContent: "center" }}>

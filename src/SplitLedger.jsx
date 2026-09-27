@@ -329,16 +329,18 @@ function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
           <p style={{ ...styles.muted, padding: 0, marginBottom: 28 }}>
             Te enviamos un enlace a <strong>{email}</strong> para elegir una nueva contraseña.
           </p>
-          <button style={{ ...styles.btnPrimary, marginTop: 0 }} onClick={() => switchMode("login")}>
-            Volver a iniciar sesión
-          </button>
-          <button
-            type="button"
-            style={{ background: "none", border: "none", fontSize: 13.5, fontFamily: "system-ui, sans-serif", color: "#A8754A", cursor: "pointer", padding: "12px 0 0" }}
-            onClick={async () => { setSent(false); await handle(); }}
-          >
-            ¿No te llegó? Reenviar
-          </button>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <button style={{ ...styles.btnPrimary, marginTop: 0, width: "100%" }} onClick={() => switchMode("login")}>
+              Volver a iniciar sesión
+            </button>
+            <button
+              type="button"
+              style={{ background: "none", border: "none", fontSize: 13.5, fontFamily: "system-ui, sans-serif", color: "#A8754A", cursor: "pointer", padding: "12px 0 0" }}
+              onClick={async () => { setSent(false); await handle(); }}
+            >
+              ¿No te llegó? Reenviar
+            </button>
+          </div>
         </div>
       </div>
     );

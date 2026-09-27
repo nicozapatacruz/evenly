@@ -34,6 +34,11 @@ function toSession(authUser, profile) {
 function useAuth() {
   const [session, setSession] = useState(null); // { userId, email, username, displayName, photoUrl, defaultGroupId, splitLedgerEnabled } | null
   const [authLoading, setAuthLoading] = useState(true);
+  // true mientras el usuario llegó acá desde el link de "recuperar contraseña"
+  // del correo — en ese momento Supabase ya le arma una sesión válida, pero
+  // queremos mostrarle "elegí tu nueva contraseña" en vez de mandarlo directo
+  // adentro de la app.
+  const [recovering, setRecovering] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,7 +54,8 @@ function useAuth() {
       if (!cancelled) setAuthLoading(false);
     })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, authSession) => {
+    const { data: sub } = supabase.auth.onAuthStateChange(async (event, authSession) => {
+      if (event === "PASSWORD_RECOVERY") setRecovering(true);
       if (!authSession?.user) { setSession(null); return; }
       try {
         const profile = await fetchProfile(authSession.user.id);
@@ -95,6 +101,28 @@ function useAuth() {
 
   const logout = useCallback(async () => {
     await supabase.auth.signOut();
+    setRecovering(false);
+  }, []);
+
+  // Manda el correo con el link de "recuperar contraseña" (Supabase arma el link
+  // con su propio token; redirectTo es a dónde vuelve una vez que lo clickea).
+  const resetPassword = useCallback(async (email) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: window.location.origin + window.location.pathname,
+    });
+    if (error) throw error;
+  }, []);
+
+  // Se llama desde la pantalla que aparece al volver del link del correo.
+  const completeRecovery = useCallback(async (newPassword) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw error;
+    setRecovering(false);
+  }, []);
+
+  const cancelRecovery = useCallback(async () => {
+    await supabase.auth.signOut();
+    setRecovering(false);
   }, []);
 
   // Vuelve a leer el profile y actualiza la sesión en memoria (evita el window.location.reload() de antes)
@@ -105,7 +133,7 @@ function useAuth() {
     setSession(toSession(authSession.user, profile));
   }, []);
 
-  return { session, authLoading, register, login, logout, refreshProfile };
+  return { session, authLoading, register, login, logout, refreshProfile, recovering, resetPassword, completeRecovery, cancelRecovery };
 }
 
 // Select con resource embedding: PostgREST expande cada FK respetando la RLS propia
@@ -243,8 +271,8 @@ function useGroups(userId) {
    AUTH SCREEN
    ========================================================================= */
 
-function AuthScreen({ onLogin, onRegister }) {
-  const [mode, setMode] = useState("login");
+function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
+  const [mode, setMode] = useState("login"); // "login" | "register" | "forgot"
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -256,15 +284,23 @@ function AuthScreen({ onLogin, onRegister }) {
 
   const canSubmit = mode === "login"
     ? !!email.trim() && !!password
-    : !!displayName.trim() && !!username.trim() && !!email.trim() && !!password && !!confirmPassword;
+    : mode === "forgot"
+      ? !!email.trim()
+      : !!displayName.trim() && !!username.trim() && !!email.trim() && !!password && !!confirmPassword;
+
+  const switchMode = (next) => {
+    setMode(next); setErr(""); setInfo(""); setPassword(""); setConfirmPassword("");
+  };
 
   const handle = async () => {
     setErr(""); setInfo(""); setLoading(true);
     try {
-      if (mode === "register" && password !== confirmPassword) {
+      if (mode === "forgot") {
+        await onForgotPassword(email);
+        setInfo("Te enviamos un correo con un enlace para elegir una nueva contraseña.");
+      } else if (mode === "register" && password !== confirmPassword) {
         throw new Error("Las contraseñas no coinciden.");
-      }
-      if (mode === "login") {
+      } else if (mode === "login") {
         await onLogin(email, password);
       } else {
         const { needsEmailConfirmation } = await onRegister(email, username, password, displayName);
@@ -285,7 +321,7 @@ function AuthScreen({ onLogin, onRegister }) {
       <div style={{ width: "100%", maxWidth: 400, background: "#FBF8F2", borderRadius: 20, padding: "36px 28px", boxShadow: "0 4px 32px rgba(0,0,0,0.08)", margin: "0 16px" }}>
         <h1 style={{ ...styles.h1, textAlign: "center", marginBottom: 4 }}>Evenly</h1>
         <p style={{ ...styles.muted, padding: 0, textAlign: "center", marginBottom: 28 }}>
-          {mode === "login" ? "Bienvenido de vuelta" : "Crea tu cuenta"}
+          {mode === "login" ? "Bienvenido de vuelta" : mode === "forgot" ? "Recuperar contraseña" : "Crea tu cuenta"}
         </p>
 
         {/* Un <form> real (no solo autoComplete suelto en inputs) es lo que hace que
@@ -306,29 +342,99 @@ function AuthScreen({ onLogin, onRegister }) {
           )}
           <label style={styles.label}>
             Email
-            <input style={styles.input} type="email" name="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="tu@email.com" autoCapitalize="none" autoComplete={mode === "login" ? "username" : "email"} autoFocus={mode === "login"} />
+            <input style={styles.input} type="email" name="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="tu@email.com" autoCapitalize="none" autoComplete={mode === "login" ? "username" : "email"} autoFocus={mode !== "register"} />
           </label>
-          <label style={styles.label}>
-            Contraseña
-            <input style={styles.input} type="password" name={mode === "login" ? "current-password" : "new-password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••" autoComplete={mode === "login" ? "current-password" : "new-password"} />
-          </label>
+          {mode !== "forgot" && (
+            <label style={styles.label}>
+              Contraseña
+              <input style={styles.input} type="password" name={mode === "login" ? "current-password" : "new-password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="Contraseña" autoComplete={mode === "login" ? "current-password" : "new-password"} />
+            </label>
+          )}
+          {mode === "login" && (
+            <button
+              type="button"
+              style={{ alignSelf: "flex-end", background: "none", border: "none", fontSize: 12.5, fontFamily: "system-ui, sans-serif", color: "#A8754A", cursor: "pointer", padding: 0, marginTop: -6 }}
+              onClick={() => switchMode("forgot")}
+            >
+              ¿Olvidaste tu contraseña?
+            </button>
+          )}
           {mode === "register" && (
             <label style={styles.label}>
               Confirmar contraseña
-              <input style={styles.input} type="password" name="confirm-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••" autoComplete="new-password" />
+              <input style={styles.input} type="password" name="confirm-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Confirmar contraseña" autoComplete="new-password" />
             </label>
           )}
           {err && <p style={styles.errText}>{err}</p>}
           {info && <p style={{ ...styles.muted, padding: 0, color: "#3B6E62" }}>{info}</p>}
           <button type="submit" style={{ ...styles.btnPrimary, marginTop: 4, opacity: (loading || !canSubmit) ? 0.5 : 1 }} disabled={loading || !canSubmit}>
-            {loading ? "Un momento…" : mode === "login" ? "Entrar" : "Crear cuenta"}
+            {loading ? "Un momento…" : mode === "login" ? "Entrar" : mode === "forgot" ? "Enviar enlace" : "Crear cuenta"}
           </button>
           <button
             type="button"
             style={{ background: "none", border: "none", fontSize: 13.5, fontFamily: "system-ui, sans-serif", color: "#A8754A", cursor: "pointer", textAlign: "center", padding: "4px 0" }}
-            onClick={() => { setMode(mode === "login" ? "register" : "login"); setErr(""); setInfo(""); setConfirmPassword(""); }}
+            onClick={() => switchMode(mode === "login" ? "register" : "login")}
           >
-            {mode === "login" ? "¿No tienes cuenta? Regístrate" : "¿Ya tienes cuenta? Entra"}
+            {mode === "login" ? "¿No tienes cuenta? Regístrate" : mode === "forgot" ? "Volver a iniciar sesión" : "¿Ya tienes cuenta? Entra"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================================
+   RECUPERAR CONTRASEÑA — se muestra al volver del link del correo (en vez
+   de la app normal): Supabase ya arma una sesión temporal para esto, que
+   useAuth detecta vía el evento PASSWORD_RECOVERY.
+   ========================================================================= */
+
+function RecoverPasswordScreen({ onComplete, onCancel }) {
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [err, setErr] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const canSave = newPassword.length >= 4 && confirmPassword.length >= 4;
+
+  const handleSave = async () => {
+    setErr("");
+    if (newPassword.length < 4) return setErr("La contraseña debe tener al menos 4 caracteres.");
+    if (newPassword !== confirmPassword) return setErr("Las contraseñas no coinciden.");
+    setSaving(true);
+    try {
+      await onComplete(newPassword);
+    } catch (e) {
+      setErr(e?.message || "No se pudo actualizar la contraseña.");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ ...styles.app, alignItems: "center", justifyContent: "center" }}>
+      <div style={{ width: "100%", maxWidth: 400, background: "#FBF8F2", borderRadius: 20, padding: "36px 28px", boxShadow: "0 4px 32px rgba(0,0,0,0.08)", margin: "0 16px" }}>
+        <h1 style={{ ...styles.h1, textAlign: "center", marginBottom: 4 }}>Evenly</h1>
+        <p style={{ ...styles.muted, padding: 0, textAlign: "center", marginBottom: 28 }}>Elegí tu nueva contraseña</p>
+
+        <form style={{ display: "flex", flexDirection: "column", gap: 12 }} onSubmit={e => { e.preventDefault(); if (!saving) handleSave(); }}>
+          <label style={styles.label}>
+            Nueva contraseña
+            <input style={styles.input} type="password" name="new-password" autoComplete="new-password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Nueva contraseña" autoFocus />
+          </label>
+          <label style={styles.label}>
+            Confirmar nueva contraseña
+            <input style={styles.input} type="password" name="confirm-password" autoComplete="new-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Confirmar nueva contraseña" />
+          </label>
+          {err && <p style={styles.errText}>{err}</p>}
+          <button type="submit" style={{ ...styles.btnPrimary, marginTop: 4, opacity: (saving || !canSave) ? 0.5 : 1 }} disabled={saving || !canSave}>
+            {saving ? "Guardando…" : "Guardar y entrar"}
+          </button>
+          <button
+            type="button"
+            style={{ background: "none", border: "none", fontSize: 13.5, fontFamily: "system-ui, sans-serif", color: "#A8754A", cursor: "pointer", textAlign: "center", padding: "4px 0" }}
+            onClick={onCancel}
+          >
+            Cancelar
           </button>
         </form>
       </div>
@@ -499,7 +605,10 @@ function AppShell({ session, onLogout, refreshProfile }) {
 }
 
 export default function SplitLedger() {
-  const { session, authLoading, register, login, logout, refreshProfile } = useAuth();
+  const {
+    session, authLoading, register, login, logout, refreshProfile,
+    recovering, resetPassword, completeRecovery, cancelRecovery,
+  } = useAuth();
 
   // El <style> con html/body/#root { height: 100% } vive acá, en la raíz que
   // siempre se monta (antes vivía solo dentro de AppShell, así que en la
@@ -510,9 +619,11 @@ export default function SplitLedger() {
       <style>{globalCss}</style>
       {authLoading
         ? <div style={{ ...styles.app, alignItems: "center", justifyContent: "center" }}><p style={styles.muted}>Cargando…</p></div>
-        : !session
-          ? <AuthScreen onLogin={login} onRegister={register} />
-          : <AppShell session={session} onLogout={logout} refreshProfile={refreshProfile} />}
+        : recovering
+          ? <RecoverPasswordScreen onComplete={completeRecovery} onCancel={cancelRecovery} />
+          : !session
+            ? <AuthScreen onLogin={login} onRegister={register} onForgotPassword={resetPassword} />
+            : <AppShell session={session} onLogout={logout} refreshProfile={refreshProfile} />}
     </>
   );
 }

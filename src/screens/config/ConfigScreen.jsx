@@ -187,15 +187,15 @@ function ChangePasswordScreen({ session, onBack, onSave }) {
       <div style={{ ...styles.form, paddingBottom: 100 }}>
         <label style={styles.label}>
           Contraseña actual
-          <input style={styles.input} type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="••••••" />
+          <input style={styles.input} type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Contraseña actual" />
         </label>
         <label style={styles.label}>
           Nueva contraseña
-          <input style={styles.input} type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="••••••" />
+          <input style={styles.input} type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Nueva contraseña" />
         </label>
         <label style={styles.label}>
           Confirmar nueva contraseña
-          <input style={styles.input} type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••" />
+          <input style={styles.input} type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Confirmar nueva contraseña" />
         </label>
         {err && <p style={styles.errText}>{err}</p>}
       </div>

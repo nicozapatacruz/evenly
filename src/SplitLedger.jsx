@@ -254,6 +254,10 @@ function AuthScreen({ onLogin, onRegister }) {
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const canSubmit = mode === "login"
+    ? !!email.trim() && !!password
+    : !!displayName.trim() && !!username.trim() && !!email.trim() && !!password && !!confirmPassword;
+
   const handle = async () => {
     setErr(""); setInfo(""); setLoading(true);
     try {
@@ -316,7 +320,7 @@ function AuthScreen({ onLogin, onRegister }) {
           )}
           {err && <p style={styles.errText}>{err}</p>}
           {info && <p style={{ ...styles.muted, padding: 0, color: "#3B6E62" }}>{info}</p>}
-          <button type="submit" style={{ ...styles.btnPrimary, marginTop: 4 }} disabled={loading}>
+          <button type="submit" style={{ ...styles.btnPrimary, marginTop: 4, opacity: (loading || !canSubmit) ? 0.5 : 1 }} disabled={loading || !canSubmit}>
             {loading ? "Un momento…" : mode === "login" ? "Entrar" : "Crear cuenta"}
           </button>
           <button

@@ -1760,16 +1760,17 @@ function SettleUp({ group, prefill, onCancel, onSave }) {
   const [currency, setCurrency] = useState(prefill?.currency || baseCurrency);
   const [date, setDate] = useState(todayInputValue());
   const [note, setNote] = useState("");
-  const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
 
   const numericAmount = parseAmountInput(amount || "");
   const validAmount = !isNaN(numericAmount) && numericAmount > 0;
+  // from/to siempre vienen preseleccionados (arrancan en los primeros 2 miembros) y
+  // "¿Quién recibe?" ya excluye a quien es "¿Quién paga?" — así que lo único que de
+  // verdad puede faltar acá es el monto.
+  const canSave = !!from && !!to && from !== to && validAmount;
 
   const handleSave = async () => {
-    if (!from || !to) return setErr("Indica quién paga y quién recibe.");
-    if (from === to) return setErr("Tienen que ser dos personas distintas.");
-    if (!validAmount) return setErr("Ingresa un monto válido.");
+    if (!canSave) return;
     setSaving(true);
     try {
       await onSave({
@@ -1831,8 +1832,7 @@ function SettleUp({ group, prefill, onCancel, onSave }) {
           <input style={styles.input} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Transferencia, efectivo…" />
         </label>
 
-        {err && <p style={styles.errText}>{err}</p>}
-        <button style={{ ...styles.btnPrimary, opacity: saving ? 0.6 : 1 }} onClick={handleSave} disabled={saving}>{saving ? "Registrando…" : "Registrar pago"}</button>
+        <button style={{ ...styles.btnPrimary, opacity: (saving || !canSave) ? 0.5 : 1 }} onClick={handleSave} disabled={saving || !canSave}>{saving ? "Registrando…" : "Registrar pago"}</button>
       </div>
     </div>
   );
@@ -1842,16 +1842,15 @@ function SettleUp({ group, prefill, onCancel, onSave }) {
 function InviteScreen({ group, session, groupInvites = [], onBack, onSend, onCancelInvite }) {
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [targetUsername, setTargetUsername] = useState("");
-  const [err, setErr] = useState("");
   const [sending, setSending] = useState(false);
   const [cancelingId, setCancelingId] = useState(null);
 
   const invitableMembers = group.members.filter(m => !m.linkedUserId);
-  const canSend = selectedMemberId && targetUsername.trim();
+  const isSelfInvite = !!targetUsername.trim() && targetUsername.trim().toLowerCase() === session.username;
+  const canSend = !!selectedMemberId && !!targetUsername.trim() && !isSelfInvite;
 
   const handle = async () => {
-    if (targetUsername.trim().toLowerCase() === session.username) return setErr("No puedes invitarte a ti mismo.");
-    setErr("");
+    if (!canSend) return;
     setSending(true);
     const ok = await onSend({ memberId: selectedMemberId, targetUsername: targetUsername.trim().toLowerCase() });
     if (ok) {
@@ -1922,7 +1921,7 @@ function InviteScreen({ group, session, groupInvites = [], onBack, onSend, onCan
           <input style={styles.input} value={targetUsername} onChange={e => setTargetUsername(e.target.value)} placeholder="nombre_de_usuario" autoCapitalize="none" onKeyDown={e => e.key === "Enter" && canSend && !sending && handle()} />
         </label>
 
-        {err && <p style={styles.errText}>{err}</p>}
+        {isSelfInvite && <p style={styles.errText}>No puedes invitarte a ti mismo.</p>}
       </div>
 
       <Footer>

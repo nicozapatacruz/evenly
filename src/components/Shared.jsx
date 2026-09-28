@@ -114,7 +114,7 @@ export function IconInput({ value, onChange }) {
         onClick={() => setOpen(true)}
         style={{
           ...styles.input, display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 20, flexShrink: 0, cursor: "pointer", padding: 4,
+          fontSize: 20, flexShrink: 0, cursor: "pointer", padding: 4, width: 44,
           appearance: "none", WebkitAppearance: "none", textAlign: "center",
         }}
         aria-label="Elegir ícono"

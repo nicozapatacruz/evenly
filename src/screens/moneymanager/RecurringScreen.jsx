@@ -31,7 +31,7 @@ export default function RecurringScreen({ accounts, recurring, reload, showError
 
   const removeRecurring = async (id) => {
     try {
-      const { error } = await supabase.from("mm_recurring").update({ deleted: true }).eq("id", id);
+      const { error } = await supabase.from("mm_recurring").delete().eq("id", id);
       if (error) throw error;
       await reload();
     } catch (e) { showError(`No se pudo borrar: ${e?.message || e}`); }

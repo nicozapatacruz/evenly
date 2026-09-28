@@ -127,7 +127,7 @@ export function useMoneyManager(userId) {
       supabase.from("mm_accounts").select("*").eq("user_id", userId).eq("deleted", false).order("sort_order"),
       supabase.from("mm_categories").select("*").eq("user_id", userId).eq("deleted", false).order("sort_order"),
       supabase.from("mm_account_totals").select("*").eq("user_id", userId),
-      supabase.from("mm_recurring").select("*").eq("user_id", userId).eq("deleted", false).order("next_date"),
+      supabase.from("mm_recurring").select("*").eq("user_id", userId).order("next_date"),
     ]);
     setSettings(s.data || DEFAULT_SETTINGS);
     setAccountTotals(at.data || []);
@@ -224,7 +224,6 @@ async function generateDueRecurring(userId) {
     .from("mm_recurring")
     .select("*")
     .eq("user_id", userId)
-    .eq("deleted", false)
     .lte("next_date", new Date().toISOString());
   if (!due || due.length === 0) return;
 
@@ -245,7 +244,9 @@ async function generateDueRecurring(userId) {
     }
     if (toInsert.length) await supabase.from("mm_transactions").insert(toInsert);
     if (end && next > end) {
-      await supabase.from("mm_recurring").update({ deleted: true }).eq("id", r.id);
+      // Ya cumplió su end_date y generó todas sus ocurrencias — se borra de
+      // verdad (no soft-delete: no hay pantalla de "papelera" que la use).
+      await supabase.from("mm_recurring").delete().eq("id", r.id);
     } else {
       await supabase.from("mm_recurring").update({ next_date: next.toISOString() }).eq("id", r.id);
     }

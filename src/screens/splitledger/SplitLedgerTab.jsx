@@ -439,7 +439,7 @@ function NewGroup({ onCancel, onCreate, session, showError }) {
   return (
     <div style={styles.screen}>
       <TopBar title="Nuevo grupo" onBack={onCancel} />
-      <div style={styles.form}>
+      <div style={{ ...styles.form, paddingBottom: 100 }}>
         {/* Foto del grupo */}
         <PhotoPicker previewUrl={photoUrl} onChange={handlePhoto} onClear={clearPhoto} shape="square" />
 
@@ -483,9 +483,13 @@ function NewGroup({ onCancel, onCreate, session, showError }) {
           ))}
         </div>
         <button style={styles.btnDashed} onClick={addMemberField}><Plus size={16} /> Agregar persona</button>
-
-        <button style={{ ...styles.btnPrimary, opacity: (saving || !canCreate) ? 0.5 : 1 }} onClick={handleCreate} disabled={saving || !canCreate}>{saving ? "Creando…" : "Crear grupo"}</button>
       </div>
+      <Footer>
+        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
+        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canCreate) ? 0.5 : 1 }} onClick={handleCreate} disabled={saving || !canCreate}>
+          {saving ? "Creando…" : "Crear grupo"}
+        </button>
+      </Footer>
     </div>
   );
 }
@@ -715,13 +719,12 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
                 )}
               </div>
               {confirmRemoveMemberId === m.id && (
-                <div style={{ background: "#FBEDE7", border: "1px solid #EBC9BA", borderTop: "none", borderRadius: "0 0 10px 10px", padding: "10px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                  <span style={{ fontSize: 12.5, fontFamily: "system-ui, sans-serif", color: "#76695A" }}>¿Quitar a {m.name} del grupo?</span>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button style={styles.btnGhostSmall} onClick={() => setConfirmRemoveMemberId(null)}>Cancelar</button>
-                    <button style={styles.btnDangerSmall} onClick={() => confirmRemoveMember(m.id)}>Quitar</button>
-                  </div>
-                </div>
+                <ConfirmInline
+                  message={`¿Quitar a ${m.name} del grupo?`}
+                  confirmLabel="Quitar"
+                  onCancel={() => setConfirmRemoveMemberId(null)}
+                  onConfirm={() => confirmRemoveMember(m.id)}
+                />
               )}
             </div>
           ))}
@@ -1430,7 +1433,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
           confirmLabel="Borrar"
           onCancel={() => setConfirmDelete(false)}
           onConfirm={() => onDelete(existing.id)}
-          style={{ margin: "6px 20px 12px" }}
+          style={{ margin: "6px 20px 12px", borderRadius: 12, borderTop: "1px solid #EBC9BA" }}
         />
       )}
 
@@ -1782,7 +1785,7 @@ function SettleUp({ group, prefill, onCancel, onSave }) {
   return (
     <div style={styles.screen}>
       <TopBar title="Registrar un pago" onBack={onCancel} />
-      <div style={styles.form}>
+      <div style={{ ...styles.form, paddingBottom: 100 }}>
         <p style={{ ...styles.muted, padding: 0 }}>Esto no mueve dinero — solo anota que el pago ya se hizo fuera de la app, para saldar el balance.</p>
 
         <p style={styles.label}>¿Quién paga?</p>
@@ -1826,8 +1829,13 @@ function SettleUp({ group, prefill, onCancel, onSave }) {
           <input style={styles.input} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Transferencia, efectivo…" />
         </label>
 
-        <button style={{ ...styles.btnPrimary, opacity: (saving || !canSave) ? 0.5 : 1 }} onClick={handleSave} disabled={saving || !canSave}>{saving ? "Registrando…" : "Registrar pago"}</button>
       </div>
+      <Footer>
+        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
+        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }} onClick={handleSave} disabled={saving || !canSave}>
+          {saving ? "Registrando…" : "Registrar pago"}
+        </button>
+      </Footer>
     </div>
   );
 }
@@ -1925,7 +1933,7 @@ function InviteScreen({ group, session, groupInvites = [], onBack, onSend, onCan
           onClick={handle}
           disabled={sending || !canSend}
         >
-          <Send size={15} /> {sending ? "Enviando…" : "Enviar invitación"}
+          {sending ? "Enviando…" : "Enviar invitación"}
         </button>
       </Footer>
     </div>

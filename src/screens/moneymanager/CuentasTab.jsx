@@ -31,7 +31,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
     );
   }
 
-  const balances = accounts.map((a) => ({ account: a, balance: accountBalance(a.id, accountTotals, settings) }));
+  const balances = accounts.map((a) => ({ account: a, balance: accountBalance(a.id, accountTotals) }));
   const capital = balances.filter((b) => b.balance > 0).reduce((s, b) => s + b.balance, 0);
   const debt = balances.filter((b) => b.balance < 0).reduce((s, b) => s + b.balance, 0);
 
@@ -74,7 +74,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
           const groupAccounts = accounts.filter((a) => a.group_id === g.id);
           if (groupAccounts.length === 0) return null;
           const visibleAccounts = groupAccounts.filter((a) => !a.hidden);
-          const gBalance = groupBalance(g.id, accounts, accountTotals, settings);
+          const gBalance = groupBalance(g.id, accounts, accountTotals);
           return (
             <div key={g.id} style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
               <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "#FAF7F2", borderBottom: visibleAccounts.length ? "1px solid #F0EBE2" : "none" }}>
@@ -87,7 +87,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
                     {a.icon && <span style={{ fontSize: 16, lineHeight: 1 }}>{a.icon}</span>}
                     {a.name}
                   </span>
-                  <span style={{ color: balanceColor(accountBalance(a.id, accountTotals, settings)), flexShrink: 0 }}>{money(accountBalance(a.id, accountTotals, settings), settings.main_currency)}</span>
+                  <span style={{ color: balanceColor(accountBalance(a.id, accountTotals)), flexShrink: 0 }}>{money(accountBalance(a.id, accountTotals), settings.main_currency)}</span>
                 </div>
               ))}
             </div>
@@ -188,6 +188,7 @@ export function ManageGroups({ session, groups, accounts, reload, showError, onB
                       onOpen={() => onOpenGroup(id)}
                       onRemove={() => setConfirmRemoveId(id)}
                       accCount={accCount}
+                      isConfirming={confirmRemoveId === id}
                     />
                     {confirmRemoveId === id && (
                       <ConfirmInline
@@ -249,11 +250,11 @@ function NewGroupForm({ session, groups, reload, showError, onCancel, onCreated 
   );
 }
 
-function SortableGroupRow({ group, name, onChangeName, onBlur, onOpen, onRemove, accCount }) {
+function SortableGroupRow({ group, name, onChangeName, onBlur, onOpen, onRemove, accCount, isConfirming }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: group.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   return (
-    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 6, padding: "6px 8px 6px 4px" }}>
+    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 6, padding: "6px 8px 6px 4px", borderRadius: isConfirming ? "10px 10px 0 0" : 10 }}>
       <span {...attributes} {...listeners} style={{ display: "flex", alignItems: "center", justifyContent: "center", alignSelf: "stretch", width: 28, color: "#C9BBA0", cursor: "grab", touchAction: "none" }}>
         <Menu size={18} />
       </span>
@@ -496,6 +497,7 @@ function AccountGroupEditor({ group, accounts, reload, showError }) {
                     onChangeIcon={(v) => { setIcons((prev) => ({ ...prev, [id]: v })); saveIcon(id, v); }}
                     onToggleHidden={() => toggleHidden(id)}
                     onRemove={() => setConfirmRemoveId(id)}
+                    isConfirming={confirmRemoveId === id}
                   />
                   {confirmRemoveId === id && (
                     <ConfirmInline
@@ -515,11 +517,11 @@ function AccountGroupEditor({ group, accounts, reload, showError }) {
   );
 }
 
-function SortableAccountRow({ id, name, icon, hidden, onChangeName, onBlur, onChangeIcon, onToggleHidden, onRemove }) {
+function SortableAccountRow({ id, name, icon, hidden, onChangeName, onBlur, onChangeIcon, onToggleHidden, onRemove, isConfirming }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   return (
-    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 6, padding: "6px 8px 6px 4px" }}>
+    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 6, padding: "6px 8px 6px 4px", borderRadius: isConfirming ? "10px 10px 0 0" : 10 }}>
       <span {...attributes} {...listeners} style={{ display: "flex", alignItems: "center", justifyContent: "center", alignSelf: "stretch", width: 28, color: "#C9BBA0", cursor: "grab", touchAction: "none" }}>
         <Menu size={18} />
       </span>

@@ -6,7 +6,7 @@ import { supabase } from "./supabaseClient.js";
 // unificar categorías es una decisión pendiente, no algo ya resuelto).
 
 const DEFAULT_SETTINGS = {
-  main_currency: "EUR", secondary_currency: null, secondary_rate: null,
+  main_currency: "EUR", other_currencies: [],
   month_start_day: 1, week_start_day: "sunday", autocomplete_notes: true, startup_tab: null,
 };
 
@@ -258,6 +258,7 @@ async function generateDueRecurring(userId) {
       toInsert.push({
         user_id: userId, type: r.type, account_id: r.account_id, to_account_id: r.to_account_id,
         category_id: r.category_id, currency: r.currency, amount: r.amount,
+        exchange_rate: r.exchange_rate, amount_main: r.amount_main,
         title: r.title, memo: r.memo, date: next.toISOString(),
       });
       next = nextOccurrence(start, r.repeat_unit, r.repeat_interval, next);
@@ -274,25 +275,27 @@ async function generateDueRecurring(userId) {
   }
 }
 
-// Convierte un monto a la moneda principal usando la tasa guardada en mm_settings
-// (misma idea que baseCurrency+rates en Split Ledger, pero acá solo hay 2 monedas).
-export function toMainCurrency(amount, currency, settings) {
-  if (!currency || currency === settings.main_currency) return amount;
-  if (currency === settings.secondary_currency && settings.secondary_rate) return amount / settings.secondary_rate;
+// Convierte un monto a la moneda principal — se llama UNA sola vez, al
+// guardar la transacción (no en cada lectura): el resultado se persiste en
+// `amount_main` junto con la tasa usada (`exchange_rate`), así la tasa queda
+// ligada a esa transacción puntual y no a una tasa fija global que se
+// desactualiza. `rate` son unidades de la moneda secundaria por 1 de la
+// principal (ej. 1 EUR = 4500 COP → rate=4500).
+export function computeAmountMain(amount, currency, mainCurrency, rate) {
+  if (!currency || currency === mainCurrency) return amount;
+  if (rate) return amount / rate;
   return amount;
 }
 
-// accountTotals: filas de la vista mm_account_totals (una por cuenta×moneda,
-// ya con el signo aplicado según ingreso/gasto/transferencia) — acá solo
-// falta convertir cada moneda a la principal y sumar.
-export function accountBalance(accountId, accountTotals, settings) {
-  return accountTotals
-    .filter((t) => t.account_id === accountId)
-    .reduce((sum, t) => sum + toMainCurrency(t.total, t.currency, settings), 0);
+// accountTotals: una fila por cuenta (vista mm_account_totals), ya sumada y
+// convertida a la moneda principal del lado del servidor (suma `amount_main`,
+// no `amount`) — acá no hay más conversión que hacer.
+export function accountBalance(accountId, accountTotals) {
+  return accountTotals.find((t) => t.account_id === accountId)?.total || 0;
 }
 
-export function groupBalance(groupId, accounts, accountTotals, settings) {
+export function groupBalance(groupId, accounts, accountTotals) {
   return accounts
     .filter((a) => a.group_id === groupId)
-    .reduce((sum, a) => sum + accountBalance(a.id, accountTotals, settings), 0);
+    .reduce((sum, a) => sum + accountBalance(a.id, accountTotals), 0);
 }

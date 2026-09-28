@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 import { styles } from "../../lib/styles.js";
 import { RootHeader, MonthNav, TodayButton } from "../../components/Shared.jsx";
 import { money, measureTextWidth } from "../../lib/helpers.jsx";
-import { toMainCurrency, useMonthTransactions } from "../../lib/moneyManagerData.js";
+import { useMonthTransactions } from "../../lib/moneyManagerData.js";
 
 const DAY_AMOUNTS_FONT = "12.5px system-ui, sans-serif";
 
@@ -25,8 +25,8 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
   // refetchea solo cuando cambiás de mes.
   const { transactions: monthTx, loading } = useMonthTransactions(userId, viewMonth);
 
-  const monthIncome = monthTx.filter((t) => t.type === "income").reduce((s, t) => s + toMainCurrency(t.amount, t.currency, settings), 0);
-  const monthExpense = monthTx.filter((t) => t.type === "expense").reduce((s, t) => s + toMainCurrency(t.amount, t.currency, settings), 0);
+  const monthIncome = monthTx.filter((t) => t.type === "income").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+  const monthExpense = monthTx.filter((t) => t.type === "expense").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
 
   // Ancho reservado para el monto en rojo — el que ocuparía el máximo
   // "razonable" (999.999,99), para que el gasto de cada día empiece siempre
@@ -84,8 +84,8 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
 
         {byDay.map(([dayKey, txs]) => {
           const d = new Date(dayKey + "T12:00:00");
-          const dayIncome = txs.filter((t) => t.type === "income").reduce((s, t) => s + toMainCurrency(t.amount, t.currency, settings), 0);
-          const dayExpense = txs.filter((t) => t.type === "expense").reduce((s, t) => s + toMainCurrency(t.amount, t.currency, settings), 0);
+          const dayIncome = txs.filter((t) => t.type === "income").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+          const dayExpense = txs.filter((t) => t.type === "expense").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
           return (
             <div key={dayKey} style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 14px", background: "#FAF7F2", borderBottom: "1px solid #F0EBE2", fontFamily: "system-ui, sans-serif" }}>

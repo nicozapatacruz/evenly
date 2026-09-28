@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { styles } from "../../lib/styles.js";
 import { RootHeader, MonthNav, TodayButton } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
-import { toMainCurrency, useCategoryMonthTotals } from "../../lib/moneyManagerData.js";
+import { useCategoryMonthTotals } from "../../lib/moneyManagerData.js";
 
 const MONTH_LABEL = (d) => d.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
 
@@ -32,17 +32,14 @@ export default function EstadisticasTab({ userId, settings, categories, viewMont
   const { totals } = useCategoryMonthTotals(userId, viewMonth, type);
 
   const { rows, total } = useMemo(() => {
-    const byCategory = new Map();
-    for (const t of totals) {
-      const amt = toMainCurrency(t.total, t.currency, settings);
-      byCategory.set(t.category_id, (byCategory.get(t.category_id) || 0) + amt);
-    }
-    const rows = [...byCategory.entries()]
-      .map(([categoryId, amount]) => ({ categoryId, name: categories.find((c) => c.id === categoryId)?.name || "Sin categoría", amount }))
+    // Una fila por categoría ya (la vista agrega por categoría/tipo/mes y ya
+    // viene convertida a la moneda principal — `total` acá es `amount_main`).
+    const rows = totals
+      .map((t) => ({ categoryId: t.category_id, name: categories.find((c) => c.id === t.category_id)?.name || "Sin categoría", amount: t.total }))
       .sort((a, b) => b.amount - a.amount);
     const total = rows.reduce((s, r) => s + r.amount, 0);
     return { rows, total };
-  }, [totals, categories, settings]);
+  }, [totals, categories]);
 
   const slices = useMemo(() => {
     const head = rows.slice(0, 8).map((r, i) => ({ ...r, color: SLICE_COLORS[i] }));

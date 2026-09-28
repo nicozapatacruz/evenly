@@ -532,6 +532,8 @@ function AppShell({ session, onLogout, refreshProfile }) {
           category_id: tx.category_id,
           currency: tx.currency,
           amount: tx.amount,
+          exchange_rate: tx.exchange_rate,
+          amount_main: tx.amount_main,
           title: tx.title,
           memo: tx.memo,
           ...recurring,

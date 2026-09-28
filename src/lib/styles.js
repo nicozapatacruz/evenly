@@ -103,11 +103,19 @@ export const styles = {
   btnToday: { padding: "4px 10px", borderRadius: 20, border: "1px solid #DDD2BE", background: "#fff", color: "#544A3C", fontSize: 12, fontWeight: 600, fontFamily: "system-ui, sans-serif" },
   btnGhostSmall: { padding: "8px 14px", borderRadius: 8, border: "1px solid #DDD2BE", background: "#fff", fontSize: 13, fontFamily: "system-ui, sans-serif", display: "flex", alignItems: "center", gap: 6, color: "#76695A" },
   btnDangerSmall: { padding: "8px 14px", borderRadius: 8, border: "none", background: "#B0473A", color: "#fff", fontSize: 13, fontFamily: "system-ui, sans-serif", fontWeight: 600 },
+  btnPrimarySmall: { padding: "8px 14px", borderRadius: 8, border: "none", background: "#C75D3B", color: "#fff", fontSize: 13, fontFamily: "system-ui, sans-serif", fontWeight: 600 },
   // Sin margen lateral por defecto — la mayoría de los usos ya están anidados
   // dentro de un contenedor con su propio padding (styles.form); el único que
   // no lo está (borrar un gasto, pegado directo a styles.screen) le pasa su
   // propio margen lateral por afuera.
-  confirmBox: { margin: "6px 0 12px", padding: 14, borderRadius: 12, background: "#FBEDE7", border: "1px solid #EBC9BA", fontFamily: "system-ui, sans-serif" },
+  // Sin margen ni borde superior a propósito — se pega directo debajo de la
+  // fila/input que lo dispara (mismo radio que esa fila abajo, 0 arriba),
+  // para que se vea como una sola tarjeta que cambia de color, no una caja
+  // flotando aparte. El caller le pone su propio radio via el prop `radius`
+  // de ConfirmInline, y debe achatar las esquinas de ABAJO de su propia fila
+  // mientras el confirm está abierto (ver ejemplo ya armado: quitar miembro
+  // de un grupo, en SplitLedgerTab.jsx).
+  confirmBox: { padding: "10px 12px", background: "#FBEDE7", border: "1px solid #EBC9BA", borderTop: "none", fontFamily: "system-ui, sans-serif" },
   avatarRow: { display: "flex", gap: 8, overflowX: "auto", padding: "10px 20px 4px" },
   memberChip: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 52 },
   memberChipName: { fontSize: 10.5, color: "#6B6355", fontFamily: "system-ui, sans-serif", maxWidth: 56, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },

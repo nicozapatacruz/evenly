@@ -7,7 +7,7 @@ import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, Footer, ConfirmInline, IconInput } from "../../components/Shared.jsx";
 import { parseAmountInput, todayInputValue, dateInputValue } from "../../lib/helpers.jsx";
-import { RECURRING_FREQUENCIES, nextOccurrence } from "../../lib/moneyManagerData.js";
+import { RECURRING_FREQUENCIES, nextOccurrence, computeAmountMain } from "../../lib/moneyManagerData.js";
 
 const TYPE_INFO = {
   income: { label: "Ingreso", color: "#3B6E62" },
@@ -31,6 +31,8 @@ export default function TransactionForm({
   const [type, setType] = useState(editingTransaction?.type || "expense");
   const [date, setDate] = useState(editingTransaction ? dateInputValue(new Date(editingTransaction.date).getTime()) : todayInputValue());
   const [amount, setAmount] = useState(editingTransaction ? String(editingTransaction.amount) : "");
+  const [currency, setCurrency] = useState(editingTransaction?.currency || settings.main_currency);
+  const [exchangeRate, setExchangeRate] = useState(editingTransaction?.exchange_rate ? String(editingTransaction.exchange_rate) : "");
   const [categoryId, setCategoryId] = useState(editingTransaction?.category_id || "");
   const [accountId, setAccountId] = useState(editingTransaction?.account_id || accounts[0]?.id || "");
   const [toAccountId, setToAccountId] = useState(editingTransaction?.to_account_id || "");
@@ -65,12 +67,15 @@ export default function TransactionForm({
 
   const numericAmount = parseAmountInput(amount);
   const validAmount = !isNaN(numericAmount) && numericAmount > 0;
+  const numericRate = parseAmountInput(exchangeRate);
+  const needsRate = currency !== settings.main_currency;
+  const validRate = !needsRate || (!isNaN(numericRate) && numericRate > 0);
 
   const freq = RECURRING_FREQUENCIES.find((f) => f.value === freqValue);
   const customInterval = parseInt(freqInterval, 10);
   const recurringValid = !recurringOpen || (freq && (freq.interval !== null || customInterval >= 2));
 
-  const canSave = validAmount && !!accountId && recurringValid && (
+  const canSave = validAmount && validRate && !!accountId && recurringValid && (
     type === "transfer" ? (!!toAccountId && toAccountId !== accountId) : !!categoryId
   );
 
@@ -79,6 +84,8 @@ export default function TransactionForm({
     setSaving(true);
     try {
       const txDate = new Date(date + "T12:00:00");
+      const rate = needsRate ? numericRate : null;
+      const amountMain = computeAmountMain(numericAmount, currency, settings.main_currency, rate);
       let recurring = null;
       if (recurringOpen) {
         const interval = freq.interval ?? customInterval;
@@ -96,8 +103,10 @@ export default function TransactionForm({
         account_id: accountId,
         to_account_id: type === "transfer" ? toAccountId : null,
         category_id: type === "transfer" ? null : categoryId,
-        currency: settings.main_currency,
+        currency,
         amount: numericAmount,
+        exchange_rate: rate,
+        amount_main: amountMain,
         date: txDate.getTime(),
         title: note.trim() || null,
         memo: null,
@@ -133,10 +142,26 @@ export default function TransactionForm({
           <input style={styles.input} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </label>
 
-        <label style={styles.label}>
-          Importe
-          <input style={styles.input} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" inputMode="decimal" />
-        </label>
+        <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+          <label style={{ ...styles.label, flex: 1 }}>
+            Importe
+            <input style={styles.input} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" inputMode="decimal" />
+          </label>
+          <select
+            style={{ ...styles.input, width: 80, flexShrink: 0, padding: "11px 6px", textAlign: "center", fontWeight: 600, color: "#544A3C" }}
+            value={currency}
+            onChange={(e) => setCurrency(e.target.value)}
+          >
+            {[settings.main_currency, ...(settings.other_currencies || [])].map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+
+        {needsRate && (
+          <label style={styles.label}>
+            Tasa ({settings.main_currency} → {currency})
+            <input style={styles.input} value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} placeholder="1.00" inputMode="decimal" />
+          </label>
+        )}
 
         {type !== "transfer" && (
           <label style={styles.label}>
@@ -407,6 +432,7 @@ export function ManageCategories({ session, type, categories, reload, showError,
                       onBlur={() => renameCategory(id)}
                       onChangeIcon={(v) => { setIcons((prev) => ({ ...prev, [id]: v })); saveIcon(id, v); }}
                       onRemove={() => setConfirmRemoveId(id)}
+                      isConfirming={confirmRemoveId === id}
                     />
                     {confirmRemoveId === id && (
                       <ConfirmInline
@@ -474,11 +500,11 @@ function NewCategoryForm({ session, type, categories, reload, showError, onCance
   );
 }
 
-function SortableCategoryManageRow({ id, name, icon, onChangeName, onBlur, onChangeIcon, onRemove }) {
+function SortableCategoryManageRow({ id, name, icon, onChangeName, onBlur, onChangeIcon, onRemove, isConfirming }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   return (
-    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 6, padding: "6px 8px 6px 4px" }}>
+    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 6, padding: "6px 8px 6px 4px", borderRadius: isConfirming ? "10px 10px 0 0" : 10 }}>
       <span {...attributes} {...listeners} style={{ display: "flex", alignItems: "center", justifyContent: "center", alignSelf: "stretch", width: 28, color: "#C9BBA0", cursor: "grab", touchAction: "none" }}>
         <Menu size={18} />
       </span>

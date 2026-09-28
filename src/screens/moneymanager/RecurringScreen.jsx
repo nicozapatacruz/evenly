@@ -45,7 +45,7 @@ export default function RecurringScreen({ accounts, recurring, reload, showError
       )}
       {recurring.map((r) => (
         <div key={r.id}>
-          <div style={{ ...styles.shareRow, alignItems: "flex-start", flexDirection: "column", gap: 4 }}>
+          <div style={{ ...styles.shareRow, alignItems: "flex-start", flexDirection: "column", gap: 4, borderRadius: confirmRemoveId === r.id ? "10px 10px 0 0" : 10 }}>
             <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
               <span style={{ fontWeight: 700, color: TYPE_COLOR[r.type] }}>{TYPE_LABEL[r.type]} · {money(r.amount, r.currency)}</span>
               <button style={styles.iconBtnGhost} onClick={() => setConfirmRemoveId(r.id)} aria-label="Borrar recurrencia">

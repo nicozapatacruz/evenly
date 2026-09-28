@@ -331,7 +331,7 @@ function ProfileScreen({ session, onBack, onLogout, onChangePassword, onSave }) 
               confirmLabel="Cerrar sesión"
               onCancel={() => setShowLogoutConfirm(false)}
               onConfirm={onLogout}
-              style={{ margin: 0, width: "100%" }}
+              style={{ width: "100%", borderRadius: 12, borderTop: "1px solid #EBC9BA" }}
             />
           )}
         </Footer>
@@ -493,18 +493,21 @@ function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onO
         disabled={togglingEnabled}
       />
 
-      <label style={styles.label}>
-        Nombre visible
-        <input style={styles.input} value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Tu nombre" />
-      </label>
-      {nameDirty && (
-        <div style={{ display: "flex", gap: 8 }}>
-          <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={() => setDisplayName(session.displayName || "")}>Cancelar</button>
-          <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0 }} onClick={handleSaveName} disabled={savingName}>
-            {savingName ? "Guardando…" : "Guardar"}
-          </button>
-        </div>
-      )}
+      <div>
+        <label style={styles.label}>
+          Nombre visible
+          <input style={{ ...styles.input, borderRadius: nameDirty ? "10px 10px 0 0" : 10 }} value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Tu nombre" />
+        </label>
+        {nameDirty && (
+          <ConfirmInline
+            danger={false}
+            confirmLabel={savingName ? "Guardando…" : "Guardar"}
+            confirmDisabled={savingName}
+            onCancel={() => setDisplayName(session.displayName || "")}
+            onConfirm={handleSaveName}
+          />
+        )}
+      </div>
 
       <label style={styles.label}>
         Grupo por defecto

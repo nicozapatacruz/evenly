@@ -95,27 +95,33 @@ export function IconInput({ value, onChange }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        style={{ ...styles.input, width: 56, textAlign: "center", fontSize: 20, padding: "7px 0", flexShrink: 0, cursor: "pointer" }}
+        style={{
+          ...styles.input, display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 20, flexShrink: 0, cursor: "pointer", padding: 4,
+          appearance: "none", WebkitAppearance: "none", textAlign: "center",
+        }}
         aria-label="Elegir ícono"
       >
-        {value || "—"}
+        {/* "➖" es un emoji real (misma fuente que el resto de los íconos) —
+            centra igual que cualquier ícono elegido, a diferencia del guion
+            de texto plano "—" que usa otra fuente y se ve descentrado. Solo
+            es el marcador visual de "vacío": en la base se sigue guardando
+            null/"". */}
+        <span style={{ lineHeight: 1 }}>{value || "➖"}</span>
       </button>
       {open && (
         <Modal onClose={() => setOpen(false)}>
-          <div style={{ maxHeight: "70vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 14 }}>
-            <button style={{ ...styles.btnSecondary, marginTop: 0 }} onClick={() => { onChange(""); setOpen(false); }}>
-              Sin ícono
-            </button>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {ICON_OPTIONS.map((g) => (
               <div key={g.group}>
-                <p style={{ ...styles.label, marginBottom: 6 }}>{g.group}</p>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                <p style={{ ...styles.label, marginBottom: 4 }}>{g.group}</p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
                   {g.icons.map((ic) => (
                     <button
                       key={ic}
                       onClick={() => { onChange(ic); setOpen(false); }}
                       style={{
-                        width: 40, height: 40, fontSize: 20, borderRadius: 10,
+                        width: 36, height: 36, fontSize: 18, borderRadius: 9,
                         border: ic === value ? "2px solid #C75D3B" : "1px solid #DDD2BE",
                         background: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
                       }}
@@ -127,6 +133,20 @@ export function IconInput({ value, onChange }) {
                 </div>
               </div>
             ))}
+            <div>
+              <p style={{ ...styles.label, marginBottom: 4 }}>Sin ícono</p>
+              <button
+                onClick={() => { onChange(""); setOpen(false); }}
+                style={{
+                  width: 36, height: 36, fontSize: 18, borderRadius: 9,
+                  border: !value ? "2px solid #C75D3B" : "1px solid #DDD2BE",
+                  background: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+                aria-label="Sin ícono"
+              >
+                ➖
+              </button>
+            </div>
           </div>
         </Modal>
       )}

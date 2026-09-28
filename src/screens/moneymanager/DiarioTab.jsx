@@ -2,8 +2,10 @@ import React, { useMemo } from "react";
 import { Plus } from "lucide-react";
 import { styles } from "../../lib/styles.js";
 import { RootHeader, MonthNav, TodayButton } from "../../components/Shared.jsx";
-import { money } from "../../lib/helpers.jsx";
+import { money, measureTextWidth } from "../../lib/helpers.jsx";
 import { toMainCurrency, useMonthTransactions } from "../../lib/moneyManagerData.js";
+
+const DAY_AMOUNTS_FONT = "12.5px system-ui, sans-serif";
 
 const DAY_LABEL = (d) => d.toLocaleDateString("es-ES", { weekday: "short" }).replace(".", "");
 
@@ -17,6 +19,7 @@ const DAY_LABEL = (d) => d.toLocaleDateString("es-ES", { weekday: "short" }).rep
 export default function DiarioTab({ userId, settings, groups, accounts, categories, viewMonth, setViewMonth, onNewTransaction }) {
   const accountName = (id) => accounts.find((a) => a.id === id)?.name || "—";
   const categoryName = (id) => categories.find((c) => c.id === id)?.name || "—";
+  const categoryIcon = (id) => categories.find((c) => c.id === id)?.icon;
 
   // Solo pedimos las transacciones del mes visible (no toda la tabla) — se
   // refetchea solo cuando cambiás de mes.
@@ -24,6 +27,16 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
 
   const monthIncome = monthTx.filter((t) => t.type === "income").reduce((s, t) => s + toMainCurrency(t.amount, t.currency, settings), 0);
   const monthExpense = monthTx.filter((t) => t.type === "expense").reduce((s, t) => s + toMainCurrency(t.amount, t.currency, settings), 0);
+
+  // Ancho reservado para el monto en rojo — el que ocuparía el máximo
+  // "razonable" (999.999,99), para que el gasto de cada día empiece siempre
+  // en el mismo punto y no dependa del ancho del ingreso de ese día en
+  // particular. Si un monto real es más ancho que eso, no se corta — el
+  // minWidth es un piso, no un techo, así que empuja el ingreso a la izquierda.
+  const maxExpenseWidth = useMemo(
+    () => Math.ceil(measureTextWidth(money(999999.99, settings.main_currency), DAY_AMOUNTS_FONT)),
+    [settings.main_currency]
+  );
 
   const byDay = useMemo(() => {
     const map = new Map();
@@ -73,16 +86,21 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
                 <span style={{ fontWeight: 700, fontSize: 13.5 }}>{d.getDate()} <span style={{ fontWeight: 400, color: "#6B6355", textTransform: "capitalize" }}>{DAY_LABEL(d)}</span></span>
                 <span style={{ display: "flex", gap: 10, fontSize: 12.5 }}>
                   <span style={{ color: "#3B6E62" }}>{money(dayIncome, settings.main_currency)}</span>
-                  <span style={{ color: "#B0473A" }}>{money(dayExpense, settings.main_currency)}</span>
+                  <span style={{ color: "#B0473A", minWidth: maxExpenseWidth, textAlign: "right" }}>{money(dayExpense, settings.main_currency)}</span>
                 </span>
               </div>
               {txs.map((t) => (
-                <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14 }}>
-                  <div style={{ minWidth: 0 }}>
-                    <p style={{ margin: 0, fontWeight: 600 }}>{t.type === "transfer" ? (t.title || "Transferencia") : (t.title || categoryName(t.category_id))}</p>
-                    <p style={{ margin: 0, fontSize: 12, color: "#6B6355" }}>
-                      {t.type === "transfer" ? `${accountName(t.account_id)} → ${accountName(t.to_account_id)}` : accountName(t.account_id)}
-                    </p>
+                <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
+                    {t.type !== "transfer" && categoryIcon(t.category_id) && (
+                      <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>{categoryIcon(t.category_id)}</span>
+                    )}
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ margin: 0, fontWeight: 600 }}>{t.type === "transfer" ? (t.title || "Transferencia") : (t.title || categoryName(t.category_id))}</p>
+                      <p style={{ margin: 0, fontSize: 12, color: "#6B6355" }}>
+                        {t.type === "transfer" ? `${accountName(t.account_id)} → ${accountName(t.to_account_id)}` : accountName(t.account_id)}
+                      </p>
+                    </div>
                   </div>
                   <span style={{ color: t.type === "income" ? "#3B6E62" : t.type === "expense" ? "#B0473A" : "#4A6FA5", fontWeight: 600, flexShrink: 0 }}>
                     {money(t.amount, t.currency)}

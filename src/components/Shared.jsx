@@ -80,6 +80,31 @@ export function TodayButton({ viewMonth, setViewMonth }) {
   );
 }
 
+// Input de ícono (categorías y cuentas de Money Manager) — un solo emoji,
+// opcional. Se escribe con el teclado de emoji nativo (Mac/iPhone ya lo
+// traen), no hace falta un picker propio. Si pegan/escriben más de un emoji,
+// se queda solo con el primero — así nunca queda ambigüedad de "cuál es el
+// ícono" si alguien pone 2 o 3 sin querer.
+export function IconInput({ value, onChange }) {
+  const handleChange = (e) => {
+    const raw = e.target.value;
+    if (!raw) { onChange(""); return; }
+    const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+    const first = [...segmenter.segment(raw)][0]?.segment || "";
+    onChange(/\p{Extended_Pictographic}/u.test(first) ? first : "");
+  };
+  return (
+    <input
+      style={{ ...styles.input, width: 52, textAlign: "center", fontSize: 20, padding: "7px 0", flexShrink: 0 }}
+      value={value || ""}
+      onChange={handleChange}
+      placeholder="🙂"
+      maxLength={8}
+      aria-label="Ícono (opcional)"
+    />
+  );
+}
+
 // Regla de fricción para acciones destructivas (a propósito, dos niveles):
 // 1) Confirmación de un clic (este componente): para acciones de alcance acotado
 //    y que no borran historial compartido — borrar un gasto, quitar un miembro,

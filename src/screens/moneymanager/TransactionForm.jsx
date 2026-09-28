@@ -5,7 +5,7 @@ import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } 
 import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, Footer, ConfirmInline } from "../../components/Shared.jsx";
+import { TopBar, Footer, ConfirmInline, IconInput } from "../../components/Shared.jsx";
 import { parseAmountInput, todayInputValue } from "../../lib/helpers.jsx";
 import { RECURRING_FREQUENCIES, nextOccurrence } from "../../lib/moneyManagerData.js";
 
@@ -310,12 +310,14 @@ export function ManageCategories({ session, type, categories, reload, showError,
   const [creating, setCreating] = useState(false);
   const typeCategories = categories.filter((c) => c.type === type);
   const [names, setNames] = useState(() => Object.fromEntries(typeCategories.map((c) => [c.id, c.name])));
+  const [icons, setIcons] = useState(() => Object.fromEntries(typeCategories.map((c) => [c.id, c.icon])));
   const [confirmRemoveId, setConfirmRemoveId] = useState(null);
   const [order, setOrder] = useState(() => typeCategories.map((c) => c.id));
 
   useEffect(() => {
     setOrder(typeCategories.map((c) => c.id));
     setNames(Object.fromEntries(typeCategories.map((c) => [c.id, c.name])));
+    setIcons(Object.fromEntries(typeCategories.map((c) => [c.id, c.icon])));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categories, type]);
 
@@ -345,6 +347,16 @@ export function ManageCategories({ session, type, categories, reload, showError,
       if (error) throw error;
       await reload();
     } catch (e) { showError(`No se pudo renombrar: ${e?.message || e}`); }
+  };
+
+  const saveIcon = async (id, icon) => {
+    const cat = typeCategories.find((c) => c.id === id);
+    if ((icon || null) === (cat.icon || null)) return;
+    try {
+      const { error } = await supabase.from("mm_categories").update({ icon: icon || null }).eq("id", id);
+      if (error) throw error;
+      await reload();
+    } catch (e) { showError(`No se pudo guardar el ícono: ${e?.message || e}`); }
   };
 
   const removeCategory = async (id) => {
@@ -389,8 +401,10 @@ export function ManageCategories({ session, type, categories, reload, showError,
                     <SortableCategoryManageRow
                       id={id}
                       name={names[id] ?? c.name}
+                      icon={icons[id] ?? c.icon}
                       onChangeName={(v) => setNames((prev) => ({ ...prev, [id]: v }))}
                       onBlur={() => renameCategory(id)}
+                      onChangeIcon={(v) => { setIcons((prev) => ({ ...prev, [id]: v })); saveIcon(id, v); }}
                       onRemove={() => setConfirmRemoveId(id)}
                     />
                     {confirmRemoveId === id && (
@@ -416,6 +430,7 @@ export function ManageCategories({ session, type, categories, reload, showError,
 // NewGroupForm/NewAccountForm — reemplaza el input+botón sueltos de abajo.
 function NewCategoryForm({ session, type, categories, reload, showError, onCancel, onCreated }) {
   const [name, setName] = useState("");
+  const [icon, setIcon] = useState("");
   const [saving, setSaving] = useState(false);
   const canSave = !!name.trim();
 
@@ -424,7 +439,7 @@ function NewCategoryForm({ session, type, categories, reload, showError, onCance
     setSaving(true);
     try {
       const { error } = await supabase.from("mm_categories").insert({
-        user_id: session.userId, type, name: name.trim(), sort_order: categories.filter((c) => c.type === type).length,
+        user_id: session.userId, type, name: name.trim(), icon: icon || null, sort_order: categories.filter((c) => c.type === type).length,
       });
       if (error) throw error;
       await reload();
@@ -437,10 +452,16 @@ function NewCategoryForm({ session, type, categories, reload, showError, onCance
     <div style={styles.screen}>
       <TopBar title="Nueva categoría" onBack={onCancel} />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        <label style={styles.label}>
-          Nombre
-          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre" autoFocus onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
-        </label>
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+          <label style={{ ...styles.label, flex: 1 }}>
+            Nombre
+            <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre" autoFocus onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
+          </label>
+          <label style={styles.label}>
+            Ícono
+            <IconInput value={icon} onChange={setIcon} />
+          </label>
+        </div>
       </div>
       <Footer>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
@@ -452,7 +473,7 @@ function NewCategoryForm({ session, type, categories, reload, showError, onCance
   );
 }
 
-function SortableCategoryManageRow({ id, name, onChangeName, onBlur, onRemove }) {
+function SortableCategoryManageRow({ id, name, icon, onChangeName, onBlur, onChangeIcon, onRemove }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   return (
@@ -460,6 +481,7 @@ function SortableCategoryManageRow({ id, name, onChangeName, onBlur, onRemove })
       <span {...attributes} {...listeners} style={{ display: "flex", alignItems: "center", justifyContent: "center", alignSelf: "stretch", width: 28, color: "#C9BBA0", cursor: "grab", touchAction: "none" }}>
         <Menu size={18} />
       </span>
+      <IconInput value={icon} onChange={onChangeIcon} />
       <input style={{ ...styles.input, flex: 1, padding: "7px 10px", fontSize: 14 }} value={name} onChange={(e) => onChangeName(e.target.value)} onBlur={onBlur} />
       <button style={styles.iconBtnGhost} onClick={onRemove} aria-label="Borrar categoría">
         <X size={16} />

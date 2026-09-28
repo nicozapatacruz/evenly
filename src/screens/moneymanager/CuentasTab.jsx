@@ -5,7 +5,7 @@ import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } 
 import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
-import { RootHeader, TopBar, ConfirmInline, Footer } from "../../components/Shared.jsx";
+import { RootHeader, TopBar, ConfirmInline, Footer, IconInput } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
 import { accountBalance, groupBalance } from "../../lib/moneyManagerData.js";
 
@@ -82,9 +82,12 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
                 <span style={{ fontWeight: 700, fontSize: 13.5, fontFamily: "system-ui, sans-serif", color: balanceColor(gBalance) }}>{money(gBalance, settings.main_currency)}</span>
               </div>
               {visibleAccounts.map((a) => (
-                <div key={a.id} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14 }}>
-                  <span>{a.name}</span>
-                  <span style={{ color: balanceColor(accountBalance(a.id, accountTotals, settings)) }}>{money(accountBalance(a.id, accountTotals, settings), settings.main_currency)}</span>
+                <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14 }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                    {a.icon && <span style={{ fontSize: 16, lineHeight: 1 }}>{a.icon}</span>}
+                    {a.name}
+                  </span>
+                  <span style={{ color: balanceColor(accountBalance(a.id, accountTotals, settings)), flexShrink: 0 }}>{money(accountBalance(a.id, accountTotals, settings), settings.main_currency)}</span>
                 </div>
               ))}
             </div>
@@ -347,6 +350,7 @@ export function ManageAllAccounts({ session, groups, accounts, reload, showError
 function NewAccountForm({ session, groups, defaultGroupId, reload, showError, onCancel, onCreated }) {
   const [groupId, setGroupId] = useState(defaultGroupId || groups[0]?.id || "");
   const [name, setName] = useState("");
+  const [icon, setIcon] = useState("");
   const [saving, setSaving] = useState(false);
 
   const canSave = !!groupId && !!name.trim();
@@ -356,7 +360,7 @@ function NewAccountForm({ session, groups, defaultGroupId, reload, showError, on
     setSaving(true);
     try {
       const { error } = await supabase.from("mm_accounts").insert({
-        user_id: session.userId, group_id: groupId, name: name.trim(), sort_order: 999,
+        user_id: session.userId, group_id: groupId, name: name.trim(), icon: icon || null, sort_order: 999,
       });
       if (error) throw error;
       await reload();
@@ -377,10 +381,16 @@ function NewAccountForm({ session, groups, defaultGroupId, reload, showError, on
             </select>
           </label>
         )}
-        <label style={styles.label}>
-          Nombre
-          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre (ej: Saldo, Ahorros)" autoFocus onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
-        </label>
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+          <label style={{ ...styles.label, flex: 1 }}>
+            Nombre
+            <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre (ej: Saldo, Ahorros)" autoFocus onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
+          </label>
+          <label style={styles.label}>
+            Ícono
+            <IconInput value={icon} onChange={setIcon} />
+          </label>
+        </div>
       </div>
       <Footer>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
@@ -400,12 +410,14 @@ function NewAccountForm({ session, groups, defaultGroupId, reload, showError, on
 function AccountGroupEditor({ group, accounts, reload, showError }) {
   const groupAccounts = accounts.filter((a) => a.group_id === group.id);
   const [names, setNames] = useState(() => Object.fromEntries(groupAccounts.map((a) => [a.id, a.name])));
+  const [icons, setIcons] = useState(() => Object.fromEntries(groupAccounts.map((a) => [a.id, a.icon])));
   const [confirmRemoveId, setConfirmRemoveId] = useState(null);
   const [order, setOrder] = useState(() => groupAccounts.map((a) => a.id));
 
   useEffect(() => {
     setOrder(groupAccounts.map((a) => a.id));
     setNames(Object.fromEntries(groupAccounts.map((a) => [a.id, a.name])));
+    setIcons(Object.fromEntries(groupAccounts.map((a) => [a.id, a.icon])));
   }, [accounts, group.id]);
 
   const dndSensors = useSensors(
@@ -434,6 +446,16 @@ function AccountGroupEditor({ group, accounts, reload, showError }) {
       if (error) throw error;
       await reload();
     } catch (e) { showError(`No se pudo renombrar: ${e?.message || e}`); }
+  };
+
+  const saveIcon = async (id, icon) => {
+    const acc = groupAccounts.find((a) => a.id === id);
+    if ((icon || null) === (acc.icon || null)) return;
+    try {
+      const { error } = await supabase.from("mm_accounts").update({ icon: icon || null }).eq("id", id);
+      if (error) throw error;
+      await reload();
+    } catch (e) { showError(`No se pudo guardar el ícono: ${e?.message || e}`); }
   };
 
   const toggleHidden = async (id) => {
@@ -467,9 +489,11 @@ function AccountGroupEditor({ group, accounts, reload, showError }) {
                   <SortableAccountRow
                     id={id}
                     name={names[id] ?? a.name}
+                    icon={icons[id] ?? a.icon}
                     hidden={a.hidden}
                     onChangeName={(v) => setNames((prev) => ({ ...prev, [id]: v }))}
                     onBlur={() => renameAccount(id)}
+                    onChangeIcon={(v) => { setIcons((prev) => ({ ...prev, [id]: v })); saveIcon(id, v); }}
                     onToggleHidden={() => toggleHidden(id)}
                     onRemove={() => setConfirmRemoveId(id)}
                   />
@@ -491,7 +515,7 @@ function AccountGroupEditor({ group, accounts, reload, showError }) {
   );
 }
 
-function SortableAccountRow({ id, name, hidden, onChangeName, onBlur, onToggleHidden, onRemove }) {
+function SortableAccountRow({ id, name, icon, hidden, onChangeName, onBlur, onChangeIcon, onToggleHidden, onRemove }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   return (
@@ -499,6 +523,7 @@ function SortableAccountRow({ id, name, hidden, onChangeName, onBlur, onToggleHi
       <span {...attributes} {...listeners} style={{ display: "flex", alignItems: "center", justifyContent: "center", alignSelf: "stretch", width: 28, color: "#C9BBA0", cursor: "grab", touchAction: "none" }}>
         <Menu size={18} />
       </span>
+      <IconInput value={icon} onChange={onChangeIcon} />
       <input style={{ ...styles.input, flex: 1, padding: "7px 10px", fontSize: 14, opacity: hidden ? 0.5 : 1 }} value={name} onChange={(e) => onChangeName(e.target.value)} onBlur={onBlur} />
       <button style={styles.iconBtnGhost} onClick={onToggleHidden} aria-label={hidden ? "Mostrar cuenta" : "Ocultar cuenta"}>
         {hidden ? <EyeOff size={16} /> : <Eye size={16} />}

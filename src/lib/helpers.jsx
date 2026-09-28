@@ -37,6 +37,19 @@ export const money = (n, currency = "USD") => {
   return `${n < 0 ? "-" : ""}${sym}${fixed}`;
 };
 
+// Mide el ancho real (en px) que ocupa un texto con una fuente dada, usando
+// un canvas fuera de pantalla — para reservar espacio de columna sin adivinar
+// un número mágico (ej. alinear ingreso/gasto según el monto más ancho posible).
+let measureCtx = null;
+export function measureTextWidth(text, font) {
+  if (!measureCtx) {
+    if (typeof document === "undefined") return 0;
+    measureCtx = document.createElement("canvas").getContext("2d");
+  }
+  measureCtx.font = font;
+  return measureCtx.measureText(text).width;
+}
+
 // Convierte lo que el usuario escribió en un input de monto a número.
 // money() muestra los montos en formato es-ES (punto = miles, coma = decimal), así que si el
 // texto trae una coma se asume ese formato y se limpian los puntos primero — si solo se

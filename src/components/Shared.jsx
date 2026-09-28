@@ -88,7 +88,7 @@ export function TodayButton({ viewMonth, setViewMonth }) {
 // `<select>` nativo (funcionaba pero ocupaba más lista que grilla) — la
 // grilla ahorra espacio y se ve todo de un vistazo, sin depender de ningún
 // teclado del sistema.
-export function IconInput({ value, onChange }) {
+export function IconInput({ value, onChange, large = false }) {
   const [open, setOpen] = useState(false);
   const [custom, setCustom] = useState("");
 
@@ -114,7 +114,7 @@ export function IconInput({ value, onChange }) {
         onClick={() => setOpen(true)}
         style={{
           ...styles.input, display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 20, flexShrink: 0, cursor: "pointer", padding: 4,
+          fontSize: 20, flexShrink: 0, cursor: "pointer", padding: large ? "11px 13px" : 4,
           appearance: "none", WebkitAppearance: "none", textAlign: "center",
         }}
         aria-label="Elegir ícono"
@@ -301,7 +301,10 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir" })
                   {g.label}
                 </p>
               )}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)" }}>
+              {/* gap+background en vez de borderRight/borderBottom por celda:
+                  así no queda un borde doble justo en el borde de afuera de
+                  la grilla (se veía como un efecto raro ahí). */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1, background: "#F0EBE2" }}>
                 {g.items.map((it) => (
                   <button
                     type="button"
@@ -309,8 +312,7 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir" })
                     onClick={() => { onChange(it.value); setOpen(false); }}
                     style={{
                       display: "flex", alignItems: "center", gap: 6, padding: "10px 8px", fontSize: 12.5, fontFamily: "system-ui, sans-serif",
-                      border: "none", borderRight: "1px solid #F0EBE2", borderBottom: "1px solid #F0EBE2",
-                      background: it.value === value ? "#FBEDE7" : "#fff", color: "#2B2620", textAlign: "left", cursor: "pointer", minWidth: 0,
+                      border: "none", background: it.value === value ? "#FBEDE7" : "#fff", color: "#2B2620", textAlign: "left", cursor: "pointer", minWidth: 0,
                     }}
                   >
                     {it.icon && <span style={{ flexShrink: 0 }}>{it.icon}</span>}
@@ -320,7 +322,7 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir" })
                 {/* Celdas vacías al final de la última fila — mismo gris que
                     usa la app original en vez de dejarlas en blanco. */}
                 {Array.from({ length: (3 - (g.items.length % 3)) % 3 }).map((_, i) => (
-                  <div key={`empty-${i}`} style={{ background: "rgba(221, 210, 190, 0.5)", borderRight: "1px solid #F0EBE2", borderBottom: "1px solid #F0EBE2" }} />
+                  <div key={`empty-${i}`} style={{ background: "rgba(221, 210, 190, 0.3)" }} />
                 ))}
               </div>
             </div>

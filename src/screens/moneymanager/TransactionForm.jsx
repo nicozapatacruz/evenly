@@ -530,14 +530,14 @@ function NewCategoryForm({ session, type, categories, reload, showError, onCance
     <div style={styles.screen}>
       <TopBar title="Nueva categoría" onBack={onCancel} />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+        <div style={{ display: "flex", gap: 8 }}>
+          <label style={styles.label}>
+            Ícono
+            <IconInput value={icon} onChange={setIcon} large />
+          </label>
           <label style={{ ...styles.label, flex: 1 }}>
             Nombre
             <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre" onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
-          </label>
-          <label style={styles.label}>
-            Ícono
-            <IconInput value={icon} onChange={setIcon} />
           </label>
         </div>
       </div>

@@ -101,7 +101,7 @@ export default function CurrencySettingsScreen({ session, settings, reload, show
               value=""
               onChange={(e) => { if (e.target.value) setOtherCurrencies((prev) => [...prev, e.target.value]); }}
             >
-              <option value="">+ Agregar moneda</option>
+              <option value="" disabled hidden>+ Agregar moneda</option>
               {availableToAdd.map((c) => <option key={c} value={c}>{c} ({CURRENCIES[c].symbol})</option>)}
             </select>
           )}

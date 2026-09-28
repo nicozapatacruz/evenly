@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { X, Menu, Plus, Pencil } from "lucide-react";
+import { X, Menu, Plus, Pencil, ArrowLeftRight } from "lucide-react";
 import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, Footer, ConfirmInline, IconInput } from "../../components/Shared.jsx";
-import { parseAmountInput, todayInputValue, dateInputValue } from "../../lib/helpers.jsx";
+import { parseAmountInput, todayInputValue, dateInputValue, money } from "../../lib/helpers.jsx";
 import { RECURRING_FREQUENCIES, nextOccurrence, computeAmountMain } from "../../lib/moneyManagerData.js";
 
 const TYPE_INFO = {
@@ -33,6 +33,10 @@ export default function TransactionForm({
   const [amount, setAmount] = useState(editingTransaction ? String(editingTransaction.amount) : "");
   const [currency, setCurrency] = useState(editingTransaction?.currency || settings.main_currency);
   const [exchangeRate, setExchangeRate] = useState(editingTransaction?.exchange_rate ? String(editingTransaction.exchange_rate) : "");
+  // La tasa se guarda siempre como "cuántas {moneda de la transacción} vale 1
+  // {moneda principal}" (mismo formato de siempre) — este toggle solo cambia
+  // qué lado se le pide escribir al usuario; se invierte antes de guardar.
+  const [rateFlipped, setRateFlipped] = useState(false);
   const [categoryId, setCategoryId] = useState(editingTransaction?.category_id || "");
   const [accountId, setAccountId] = useState(editingTransaction?.account_id || accounts[0]?.id || "");
   const [toAccountId, setToAccountId] = useState(editingTransaction?.to_account_id || "");
@@ -68,8 +72,9 @@ export default function TransactionForm({
   const numericAmount = parseAmountInput(amount);
   const validAmount = !isNaN(numericAmount) && numericAmount > 0;
   const numericRate = parseAmountInput(exchangeRate);
+  const canonicalRate = rateFlipped && numericRate ? 1 / numericRate : numericRate;
   const needsRate = currency !== settings.main_currency;
-  const validRate = !needsRate || (!isNaN(numericRate) && numericRate > 0);
+  const validRate = !needsRate || (!isNaN(canonicalRate) && canonicalRate > 0);
 
   const freq = RECURRING_FREQUENCIES.find((f) => f.value === freqValue);
   const customInterval = parseInt(freqInterval, 10);
@@ -84,7 +89,7 @@ export default function TransactionForm({
     setSaving(true);
     try {
       const txDate = new Date(date + "T12:00:00");
-      const rate = needsRate ? numericRate : null;
+      const rate = needsRate ? canonicalRate : null;
       const amountMain = computeAmountMain(numericAmount, currency, settings.main_currency, rate);
       let recurring = null;
       if (recurringOpen) {
@@ -150,7 +155,7 @@ export default function TransactionForm({
           <select
             style={{ ...styles.input, width: 80, flexShrink: 0, padding: "11px 6px", textAlign: "center", fontWeight: 600, color: "#544A3C" }}
             value={currency}
-            onChange={(e) => setCurrency(e.target.value)}
+            onChange={(e) => { setCurrency(e.target.value); setRateFlipped(false); }}
           >
             {[settings.main_currency, ...(settings.other_currencies || [])].map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
@@ -158,9 +163,37 @@ export default function TransactionForm({
 
         {needsRate && (
           <label style={styles.label}>
-            Tasa ({settings.main_currency} → {currency})
-            <input style={styles.input} value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} placeholder="1.00" inputMode="decimal" />
+            1 {rateFlipped ? currency : settings.main_currency} equivale a
+            <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ position: "relative", flex: 1 }}>
+                <input style={{ ...styles.input, width: "100%", paddingRight: 50 }} value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} placeholder="1.00" inputMode="decimal" />
+                <span style={{ position: "absolute", top: "50%", right: 13, transform: "translateY(-50%)", fontFamily: "system-ui, sans-serif", fontSize: 14, fontWeight: 600, color: "#544A3C", pointerEvents: "none" }}>
+                  {rateFlipped ? settings.main_currency : currency}
+                </span>
+              </div>
+              <button
+                type="button"
+                style={styles.btnSecondarySmall}
+                onClick={() => {
+                  setRateFlipped((f) => !f);
+                  setExchangeRate((prev) => {
+                    const n = parseAmountInput(prev);
+                    if (!prev || isNaN(n) || n <= 0) return "";
+                    return String(Number((1 / n).toPrecision(10)));
+                  });
+                }}
+                aria-label="Invertir la tasa"
+              >
+                <ArrowLeftRight size={16} />
+              </button>
+            </div>
           </label>
+        )}
+
+        {needsRate && validAmount && validRate && (
+          <p style={{ ...styles.muted, padding: 0, fontSize: 12.5, margin: 0 }}>
+            {money(numericAmount, currency)} equivalen a {money(numericAmount / canonicalRate, settings.main_currency)}.
+          </p>
         )}
 
         {type !== "transfer" && (

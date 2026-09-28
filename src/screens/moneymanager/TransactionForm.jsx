@@ -69,6 +69,12 @@ export default function TransactionForm({
     );
   }
 
+  // Si la transacción ya tenía una moneda que después se sacó de "Otras
+  // monedas" en Ajustes, igual la mostramos acá — si no, el select se queda
+  // sin esa opción y no hay forma de mantenerla al editar.
+  const currencyOptions = [settings.main_currency, ...(settings.other_currencies || [])];
+  if (!currencyOptions.includes(currency)) currencyOptions.push(currency);
+
   const numericAmount = parseAmountInput(amount);
   const validAmount = !isNaN(numericAmount) && numericAmount > 0;
   const numericRate = parseAmountInput(exchangeRate);
@@ -157,7 +163,7 @@ export default function TransactionForm({
             value={currency}
             onChange={(e) => { setCurrency(e.target.value); setRateFlipped(false); }}
           >
-            {[settings.main_currency, ...(settings.other_currencies || [])].map((c) => <option key={c} value={c}>{c}</option>)}
+            {currencyOptions.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
 

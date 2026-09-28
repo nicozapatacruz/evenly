@@ -5,7 +5,7 @@ import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } 
 import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, Footer } from "../../components/Shared.jsx";
+import { TopBar, Footer, ConfirmInline } from "../../components/Shared.jsx";
 import { CURRENCIES, CURRENCY_LIST } from "../../lib/helpers.jsx";
 
 /* =========================================================================
@@ -20,6 +20,7 @@ export default function CurrencySettingsScreen({ session, settings, reload, show
   const [mainCurrency, setMainCurrency] = useState(settings.main_currency);
   const [otherCurrencies, setOtherCurrencies] = useState(() => (settings.other_currencies || []).filter((c) => c !== settings.main_currency));
   const [saving, setSaving] = useState(false);
+  const [confirmRemoveCode, setConfirmRemoveCode] = useState(null);
 
   // Si cambiás la principal a una moneda que ya estaba en "otras", se saca
   // de ahí sola (no tiene sentido que esté en las dos listas a la vez).
@@ -78,7 +79,17 @@ export default function CurrencySettingsScreen({ session, settings, reload, show
             <SortableContext items={otherCurrencies} strategy={verticalListSortingStrategy}>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {otherCurrencies.map((c) => (
-                  <SortableCurrencyRow key={c} code={c} onRemove={() => setOtherCurrencies((prev) => prev.filter((x) => x !== c))} />
+                  <div key={c}>
+                    <SortableCurrencyRow code={c} isConfirming={confirmRemoveCode === c} onRemove={() => setConfirmRemoveCode(c)} />
+                    {confirmRemoveCode === c && (
+                      <ConfirmInline
+                        message={`¿Quitar ${c} de la lista?`}
+                        confirmLabel="Quitar"
+                        onCancel={() => setConfirmRemoveCode(null)}
+                        onConfirm={() => { setOtherCurrencies((prev) => prev.filter((x) => x !== c)); setConfirmRemoveCode(null); }}
+                      />
+                    )}
+                  </div>
                 ))}
               </div>
             </SortableContext>
@@ -106,11 +117,11 @@ export default function CurrencySettingsScreen({ session, settings, reload, show
   );
 }
 
-function SortableCurrencyRow({ code, onRemove }) {
+function SortableCurrencyRow({ code, isConfirming, onRemove }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: code });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   return (
-    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 6, padding: "6px 8px 6px 4px" }}>
+    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 6, padding: "6px 8px 6px 4px", borderRadius: isConfirming ? "10px 10px 0 0" : 10 }}>
       <span {...attributes} {...listeners} style={{ display: "flex", alignItems: "center", justifyContent: "center", alignSelf: "stretch", width: 28, color: "#C9BBA0", cursor: "grab", touchAction: "none" }}>
         <Menu size={18} />
       </span>

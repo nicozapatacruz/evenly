@@ -1846,6 +1846,7 @@ function InviteScreen({ group, session, groupInvites = [], onBack, onSend, onCan
   const [targetUsername, setTargetUsername] = useState("");
   const [sending, setSending] = useState(false);
   const [cancelingId, setCancelingId] = useState(null);
+  const [confirmCancelId, setConfirmCancelId] = useState(null);
 
   const invitableMembers = group.members.filter(m => !m.linkedUserId);
   const isSelfInvite = !!targetUsername.trim() && targetUsername.trim().toLowerCase() === session.username;
@@ -1878,42 +1879,53 @@ function InviteScreen({ group, session, groupInvites = [], onBack, onSend, onCan
           {invitableMembers.map(m => {
             const pending = groupInvites.find(i => i.memberId === m.id);
             const isSelected = selectedMemberId === m.id;
+            const isConfirming = confirmCancelId === m.id;
             return (
-              <button key={m.id}
-                onClick={() => !pending && setSelectedMemberId(m.id)}
-                style={{ ...styles.shareRow, textAlign: "left", cursor: pending ? "default" : "pointer", borderColor: isSelected ? "#C75D3B" : pending ? "#CFE2D7" : "#ECE3D3", background: isSelected ? "#C75D3B0d" : pending ? "#EAF1ED" : "#fff" }}
-              >
-                <span style={{ ...styles.avatar, background: colorFor(m.id) }}>{initials(m.name)}</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ display: "block" }}>{m.name}</span>
-                  {pending && (
-                    <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#3B6E62", fontFamily: "system-ui, sans-serif" }}>
-                      <Send size={10} /> Invitación enviada a @{pending.username}
-                    </span>
-                  )}
-                </div>
-                <span style={{ width: 28, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  {isSelected && <Check size={16} color="#C75D3B" />}
-                  {pending && (
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        setCancelingId(m.id);
-                        await onCancelInvite(m.id);
-                        setCancelingId(null);
-                      }}
-                      disabled={cancelingId === m.id}
-                      style={{ width: 28, height: 28, borderRadius: "50%", border: "none", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: cancelingId === m.id ? "default" : "pointer", color: "#6B6355", opacity: cancelingId === m.id ? 0.6 : 1 }}
-                      aria-label="Cancelar invitación"
-                    >
-                      {cancelingId === m.id
-                        ? <RefreshCw size={14} className="spin" />
-                        : <X size={14} />
-                      }
-                    </button>
-                  )}
-                </span>
-              </button>
+              <div key={m.id}>
+                <button
+                  onClick={() => !pending && setSelectedMemberId(m.id)}
+                  style={{ ...styles.shareRow, textAlign: "left", cursor: pending ? "default" : "pointer", borderColor: isSelected ? "#C75D3B" : pending ? "#CFE2D7" : "#ECE3D3", background: isSelected ? "#C75D3B0d" : pending ? "#EAF1ED" : "#fff", borderRadius: isConfirming ? "10px 10px 0 0" : 10 }}
+                >
+                  <span style={{ ...styles.avatar, background: colorFor(m.id) }}>{initials(m.name)}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: "block" }}>{m.name}</span>
+                    {pending && (
+                      <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#3B6E62", fontFamily: "system-ui, sans-serif" }}>
+                        <Send size={10} /> Invitación enviada a @{pending.username}
+                      </span>
+                    )}
+                  </div>
+                  <span style={{ width: 28, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    {isSelected && <Check size={16} color="#C75D3B" />}
+                    {pending && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setConfirmCancelId(m.id); }}
+                        disabled={cancelingId === m.id}
+                        style={{ width: 28, height: 28, borderRadius: "50%", border: "none", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: cancelingId === m.id ? "default" : "pointer", color: "#6B6355", opacity: cancelingId === m.id ? 0.6 : 1 }}
+                        aria-label="Cancelar invitación"
+                      >
+                        {cancelingId === m.id
+                          ? <RefreshCw size={14} className="spin" />
+                          : <X size={14} />
+                        }
+                      </button>
+                    )}
+                  </span>
+                </button>
+                {isConfirming && (
+                  <ConfirmInline
+                    message="¿Cancelar esta invitación?"
+                    confirmLabel="Sí, cancelar"
+                    onCancel={() => setConfirmCancelId(null)}
+                    onConfirm={async () => {
+                      setConfirmCancelId(null);
+                      setCancelingId(m.id);
+                      await onCancelInvite(m.id);
+                      setCancelingId(null);
+                    }}
+                  />
+                )}
+              </div>
             );
           })}
         </div>

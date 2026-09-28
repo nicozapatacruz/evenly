@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ArrowLeft, Camera, ChevronLeft, ChevronRight, User } from "lucide-react";
+import { ArrowLeft, Camera, ChevronLeft, ChevronRight, User, X } from "lucide-react";
 import { styles } from "../lib/styles.js";
 import { ICON_OPTIONS } from "../lib/moneyManagerData.js";
 
@@ -90,10 +90,27 @@ export function TodayButton({ viewMonth, setViewMonth }) {
 // teclado del sistema.
 export function IconInput({ value, onChange }) {
   const [open, setOpen] = useState(false);
+  const [custom, setCustom] = useState("");
+
+  // El input queda libre mientras se escribe (sin transformar en cada tecla —
+  // eso rompía el borrado con backspace). La limpieza (quedarse con el primer
+  // emoji real, por si pegan varios) se hace recién al confirmar.
+  const applyCustom = () => {
+    const trimmed = custom.trim();
+    if (!trimmed) return;
+    const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+    const first = [...segmenter.segment(trimmed)][0]?.segment || "";
+    if (!/\p{Extended_Pictographic}/u.test(first)) return;
+    onChange(first);
+    setCustom("");
+    setOpen(false);
+  };
+
   return (
     <>
       <button
         type="button"
+        className="icon-inset-focus"
         onClick={() => setOpen(true)}
         style={{
           ...styles.input, display: "flex", alignItems: "center", justifyContent: "center",
@@ -110,7 +127,7 @@ export function IconInput({ value, onChange }) {
         <span style={{ lineHeight: 1 }}>{value || "➖"}</span>
       </button>
       {open && (
-        <Modal onClose={() => setOpen(false)}>
+        <Modal title="Elegir ícono" onClose={() => setOpen(false)}>
           <div className="no-scrollbar" style={{ maxHeight: "70vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 14 }}>
             <button style={{ ...styles.btnSecondary, marginTop: 0 }} onClick={() => { onChange(""); setOpen(false); }}>
               Sin ícono
@@ -136,6 +153,30 @@ export function IconInput({ value, onChange }) {
                 </div>
               </div>
             ))}
+            <div>
+              <p style={{ ...styles.label, marginBottom: 6 }}>Personalizado</p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  className="icon-inset-focus"
+                  style={{ ...styles.input, width: 56, textAlign: "center", fontSize: 20, flexShrink: 0 }}
+                  value={custom}
+                  onChange={(e) => setCustom(e.target.value)}
+                  onBeforeInput={(e) => {
+                    // Bloquea la inserción de texto que no sea emoji (backspace/borrar
+                    // no dispara esto — solo pasa por acá cuando se INSERTA contenido,
+                    // así que no interfiere con el borrado).
+                    if (e.data && !/\p{Extended_Pictographic}/u.test(e.data)) e.preventDefault();
+                  }}
+                  onKeyDown={(e) => e.key === "Enter" && applyCustom()}
+                  placeholder="😀"
+                  aria-label="Ícono personalizado"
+                />
+                <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0, opacity: custom ? 1 : 0.5 }} onClick={applyCustom} disabled={!custom}>
+                  Usar este
+                </button>
+              </div>
+              <p style={{ ...styles.muted, padding: 0, fontSize: 12.5, margin: "6px 0 0" }}>Solo se aceptan emojis.</p>
+            </div>
           </div>
         </Modal>
       )}
@@ -161,11 +202,19 @@ export function ConfirmInline({ message, confirmLabel = "Confirmar", onCancel, o
   );
 }
 
-// Popup centrado con fondo oscuro — para confirmaciones fuertes (ej. borrar un grupo entero)
-export function Modal({ onClose, children }) {
+// Popup centrado con fondo oscuro — para confirmaciones fuertes (ej. borrar un grupo entero).
+// El título va en la misma fila que la X (ahorra alto en vez de reservar
+// espacio arriba para la X y después repetir el título como texto aparte).
+export function Modal({ title, onClose, children }) {
   return (
     <div style={styles.modalBackdrop} onClick={onClose}>
       <div style={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
+          <p style={{ margin: 0, fontSize: 15, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#2B2620" }}>{title}</p>
+          <button style={{ ...styles.iconBtnGhost, flexShrink: 0 }} onClick={onClose} aria-label="Cerrar">
+            <X size={18} />
+          </button>
+        </div>
         {children}
       </div>
     </div>

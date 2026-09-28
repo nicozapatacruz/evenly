@@ -774,10 +774,7 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
       {editingCatId && (() => {
         const editingCat = categories.find((c) => c.id === editingCatId);
         return (
-          <Modal onClose={() => setEditingCatId(null)}>
-            <p style={{ margin: "0 0 12px", fontSize: 15, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#2B2620" }}>
-              Elegir ícono
-            </p>
+          <Modal title="Elegir ícono" onClose={() => setEditingCatId(null)}>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {ICON_KEYS.map((key) => {
                 const usedByOther = categories.some((c) => c.id !== editingCatId && c.iconKey === key);
@@ -807,10 +804,7 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
       </Footer>
 
       {showDeleteModal && (
-        <Modal onClose={() => { setShowDeleteModal(false); setDeleteConfirmText(""); }}>
-          <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#2B2620" }}>
-            ¿Borrar "{group.name}"?
-          </p>
+        <Modal title={`¿Borrar "${group.name}"?`} onClose={() => { setShowDeleteModal(false); setDeleteConfirmText(""); }}>
           <p style={{ margin: "0 0 14px", fontSize: 14, fontFamily: "system-ui, sans-serif", color: "#6B6355" }}>
             Esta acción no se puede deshacer.
           </p>

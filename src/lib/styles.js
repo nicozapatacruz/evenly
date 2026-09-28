@@ -6,6 +6,12 @@ export const globalCss = `
     outline: 2px solid #C75D3B;
     outline-offset: 2px;
   }
+  /* El foco normal se dibuja hacia afuera (outline-offset positivo), pero en
+     cajas chicas pegadas a un borde (ej. el input de ícono personalizado)
+     eso se ve como si el borde "se saliera" — acá se dibuja hacia adentro. */
+  .icon-inset-focus:focus {
+    outline-offset: -2px;
+  }
   button { font-family: inherit; cursor: pointer; color: inherit; }
   select { appearance: none; -webkit-appearance: none; background-image: none; }
   /* iOS Safari ignora font-size/height inline en <input type="date">; hay que
@@ -65,6 +71,11 @@ export const styles = {
   // objeto en vez de uno por pantalla es a propósito: así no se puede volver
   // a desalinear un padding entre los dos sin querer.
   rootHeader: { ...fixedHeaderBase, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "calc(32px + env(safe-area-inset-top)) 20px 18px" },
+  // Franja fija debajo del RootHeader (ej. mes + totales en Transacciones) —
+  // va envuelta junto al RootHeader en un div "position:sticky" propio del
+  // screen que lo usa (no acá, sería sticky dos veces sin sentido); esta
+  // parte solo pone el look visual (fondo + separador).
+  subHeader: { background: "#FBF8F2", borderBottom: "1px solid #ECE3D3", padding: "8px 20px", display: "flex", flexDirection: "column", gap: 4 },
   eyebrow: { margin: 0, fontFamily: "'Courier New', monospace", fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "#A8754A" },
   h1: { margin: "4px 0 0", fontSize: 30, fontWeight: 600, letterSpacing: "-0.01em" },
   muted: { color: "#6B6355", fontSize: 14, padding: "0 20px", lineHeight: 1.5, fontFamily: "system-ui, sans-serif" },
@@ -191,8 +202,9 @@ export const styles = {
     maxWidth: 380,
     background: "#FBF8F2",
     borderRadius: 16,
-    padding: 20,
+    padding: "16px 20px 20px",
     boxShadow: "0 20px 50px rgba(0,0,0,0.3)",
+    overflow: "hidden",
   },
   payerRow: { display: "flex", flexWrap: "wrap", gap: 8 },
   payerChip: { display: "flex", alignItems: "center", gap: 6, padding: "7px 12px 7px 7px", borderRadius: 20, border: "1.5px solid transparent", fontSize: 13, fontFamily: "system-ui, sans-serif", fontWeight: 600 },

@@ -50,25 +50,27 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
 
   return (
     <div style={styles.screen}>
-      <RootHeader title="Transacciones" right={<TodayButton viewMonth={viewMonth} setViewMonth={setViewMonth} />} />
-      <div style={{ ...styles.form, paddingTop: 12, paddingBottom: 100 }}>
-        <MonthNav viewMonth={viewMonth} setViewMonth={setViewMonth} />
-
-        <div style={{ display: "flex", justifyContent: "space-between", textAlign: "center", padding: "0 4px" }}>
-          <div style={{ flex: 1 }}>
-            <p style={{ ...styles.muted, padding: 0, fontSize: 12 }}>Ingreso</p>
-            <p style={{ margin: "2px 0 0", fontWeight: 700, color: "#3B6E62" }}>{money(monthIncome, settings.main_currency)}</p>
-          </div>
-          <div style={{ flex: 1 }}>
-            <p style={{ ...styles.muted, padding: 0, fontSize: 12 }}>Gastos</p>
-            <p style={{ margin: "2px 0 0", fontWeight: 700, color: "#B0473A" }}>{money(monthExpense, settings.main_currency)}</p>
-          </div>
-          <div style={{ flex: 1 }}>
-            <p style={{ ...styles.muted, padding: 0, fontSize: 12 }}>Balance</p>
-            <p style={{ margin: "2px 0 0", fontWeight: 700 }}>{money(monthIncome - monthExpense, settings.main_currency)}</p>
+      <div style={{ position: "sticky", top: 0, zIndex: 5 }}>
+        <RootHeader title="Transacciones" right={<TodayButton viewMonth={viewMonth} setViewMonth={setViewMonth} />} />
+        <div style={styles.subHeader}>
+          <MonthNav viewMonth={viewMonth} setViewMonth={setViewMonth} />
+          <div style={{ display: "flex", justifyContent: "space-between", textAlign: "center", padding: "0 4px" }}>
+            <div style={{ flex: 1 }}>
+              <p style={{ ...styles.muted, padding: 0, margin: 0, fontSize: 12 }}>Ingreso</p>
+              <p style={{ margin: "2px 0 0", fontWeight: 700, color: "#3B6E62" }}>{money(monthIncome, settings.main_currency)}</p>
+            </div>
+            <div style={{ flex: 1 }}>
+              <p style={{ ...styles.muted, padding: 0, margin: 0, fontSize: 12 }}>Gastos</p>
+              <p style={{ margin: "2px 0 0", fontWeight: 700, color: "#B0473A" }}>{money(monthExpense, settings.main_currency)}</p>
+            </div>
+            <div style={{ flex: 1 }}>
+              <p style={{ ...styles.muted, padding: 0, margin: 0, fontSize: 12 }}>Balance</p>
+              <p style={{ margin: "2px 0 0", fontWeight: 700 }}>{money(monthIncome - monthExpense, settings.main_currency)}</p>
+            </div>
           </div>
         </div>
-
+      </div>
+      <div style={{ ...styles.form, paddingTop: 12, paddingBottom: 100 }}>
         {byDay.length === 0 && (
           <div style={styles.emptyState}>
             <p style={styles.emptyTitle}>Nada registrado este mes</p>

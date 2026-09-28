@@ -691,7 +691,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           categories={moneyManager.categories}
           viewMonth={ledgerMonth}
           setViewMonth={setLedgerMonth}
-          onNewTransaction={() => setLedgerView({ screen: "newTransaction" })}
+          onNewTransaction={(date) => setLedgerView({ screen: "newTransaction", date })}
           onEditTransaction={(t) => setLedgerView({ screen: "editTransaction", transaction: t })}
         />
       )}
@@ -706,6 +706,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           reloadCategories={moneyManager.reload}
           showError={showError}
           editingTransaction={ledgerView.transaction}
+          defaultDate={ledgerView.date}
           onCancel={() => setLedgerView({ screen: "list" })}
           onSave={async (tx) => {
             const ok = await saveMoneyTransaction(tx);

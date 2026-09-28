@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { X, Menu, Plus, Pencil, ArrowLeftRight } from "lucide-react";
+import { X, Menu, Plus, ArrowLeftRight } from "lucide-react";
 import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, Footer, ConfirmInline, IconInput } from "../../components/Shared.jsx";
+import { TopBar, Footer, ConfirmInline, IconInput, PickerField } from "../../components/Shared.jsx";
 import { parseAmountInput, todayInputValue, dateInputValue, money } from "../../lib/helpers.jsx";
 import { RECURRING_FREQUENCIES, nextOccurrence, computeAmountMain } from "../../lib/moneyManagerData.js";
 
@@ -24,12 +24,12 @@ const TYPE_INFO = {
 
 export default function TransactionForm({
   session, settings, groups, accounts, categories, onCancel, onSave, reloadCategories, showError,
-  forceRecurringOpen = false, hideRemoveRecurring = false, editingTransaction = null,
+  forceRecurringOpen = false, hideRemoveRecurring = false, editingTransaction = null, defaultDate = null,
 }) {
   const [managingCategoryType, setManagingCategoryType] = useState(null); // "income" | "expense" | null
 
   const [type, setType] = useState(editingTransaction?.type || "expense");
-  const [date, setDate] = useState(editingTransaction ? dateInputValue(new Date(editingTransaction.date).getTime()) : todayInputValue());
+  const [date, setDate] = useState(editingTransaction ? dateInputValue(new Date(editingTransaction.date).getTime()) : (defaultDate || todayInputValue()));
   const [amount, setAmount] = useState(editingTransaction ? String(editingTransaction.amount) : "");
   const [currency, setCurrency] = useState(editingTransaction?.currency || settings.main_currency);
   const [exchangeRate, setExchangeRate] = useState(editingTransaction?.exchange_rate ? String(editingTransaction.exchange_rate) : "");
@@ -38,7 +38,7 @@ export default function TransactionForm({
   // qué lado se le pide escribir al usuario; se invierte antes de guardar.
   const [rateFlipped, setRateFlipped] = useState(false);
   const [categoryId, setCategoryId] = useState(editingTransaction?.category_id || "");
-  const [accountId, setAccountId] = useState(editingTransaction?.account_id || accounts[0]?.id || "");
+  const [accountId, setAccountId] = useState(editingTransaction?.account_id || "");
   const [toAccountId, setToAccountId] = useState(editingTransaction?.to_account_id || "");
   const [note, setNote] = useState(editingTransaction?.title || "");
   const [saving, setSaving] = useState(false);
@@ -52,7 +52,10 @@ export default function TransactionForm({
 
   useEffect(() => {
     if (type === "transfer") { setCategoryId(""); return; }
-    if (!typeCategories.find((c) => c.id === categoryId)) setCategoryId(typeCategories[0]?.id || "");
+    // Sin default — si la categoría elegida ya no es válida para este tipo
+    // (o no se eligió ninguna todavía), queda vacía en vez de autoseleccionar
+    // la primera de la lista.
+    if (!typeCategories.find((c) => c.id === categoryId)) setCategoryId("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, categories]);
 
@@ -65,6 +68,7 @@ export default function TransactionForm({
         reload={reloadCategories}
         showError={showError}
         onBack={() => setManagingCategoryType(null)}
+        initialCreating
       />
     );
   }
@@ -205,48 +209,56 @@ export default function TransactionForm({
         {type !== "transfer" && (
           <label style={styles.label}>
             Categoría
-            <div style={{ display: "flex", gap: 8 }}>
-              <select style={{ ...styles.input, flex: 1 }} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-                {typeCategories.length === 0 && <option value="">Sin categorías</option>}
-                {typeCategories.map((c) => <option key={c.id} value={c.id}>{c.icon ? `${c.icon} ` : ""}{c.name}</option>)}
-              </select>
-              <button style={styles.btnSecondarySmall} onClick={() => setManagingCategoryType(type === "income" ? "income" : "expense")} aria-label="Gestionar categorías">
-                <Pencil size={16} />
-              </button>
-            </div>
+            <PickerField
+              value={categoryId}
+              onChange={(v) => {
+                if (v === "__new__") { setManagingCategoryType(type === "income" ? "income" : "expense"); return; }
+                setCategoryId(v);
+              }}
+              placeholder="Sin categorías"
+              groups={[{
+                label: null,
+                items: [
+                  ...typeCategories.map((c) => ({ value: c.id, label: c.name, icon: c.icon })),
+                  { value: "__new__", label: "Nuevo", icon: "➕" },
+                ],
+              }]}
+            />
           </label>
         )}
 
         <label style={styles.label}>
           {type === "transfer" ? "De" : "Cuenta"}
-          <select style={styles.input} value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-            {groups.map((g) => {
-              const groupAccounts = accounts.filter((a) => a.group_id === g.id);
-              if (groupAccounts.length === 0) return null;
-              return (
-                <optgroup key={g.id} label={g.name}>
-                  {groupAccounts.map((a) => <option key={a.id} value={a.id}>{a.icon ? `${a.icon} ` : ""}{a.name}</option>)}
-                </optgroup>
-              );
-            })}
-          </select>
+          <PickerField
+            value={accountId}
+            onChange={setAccountId}
+            placeholder="Elegí una cuenta"
+            groups={groups
+              .map((g) => ({
+                label: g.name,
+                // Las ocultas no se muestran acá — salvo que sea la que ya
+                // tenía elegida esta transacción, para no perder la selección
+                // al editar una que usaba una cuenta que después ocultaste.
+                items: accounts.filter((a) => a.group_id === g.id && (!a.hidden || a.id === accountId)).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
+              }))
+              .filter((g) => g.items.length > 0)}
+          />
         </label>
 
         {type === "transfer" && (
           <label style={styles.label}>
             A
-            <select style={styles.input} value={toAccountId} onChange={(e) => setToAccountId(e.target.value)}>
-              <option value="">Elegí una cuenta</option>
-              {groups.map((g) => {
-                const groupAccounts = accounts.filter((a) => a.group_id === g.id && a.id !== accountId);
-                if (groupAccounts.length === 0) return null;
-                return (
-                  <optgroup key={g.id} label={g.name}>
-                    {groupAccounts.map((a) => <option key={a.id} value={a.id}>{a.icon ? `${a.icon} ` : ""}{a.name}</option>)}
-                  </optgroup>
-                );
-              })}
-            </select>
+            <PickerField
+              value={toAccountId}
+              onChange={setToAccountId}
+              placeholder="Elegí una cuenta"
+              groups={groups
+                .map((g) => ({
+                  label: g.name,
+                  items: accounts.filter((a) => a.group_id === g.id && a.id !== accountId && (!a.hidden || a.id === toAccountId)).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
+                }))
+                .filter((g) => g.items.length > 0)}
+            />
           </label>
         )}
 
@@ -371,8 +383,8 @@ function RecurringFields({ type, date, freqValue, setFreqValue, freqInterval, se
    sin subcategorías por ahora)
    ========================================================================= */
 
-export function ManageCategories({ session, type, categories, reload, showError, onBack }) {
-  const [creating, setCreating] = useState(false);
+export function ManageCategories({ session, type, categories, reload, showError, onBack, initialCreating = false }) {
+  const [creating, setCreating] = useState(initialCreating);
   const typeCategories = categories.filter((c) => c.type === type);
   const [names, setNames] = useState(() => Object.fromEntries(typeCategories.map((c) => [c.id, c.name])));
   const [icons, setIcons] = useState(() => Object.fromEntries(typeCategories.map((c) => [c.id, c.icon])));

@@ -88,7 +88,10 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
           const dayExpense = txs.filter((t) => t.type === "expense").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
           return (
             <div key={dayKey} style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 14px", background: "#FAF7F2", borderBottom: "1px solid #F0EBE2", fontFamily: "system-ui, sans-serif" }}>
+              <div
+                onClick={() => onNewTransaction(dayKey)}
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 14px", background: "#FAF7F2", borderBottom: "1px solid #F0EBE2", fontFamily: "system-ui, sans-serif", cursor: "pointer" }}
+              >
                 <span style={{ fontWeight: 700, fontSize: 13.5 }}>{d.getDate()} <span style={{ fontWeight: 400, color: "#6B6355", textTransform: "capitalize" }}>{DAY_LABEL(d)}</span></span>
                 <span style={{ display: "flex", gap: 10, fontSize: 12.5 }}>
                   <span style={{ color: "#3B6E62" }}>{money(dayIncome, settings.main_currency)}</span>
@@ -112,9 +115,14 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
                       </p>
                     </div>
                   </div>
-                  <span style={{ color: t.type === "income" ? "#3B6E62" : t.type === "expense" ? "#B0473A" : "#4A6FA5", fontWeight: 600, flexShrink: 0 }}>
-                    {money(t.amount, t.currency)}
-                  </span>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0 }}>
+                    <span style={{ color: t.type === "income" ? "#3B6E62" : t.type === "expense" ? "#B0473A" : "#4A6FA5", fontWeight: 600 }}>
+                      {money(t.amount, t.currency)}
+                    </span>
+                    {t.currency !== settings.main_currency && (
+                      <span style={{ fontSize: 11, color: "#6B6355" }}>= {money(t.amount_main, settings.main_currency)}</span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -122,7 +130,7 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
         })}
       </div>
 
-      <button style={{ ...styles.fab, bottom: "calc(78px + env(safe-area-inset-bottom))" }} onClick={onNewTransaction} aria-label="Nueva transacción">
+      <button style={{ ...styles.fab, bottom: "calc(78px + env(safe-area-inset-bottom))" }} onClick={() => onNewTransaction()} aria-label="Nueva transacción">
         <Plus size={24} strokeWidth={2.5} />
       </button>
     </div>

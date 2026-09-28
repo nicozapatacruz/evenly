@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Camera, ChevronLeft, ChevronRight, User, X } from "lucide-react";
 import { styles } from "../lib/styles.js";
 import { ICON_OPTIONS } from "../lib/moneyManagerData.js";
@@ -238,6 +238,97 @@ export function Modal({ title, onClose, children }) {
 // Barra fija abajo de la pantalla (botones principales de guardar/cancelar/etc.)
 export function Footer({ children }) {
   return <div style={styles.footer}>{children}</div>;
+}
+
+// Selector en grilla (categoría/cuenta en Money Manager) — en vez de abrir el
+// picker nativo del navegador, toca el campo y despliega una grilla de
+// ícono+nombre justo debajo, como en la app original. `groups` es
+// [{ label, items: [{ value, label, icon }] }] — pasar `label: null` para
+// una lista plana sin encabezados (ej. categorías, que no se agrupan).
+let pickerInstanceCounter = 0;
+
+export function PickerField({ value, onChange, groups, placeholder = "Elegir" }) {
+  const [open, setOpen] = useState(false);
+  const idRef = useRef(null);
+  if (idRef.current === null) idRef.current = ++pickerInstanceCounter;
+  const containerRef = useRef(null);
+  const selected = groups.flatMap((g) => g.items).find((it) => it.value === value);
+
+  // Si se abre OTRO picker, este se cierra solo — nunca hay dos abiertos a
+  // la vez (se avisan entre ellos con un evento propio, en vez de levantar
+  // el estado al padre, que tendría que coordinar N pickers distintos).
+  useEffect(() => {
+    if (open) window.dispatchEvent(new CustomEvent("mm-picker-open", { detail: idRef.current }));
+  }, [open]);
+  useEffect(() => {
+    const onOtherOpen = (e) => { if (e.detail !== idRef.current) setOpen(false); };
+    window.addEventListener("mm-picker-open", onOtherOpen);
+    return () => window.removeEventListener("mm-picker-open", onOtherOpen);
+  }, []);
+
+  // Click afuera de este picker (mientras está abierto) lo cierra.
+  useEffect(() => {
+    if (!open) return;
+    const onClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [open]);
+
+  return (
+    <div ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        style={{ ...styles.input, width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", borderRadius: open ? "10px 10px 0 0" : 10 }}
+      >
+        {selected ? (
+          <>
+            {selected.icon && <span>{selected.icon}</span>}
+            <span>{selected.label}</span>
+          </>
+        ) : (
+          <span style={{ color: "#A89A87" }}>{placeholder}</span>
+        )}
+      </button>
+      {open && (
+        <div style={{ border: "1px solid #DDD2BE", borderTop: "none", borderRadius: "0 0 10px 10px", background: "#fff", overflow: "hidden" }}>
+          {groups.map((g) => (
+            <div key={g.label || "flat"}>
+              {g.label && (
+                <p style={{ margin: 0, padding: "6px 10px", fontSize: 11, fontWeight: 700, color: "#A8754A", textTransform: "uppercase", letterSpacing: "0.04em", background: "#FAF7F2", borderBottom: "1px solid #F0EBE2" }}>
+                  {g.label}
+                </p>
+              )}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)" }}>
+                {g.items.map((it) => (
+                  <button
+                    type="button"
+                    key={it.value}
+                    onClick={() => { onChange(it.value); setOpen(false); }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 6, padding: "10px 8px", fontSize: 12.5, fontFamily: "system-ui, sans-serif",
+                      border: "none", borderRight: "1px solid #F0EBE2", borderBottom: "1px solid #F0EBE2",
+                      background: it.value === value ? "#FBEDE7" : "#fff", color: "#2B2620", textAlign: "left", cursor: "pointer", minWidth: 0,
+                    }}
+                  >
+                    {it.icon && <span style={{ flexShrink: 0 }}>{it.icon}</span>}
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.label}</span>
+                  </button>
+                ))}
+                {/* Celdas vacías al final de la última fila — mismo gris que
+                    usa la app original en vez de dejarlas en blanco. */}
+                {Array.from({ length: (3 - (g.items.length % 3)) % 3 }).map((_, i) => (
+                  <div key={`empty-${i}`} style={{ background: "rgba(221, 210, 190, 0.5)", borderRight: "1px solid #F0EBE2", borderBottom: "1px solid #F0EBE2" }} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // Foto + botones de cambiar/quitar — compartido por NewGroup/EditGroup (foto de grupo,

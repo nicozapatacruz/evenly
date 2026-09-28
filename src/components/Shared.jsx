@@ -111,17 +111,20 @@ export function IconInput({ value, onChange }) {
       </button>
       {open && (
         <Modal onClose={() => setOpen(false)}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div className="no-scrollbar" style={{ maxHeight: "70vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 14 }}>
+            <button style={{ ...styles.btnSecondary, marginTop: 0 }} onClick={() => { onChange(""); setOpen(false); }}>
+              Sin ícono
+            </button>
             {ICON_OPTIONS.map((g) => (
               <div key={g.group}>
-                <p style={{ ...styles.label, marginBottom: 4 }}>{g.group}</p>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                <p style={{ ...styles.label, marginBottom: 6 }}>{g.group}</p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {g.icons.map((ic) => (
                     <button
                       key={ic}
                       onClick={() => { onChange(ic); setOpen(false); }}
                       style={{
-                        width: 36, height: 36, fontSize: 18, borderRadius: 9,
+                        width: 40, height: 40, fontSize: 20, borderRadius: 10,
                         border: ic === value ? "2px solid #C75D3B" : "1px solid #DDD2BE",
                         background: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
                       }}
@@ -133,20 +136,6 @@ export function IconInput({ value, onChange }) {
                 </div>
               </div>
             ))}
-            <div>
-              <p style={{ ...styles.label, marginBottom: 4 }}>Sin ícono</p>
-              <button
-                onClick={() => { onChange(""); setOpen(false); }}
-                style={{
-                  width: 36, height: 36, fontSize: 18, borderRadius: 9,
-                  border: !value ? "2px solid #C75D3B" : "1px solid #DDD2BE",
-                  background: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
-                }}
-                aria-label="Sin ícono"
-              >
-                ➖
-              </button>
-            </div>
           </div>
         </Modal>
       )}

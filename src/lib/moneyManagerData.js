@@ -56,14 +56,14 @@ async function seedDefaults(userId) {
 export const ICON_OPTIONS = [
   { group: "Dinero", icons: ["💰", "💵", "💳", "🏦", "💸", "🪙", "📈", "📉", "🗳️", "🤑", "⚖️"] },
   { group: "Comida", icons: ["🛒", "🍜", "🍔", "☕", "🍕", "🍎"] },
-  { group: "Transporte", icons: ["🚖", "🚗", "⛽", "🚌", "✈️", "🚲"] },
+  { group: "Transporte", icons: ["🚖", "🚗", "⛽", "🚌", "🚆", "🚲"] },
   { group: "Hogar", icons: ["🏠", "💡", "🔧", "🛋️"] },
   { group: "Compras", icons: ["🛍️", "👕", "👟", "🧥"] },
   { group: "Salud", icons: ["🧘", "💊", "🏥", "💪"] },
   { group: "Ocio", icons: ["🎬", "🎮", "🎉", "🎵", "⚽️", "🎁", "👬🏻"] },
   { group: "Educación", icons: ["📚", "🎓", "📙"] },
-  { group: "Viajes", icons: ["🧳", "🏖️"] },
-  { group: "Otros", icons: ["👨‍👩‍👧", "❤️", "🐶", "🐱", "⭐", "✅", "🔔", "📌", "❕"] },
+  { group: "Viajes", icons: ["🧳", "🏖️", "✈️"] },
+  { group: "Otros", icons: ["👨‍👩‍👧", "❤️", "🐶", "🐱", "⭐", "✅", "🔔", "📌", "❕", "🔄", "📺"] },
 ];
 
 export const ACCOUNT_TYPES = [

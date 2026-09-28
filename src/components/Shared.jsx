@@ -266,14 +266,19 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir" })
     return () => window.removeEventListener("mm-picker-open", onOtherOpen);
   }, []);
 
-  // Click afuera de este picker (mientras está abierto) lo cierra.
+  // Click afuera de este picker (mientras está abierto) lo cierra. A
+  // propósito con "click", no "mousedown": si cierra en mousedown, la
+  // página se reacomoda ANTES de que termine el click (mousedown → mouseup
+  // → click), y el click termina cayendo en otro elemento que se corrió a
+  // ese lugar — justo el bug de "toco Cuenta, cierra Categoría pero no
+  // abre Cuenta". Con "click" todo se resuelve en el mismo evento.
   useEffect(() => {
     if (!open) return;
     const onClickOutside = (e) => {
       if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
     };
-    document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
+    document.addEventListener("click", onClickOutside);
+    return () => document.removeEventListener("click", onClickOutside);
   }, [open]);
 
   return (

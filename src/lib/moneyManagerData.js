@@ -50,6 +50,22 @@ async function seedDefaults(userId) {
   ]);
 }
 
+// Lista curada de íconos para categorías/cuentas — un select en vez de un
+// input libre, porque el teclado de emoji nativo no es confiable (no abre
+// solo en mobile, no existe un atajo simple en desktop).
+export const ICON_OPTIONS = [
+  { group: "Dinero", icons: ["💰", "💵", "💳", "🏦", "💸", "🪙", "📈", "📉", "🗳️", "🤑", "⚖️"] },
+  { group: "Comida", icons: ["🛒", "🍜", "🍔", "☕", "🍕", "🍎"] },
+  { group: "Transporte", icons: ["🚖", "🚗", "⛽", "🚌", "✈️", "🚲"] },
+  { group: "Hogar", icons: ["🏠", "💡", "🔧", "🛋️"] },
+  { group: "Compras", icons: ["🛍️", "👕", "👟", "🧥"] },
+  { group: "Salud", icons: ["🧘", "💊", "🏥", "💪"] },
+  { group: "Ocio", icons: ["🎬", "🎮", "🎉", "🎵", "⚽️", "🎁", "👬🏻"] },
+  { group: "Educación", icons: ["📚", "🎓", "📙"] },
+  { group: "Viajes", icons: ["🧳", "🏖️"] },
+  { group: "Otros", icons: ["👨‍👩‍👧", "❤️", "🐶", "🐱", "⭐", "✅", "🔔", "📌", "❕"] },
+];
+
 export const ACCOUNT_TYPES = [
   { value: "cash", label: "Efectivo" },
   { value: "bank", label: "Banco" },

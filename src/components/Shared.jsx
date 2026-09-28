@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useState } from "react";
 import { ArrowLeft, Camera, ChevronLeft, ChevronRight, User } from "lucide-react";
 import { styles } from "../lib/styles.js";
+import { ICON_OPTIONS } from "../lib/moneyManagerData.js";
 
 const MONTH_LABEL = (d) => d.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
 
@@ -80,28 +81,56 @@ export function TodayButton({ viewMonth, setViewMonth }) {
   );
 }
 
-// Input de ícono (categorías y cuentas de Money Manager) — un solo emoji,
-// opcional. Se escribe con el teclado de emoji nativo (Mac/iPhone ya lo
-// traen), no hace falta un picker propio. Si pegan/escriben más de un emoji,
-// se queda solo con el primero — así nunca queda ambigüedad de "cuál es el
-// ícono" si alguien pone 2 o 3 sin querer.
+// Selector de ícono (categorías y cuentas de Money Manager) — botón compacto
+// que abre una grilla con la misma lista curada de emojis, agrupada por
+// tema. Antes fue un input de texto libre (no confiable: no abre el teclado
+// de emoji solo en mobile, sin atajo simple en desktop) y después un
+// `<select>` nativo (funcionaba pero ocupaba más lista que grilla) — la
+// grilla ahorra espacio y se ve todo de un vistazo, sin depender de ningún
+// teclado del sistema.
 export function IconInput({ value, onChange }) {
-  const handleChange = (e) => {
-    const raw = e.target.value;
-    if (!raw) { onChange(""); return; }
-    const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-    const first = [...segmenter.segment(raw)][0]?.segment || "";
-    onChange(/\p{Extended_Pictographic}/u.test(first) ? first : "");
-  };
+  const [open, setOpen] = useState(false);
   return (
-    <input
-      style={{ ...styles.input, width: 52, textAlign: "center", fontSize: 20, padding: "7px 0", flexShrink: 0 }}
-      value={value || ""}
-      onChange={handleChange}
-      placeholder="🙂"
-      maxLength={8}
-      aria-label="Ícono (opcional)"
-    />
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        style={{ ...styles.input, width: 56, textAlign: "center", fontSize: 20, padding: "7px 0", flexShrink: 0, cursor: "pointer" }}
+        aria-label="Elegir ícono"
+      >
+        {value || "—"}
+      </button>
+      {open && (
+        <Modal onClose={() => setOpen(false)}>
+          <div style={{ maxHeight: "70vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 14 }}>
+            <button style={{ ...styles.btnSecondary, marginTop: 0 }} onClick={() => { onChange(""); setOpen(false); }}>
+              Sin ícono
+            </button>
+            {ICON_OPTIONS.map((g) => (
+              <div key={g.group}>
+                <p style={{ ...styles.label, marginBottom: 6 }}>{g.group}</p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {g.icons.map((ic) => (
+                    <button
+                      key={ic}
+                      onClick={() => { onChange(ic); setOpen(false); }}
+                      style={{
+                        width: 40, height: 40, fontSize: 20, borderRadius: 10,
+                        border: ic === value ? "2px solid #C75D3B" : "1px solid #DDD2BE",
+                        background: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
+                      }}
+                      aria-label={`Ícono ${ic}`}
+                    >
+                      {ic}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }
 

@@ -6,7 +6,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, Footer, ConfirmInline, IconInput } from "../../components/Shared.jsx";
-import { parseAmountInput, todayInputValue } from "../../lib/helpers.jsx";
+import { parseAmountInput, todayInputValue, dateInputValue } from "../../lib/helpers.jsx";
 import { RECURRING_FREQUENCIES, nextOccurrence } from "../../lib/moneyManagerData.js";
 
 const TYPE_INFO = {
@@ -24,17 +24,17 @@ const TYPE_INFO = {
 
 export default function TransactionForm({
   session, settings, groups, accounts, categories, onCancel, onSave, reloadCategories, showError,
-  forceRecurringOpen = false, hideRemoveRecurring = false,
+  forceRecurringOpen = false, hideRemoveRecurring = false, editingTransaction = null,
 }) {
   const [managingCategoryType, setManagingCategoryType] = useState(null); // "income" | "expense" | null
 
-  const [type, setType] = useState("expense");
-  const [date, setDate] = useState(todayInputValue());
-  const [amount, setAmount] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [accountId, setAccountId] = useState(accounts[0]?.id || "");
-  const [toAccountId, setToAccountId] = useState("");
-  const [note, setNote] = useState("");
+  const [type, setType] = useState(editingTransaction?.type || "expense");
+  const [date, setDate] = useState(editingTransaction ? dateInputValue(new Date(editingTransaction.date).getTime()) : todayInputValue());
+  const [amount, setAmount] = useState(editingTransaction ? String(editingTransaction.amount) : "");
+  const [categoryId, setCategoryId] = useState(editingTransaction?.category_id || "");
+  const [accountId, setAccountId] = useState(editingTransaction?.account_id || accounts[0]?.id || "");
+  const [toAccountId, setToAccountId] = useState(editingTransaction?.to_account_id || "");
+  const [note, setNote] = useState(editingTransaction?.title || "");
   const [saving, setSaving] = useState(false);
 
   const [recurringOpen, setRecurringOpen] = useState(forceRecurringOpen);
@@ -91,6 +91,7 @@ export default function TransactionForm({
         };
       }
       await onSave({
+        id: editingTransaction?.id,
         type,
         account_id: accountId,
         to_account_id: type === "transfer" ? toAccountId : null,
@@ -111,7 +112,7 @@ export default function TransactionForm({
 
   return (
     <div style={styles.screen}>
-      <TopBar title={TYPE_INFO[type].label} onBack={onCancel} />
+      <TopBar title={editingTransaction ? `Editar ${TYPE_INFO[type].label}` : TYPE_INFO[type].label} onBack={onCancel} />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
         <div style={{ ...styles.tabRow, padding: 0 }}>
           {Object.keys(TYPE_INFO).map((t) => (
@@ -134,7 +135,7 @@ export default function TransactionForm({
 
         <label style={styles.label}>
           Importe
-          <input style={styles.input} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" inputMode="decimal" autoFocus />
+          <input style={styles.input} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" inputMode="decimal" />
         </label>
 
         {type !== "transfer" && (
@@ -143,7 +144,7 @@ export default function TransactionForm({
             <div style={{ display: "flex", gap: 8 }}>
               <select style={{ ...styles.input, flex: 1 }} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
                 {typeCategories.length === 0 && <option value="">Sin categorías</option>}
-                {typeCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {typeCategories.map((c) => <option key={c.id} value={c.id}>{c.icon ? `${c.icon} ` : ""}{c.name}</option>)}
               </select>
               <button style={styles.btnSecondarySmall} onClick={() => setManagingCategoryType(type === "income" ? "income" : "expense")} aria-label="Gestionar categorías">
                 <Pencil size={16} />
@@ -160,7 +161,7 @@ export default function TransactionForm({
               if (groupAccounts.length === 0) return null;
               return (
                 <optgroup key={g.id} label={g.name}>
-                  {groupAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  {groupAccounts.map((a) => <option key={a.id} value={a.id}>{a.icon ? `${a.icon} ` : ""}{a.name}</option>)}
                 </optgroup>
               );
             })}
@@ -177,7 +178,7 @@ export default function TransactionForm({
                 if (groupAccounts.length === 0) return null;
                 return (
                   <optgroup key={g.id} label={g.name}>
-                    {groupAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    {groupAccounts.map((a) => <option key={a.id} value={a.id}>{a.icon ? `${a.icon} ` : ""}{a.name}</option>)}
                   </optgroup>
                 );
               })}
@@ -455,7 +456,7 @@ function NewCategoryForm({ session, type, categories, reload, showError, onCance
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
           <label style={{ ...styles.label, flex: 1 }}>
             Nombre
-            <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre" autoFocus onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
+            <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre" onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
           </label>
           <label style={styles.label}>
             Ícono

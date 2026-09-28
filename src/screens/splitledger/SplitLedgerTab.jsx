@@ -445,7 +445,7 @@ function NewGroup({ onCancel, onCreate, session, showError }) {
 
         <label style={styles.label}>
           Nombre del grupo
-          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Viaje a Lisboa, Piso compartido…" autoFocus />
+          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Viaje a Lisboa, Piso compartido…" />
         </label>
 
         <label style={styles.label}>
@@ -813,7 +813,6 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
             placeholder='Escribe "Confirmar" para continuar'
             value={deleteConfirmText}
             onChange={e => setDeleteConfirmText(e.target.value)}
-            autoFocus
           />
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
             <button style={{ ...styles.btnGhostSmall, flex: 1, justifyContent: "center" }} onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(""); }}>Cancelar</button>
@@ -1439,7 +1438,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
         {extraHeaderField}
         <label style={styles.label}>
           Descripción
-          <input style={styles.input} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Cena, taxi, supermercado…" autoFocus={!existing} />
+          <input style={styles.input} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Cena, taxi, supermercado…" />
         </label>
 
         <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
@@ -1671,7 +1670,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
         )}
 
         {(notesOpen || notes) && (
-          <textarea style={{ ...styles.input, minHeight: 60, resize: "vertical", fontFamily: "system-ui, sans-serif" }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas adicionales…" autoFocus={notesOpen && !notes} />
+          <textarea style={{ ...styles.input, minHeight: 60, resize: "vertical", fontFamily: "system-ui, sans-serif" }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas adicionales…" />
         )}
 
         {err && <p style={styles.errText}>{err}</p>}

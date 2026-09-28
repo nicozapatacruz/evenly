@@ -366,7 +366,7 @@ function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
           {mode === "register" && (
             <label style={styles.label}>
               Nombre que verán los demás
-              <input style={styles.input} name="name" value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Tu nombre" autoComplete="name" autoFocus />
+              <input style={styles.input} name="name" value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Tu nombre" autoComplete="name" />
             </label>
           )}
           {mode === "register" && (
@@ -377,7 +377,7 @@ function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
           )}
           <label style={styles.label}>
             Email
-            <input style={styles.input} type="email" name="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="tu@email.com" autoCapitalize="none" autoComplete={mode === "login" ? "username" : "email"} autoFocus={mode !== "register"} />
+            <input style={styles.input} type="email" name="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="tu@email.com" autoCapitalize="none" autoComplete={mode === "login" ? "username" : "email"} />
           </label>
           {mode !== "forgot" && (
             <label style={styles.label}>
@@ -454,7 +454,7 @@ function RecoverPasswordScreen({ onComplete, onCancel }) {
         <form style={{ display: "flex", flexDirection: "column", gap: 12 }} onSubmit={e => { e.preventDefault(); if (!saving) handleSave(); }}>
           <label style={styles.label}>
             Nueva contraseña
-            <input style={styles.input} type="password" name="new-password" autoComplete="new-password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Nueva contraseña" autoFocus />
+            <input style={styles.input} type="password" name="new-password" autoComplete="new-password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Nueva contraseña" />
           </label>
           <label style={styles.label}>
             Confirmar nueva contraseña
@@ -516,11 +516,12 @@ function AppShell({ session, onLogout, refreshProfile }) {
   // Guarda una transacción de Money Manager y, si venía con recurrencia
   // activada, también crea su plantilla en mm_recurring. Un solo lugar para
   // esto porque lo usan tanto "Hoy" (FAB) como "Transacciones repetidas" en Config.
-  const saveMoneyTransaction = async ({ recurring, ...tx }) => {
+  const saveMoneyTransaction = async ({ recurring, id, ...tx }) => {
     try {
-      const { error } = await supabase
-        .from("mm_transactions")
-        .insert({ user_id: session.userId, ...tx, date: new Date(tx.date).toISOString() });
+      const payload = { ...tx, date: new Date(tx.date).toISOString() };
+      const { error } = id
+        ? await supabase.from("mm_transactions").update(payload).eq("id", id)
+        : await supabase.from("mm_transactions").insert({ user_id: session.userId, ...payload });
       if (error) throw error;
       if (recurring) {
         const { error: recError } = await supabase.from("mm_recurring").insert({
@@ -689,10 +690,11 @@ function AppShell({ session, onLogout, refreshProfile }) {
           viewMonth={ledgerMonth}
           setViewMonth={setLedgerMonth}
           onNewTransaction={() => setLedgerView({ screen: "newTransaction" })}
+          onEditTransaction={(t) => setLedgerView({ screen: "editTransaction", transaction: t })}
         />
       )}
 
-      {activeTab === "ledger" && ledgerView.screen === "newTransaction" && (
+      {activeTab === "ledger" && (ledgerView.screen === "newTransaction" || ledgerView.screen === "editTransaction") && (
         <TransactionForm
           session={session}
           settings={moneyManager.settings}
@@ -701,6 +703,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           categories={moneyManager.categories}
           reloadCategories={moneyManager.reload}
           showError={showError}
+          editingTransaction={ledgerView.transaction}
           onCancel={() => setLedgerView({ screen: "list" })}
           onSave={async (tx) => {
             const ok = await saveMoneyTransaction(tx);

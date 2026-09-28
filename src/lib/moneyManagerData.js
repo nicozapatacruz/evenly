@@ -183,6 +183,11 @@ export function useMonthTransactions(userId, viewMonth) {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Se limpia apenas cambia el mes visible (antes de que llegue la
+  // respuesta) — si no, se alcanza a ver la data del mes anterior "pegada"
+  // un instante mientras carga la del mes nuevo.
+  useEffect(() => { setTransactions([]); }, [year, month]);
+
   const load = useCallback(async () => {
     if (!userId) { setLoading(false); return; }
     setLoading(true);

@@ -236,7 +236,7 @@ function NewGroupForm({ session, groups, reload, showError, onCancel, onCreated 
       <div style={{ ...styles.form, paddingBottom: 100 }}>
         <label style={styles.label}>
           Nombre
-          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre (ej: Santander, Efectivo)" autoFocus onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
+          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre (ej: Santander, Efectivo)" onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
         </label>
       </div>
       <Footer>
@@ -384,7 +384,7 @@ function NewAccountForm({ session, groups, defaultGroupId, reload, showError, on
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
           <label style={{ ...styles.label, flex: 1 }}>
             Nombre
-            <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre (ej: Saldo, Ahorros)" autoFocus onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
+            <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre (ej: Saldo, Ahorros)" onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
           </label>
           <label style={styles.label}>
             Ícono

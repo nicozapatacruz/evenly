@@ -16,14 +16,14 @@ const DAY_LABEL = (d) => d.toLocaleDateString("es-ES", { weekday: "short" }).rep
    Resumen que acá no replicamos.
    ========================================================================= */
 
-export default function DiarioTab({ userId, settings, groups, accounts, categories, viewMonth, setViewMonth, onNewTransaction }) {
+export default function DiarioTab({ userId, settings, groups, accounts, categories, viewMonth, setViewMonth, onNewTransaction, onEditTransaction }) {
   const accountName = (id) => accounts.find((a) => a.id === id)?.name || "—";
   const categoryName = (id) => categories.find((c) => c.id === id)?.name || "—";
   const categoryIcon = (id) => categories.find((c) => c.id === id)?.icon;
 
   // Solo pedimos las transacciones del mes visible (no toda la tabla) — se
   // refetchea solo cuando cambiás de mes.
-  const { transactions: monthTx } = useMonthTransactions(userId, viewMonth);
+  const { transactions: monthTx, loading } = useMonthTransactions(userId, viewMonth);
 
   const monthIncome = monthTx.filter((t) => t.type === "income").reduce((s, t) => s + toMainCurrency(t.amount, t.currency, settings), 0);
   const monthExpense = monthTx.filter((t) => t.type === "expense").reduce((s, t) => s + toMainCurrency(t.amount, t.currency, settings), 0);
@@ -71,7 +71,11 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
         </div>
       </div>
       <div style={{ ...styles.form, paddingTop: 12, paddingBottom: 100 }}>
-        {byDay.length === 0 && (
+        {loading ? (
+          <div style={styles.emptyState}>
+            <p style={styles.emptyTitle}>Cargando transacciones…</p>
+          </div>
+        ) : byDay.length === 0 && (
           <div style={styles.emptyState}>
             <p style={styles.emptyTitle}>Nada registrado este mes</p>
             <p style={{ ...styles.muted, padding: 0 }}>Tocá el "+" de abajo para anotar un ingreso, gasto o transferencia.</p>
@@ -92,7 +96,11 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
                 </span>
               </div>
               {txs.map((t) => (
-                <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14 }}>
+                <div
+                  key={t.id}
+                  onClick={() => onEditTransaction(t)}
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14, cursor: "pointer" }}
+                >
                   <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
                     {t.type !== "transfer" && categoryIcon(t.category_id) && (
                       <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>{categoryIcon(t.category_id)}</span>

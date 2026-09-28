@@ -90,7 +90,22 @@ export default function TransactionForm({
   const customInterval = parseInt(freqInterval, 10);
   const recurringValid = !recurringOpen || (freq && (freq.interval !== null || customInterval >= 2));
 
-  const canSave = validAmount && validRate && !!accountId && recurringValid && (
+  // Al editar, no dejar guardar si no se cambió nada — creando una siempre
+  // es "dirty" (no hay un original con qué comparar).
+  const isDirty = !editingTransaction || (
+    type !== editingTransaction.type
+    || date !== dateInputValue(new Date(editingTransaction.date).getTime())
+    || amount !== String(editingTransaction.amount)
+    || currency !== (editingTransaction.currency || settings.main_currency)
+    || exchangeRate !== (editingTransaction.exchange_rate ? String(editingTransaction.exchange_rate) : "")
+    || categoryId !== (editingTransaction.category_id || "")
+    || accountId !== (editingTransaction.account_id || "")
+    || toAccountId !== (editingTransaction.to_account_id || "")
+    || note !== (editingTransaction.title || "")
+    || recurringOpen
+  );
+
+  const canSave = validAmount && validRate && !!accountId && recurringValid && isDirty && (
     type === "transfer" ? (!!toAccountId && toAccountId !== accountId) : !!categoryId
   );
 
@@ -453,8 +468,8 @@ export function ManageCategories({ session, type, categories, reload, showError,
         categories={categories}
         reload={reload}
         showError={showError}
-        onCancel={() => setCreating(false)}
-        onCreated={() => setCreating(false)}
+        onCancel={initialCreating ? onBack : () => setCreating(false)}
+        onCreated={initialCreating ? onBack : () => setCreating(false)}
       />
     );
   }
@@ -530,16 +545,13 @@ function NewCategoryForm({ session, type, categories, reload, showError, onCance
     <div style={styles.screen}>
       <TopBar title="Nueva categoría" onBack={onCancel} />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        <div style={{ display: "flex", gap: 8 }}>
-          <label style={styles.label}>
-            Ícono
-            <IconInput value={icon} onChange={setIcon} large />
-          </label>
-          <label style={{ ...styles.label, flex: 1 }}>
-            Nombre
-            <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre" onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
-          </label>
-        </div>
+        <label style={styles.label}>
+          Nombre
+          <div style={{ display: "flex", gap: 8 }}>
+            <IconInput value={icon} onChange={setIcon} />
+            <input style={{ ...styles.input, flex: 1 }} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre" onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
+          </div>
+        </label>
       </div>
       <Footer>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>

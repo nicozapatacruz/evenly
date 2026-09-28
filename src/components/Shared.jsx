@@ -88,7 +88,7 @@ export function TodayButton({ viewMonth, setViewMonth }) {
 // `<select>` nativo (funcionaba pero ocupaba más lista que grilla) — la
 // grilla ahorra espacio y se ve todo de un vistazo, sin depender de ningún
 // teclado del sistema.
-export function IconInput({ value, onChange, large = false }) {
+export function IconInput({ value, onChange }) {
   const [open, setOpen] = useState(false);
   const [custom, setCustom] = useState("");
 
@@ -114,7 +114,7 @@ export function IconInput({ value, onChange, large = false }) {
         onClick={() => setOpen(true)}
         style={{
           ...styles.input, display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 20, flexShrink: 0, cursor: "pointer", padding: large ? "11px 13px" : 4,
+          fontSize: 20, flexShrink: 0, cursor: "pointer", padding: 4,
           appearance: "none", WebkitAppearance: "none", textAlign: "center",
         }}
         aria-label="Elegir ícono"
@@ -322,7 +322,7 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir" })
                 {/* Celdas vacías al final de la última fila — mismo gris que
                     usa la app original en vez de dejarlas en blanco. */}
                 {Array.from({ length: (3 - (g.items.length % 3)) % 3 }).map((_, i) => (
-                  <div key={`empty-${i}`} style={{ background: "rgba(221, 210, 190, 0.3)" }} />
+                  <div key={`empty-${i}`} style={{ background: "#F5F1E8" }} />
                 ))}
               </div>
             </div>

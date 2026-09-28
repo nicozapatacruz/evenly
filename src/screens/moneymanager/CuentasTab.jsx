@@ -382,16 +382,13 @@ function NewAccountForm({ session, groups, defaultGroupId, reload, showError, on
             </select>
           </label>
         )}
-        <div style={{ display: "flex", gap: 8 }}>
-          <label style={styles.label}>
-            Ícono
-            <IconInput value={icon} onChange={setIcon} large />
-          </label>
-          <label style={{ ...styles.label, flex: 1 }}>
-            Nombre
-            <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre (ej: Saldo, Ahorros)" onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
-          </label>
-        </div>
+        <label style={styles.label}>
+          Nombre
+          <div style={{ display: "flex", gap: 8 }}>
+            <IconInput value={icon} onChange={setIcon} />
+            <input style={{ ...styles.input, flex: 1 }} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre (ej: Saldo, Ahorros)" onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
+          </div>
+        </label>
       </div>
       <Footer>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>

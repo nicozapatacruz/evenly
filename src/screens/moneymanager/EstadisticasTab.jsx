@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { styles } from "../../lib/styles.js";
-import { RootHeader, MonthNav, TodayButton } from "../../components/Shared.jsx";
+import { RootHeader, MonthNav, TodayButton, useMonthSwipe } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
 import { useCategoryMonthTotals } from "../../lib/moneyManagerData.js";
 
@@ -40,9 +40,17 @@ export default function EstadisticasTab({ userId, settings, categories, viewMont
   // que quede resaltada una selección de un gráfico que ya no existe.
   useEffect(() => setSelectedKey(null), [type, viewMonth]);
 
+  const swipeHandlers = useMonthSwipe(viewMonth, setViewMonth);
+
   // Totales ya agregados por categoría del lado del servidor (vista
   // mm_category_month_totals) — no traemos transacción por transacción.
-  const { totals } = useCategoryMonthTotals(userId, viewMonth, type);
+  // Se piden los dos tipos siempre (no solo el seleccionado), porque los
+  // botones Ingreso/Gastos muestran el total de cada uno todo el tiempo.
+  const { totals: incomeTotals } = useCategoryMonthTotals(userId, viewMonth, "income");
+  const { totals: expenseTotals } = useCategoryMonthTotals(userId, viewMonth, "expense");
+  const totals = type === "income" ? incomeTotals : expenseTotals;
+  const incomeSum = useMemo(() => incomeTotals.reduce((s, t) => s + t.total, 0), [incomeTotals]);
+  const expenseSum = useMemo(() => expenseTotals.reduce((s, t) => s + t.total, 0), [expenseTotals]);
 
   const { rows, total } = useMemo(() => {
     // Una fila por categoría ya (la vista agrega por categoría/tipo/mes y ya
@@ -57,14 +65,12 @@ export default function EstadisticasTab({ userId, settings, categories, viewMont
     return { rows, total };
   }, [totals, categories]);
 
-  const slices = useMemo(() => {
-    const head = rows.slice(0, 8).map((r, i) => ({ ...r, color: SLICE_COLORS[i] }));
-    const tail = rows.slice(8);
-    if (tail.length) {
-      head.push({ name: "Otros", amount: tail.reduce((s, r) => s + r.amount, 0), color: OTHER_COLOR });
-    }
-    return head;
-  }, [rows]);
+  // Cada categoría se muestra individualmente (nunca se pierde su ícono/
+  // nombre) — lo único limitado es la cantidad de COLORES distintos en la
+  // torta: pasado el 8vo puesto se repite el gris neutro en vez de inventar
+  // una 9na tonalidad (indistinguible bajo daltonismo), pero cada una sigue
+  // siendo su propia porción/fila.
+  const slices = useMemo(() => rows.map((r, i) => ({ ...r, color: i < 8 ? SLICE_COLORS[i] : OTHER_COLOR })), [rows]);
 
   let angle = 0;
   const arcs = slices.map((s) => {
@@ -77,19 +83,29 @@ export default function EstadisticasTab({ userId, settings, categories, viewMont
 
   return (
     <div style={styles.screen}>
-      <RootHeader title="Estadísticas" right={<TodayButton viewMonth={viewMonth} setViewMonth={setViewMonth} />} />
-      <div style={{ ...styles.form, paddingTop: 12 }}>
-        <MonthNav viewMonth={viewMonth} setViewMonth={setViewMonth} />
-
-        <div style={styles.tabRow}>
-          <button style={type === "income" ? { ...styles.tabActive, background: "#3B6E62", borderColor: "#3B6E62" } : styles.tab} onClick={() => setType("income")}>
-            Ingreso
-          </button>
-          <button style={type === "expense" ? styles.tabActive : styles.tab} onClick={() => setType("expense")}>
-            Gastos
-          </button>
+      <div style={{ position: "sticky", top: 0, zIndex: 5 }}>
+        <RootHeader title="Estadísticas" right={<TodayButton viewMonth={viewMonth} setViewMonth={setViewMonth} />} />
+        <div style={styles.subHeader}>
+          <MonthNav viewMonth={viewMonth} setViewMonth={setViewMonth} />
+          <div style={{ ...styles.tabRow, padding: 0 }}>
+            <button
+              style={{ ...(type === "income" ? { ...styles.tabActive, background: "#3B6E62", borderColor: "#3B6E62" } : styles.tab), display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "7px 0" }}
+              onClick={() => setType("income")}
+            >
+              <span>Ingreso</span>
+              <span style={{ color: type === "income" ? "#fff" : "#3B6E62" }}>{money(incomeSum, settings.main_currency)}</span>
+            </button>
+            <button
+              style={{ ...(type === "expense" ? styles.tabActive : styles.tab), display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "7px 0" }}
+              onClick={() => setType("expense")}
+            >
+              <span>Gastos</span>
+              <span style={{ color: type === "expense" ? "#fff" : "#B0473A" }}>{money(expenseSum, settings.main_currency)}</span>
+            </button>
+          </div>
         </div>
-
+      </div>
+      <div style={{ ...styles.form, paddingTop: 12 }} {...swipeHandlers}>
         {arcs.length === 0 ? (
           <div style={styles.emptyState}>
             <p style={styles.emptyTitle}>Nada registrado este mes</p>

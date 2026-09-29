@@ -249,6 +249,14 @@ export function dateInputValue(ms) {
   return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
 }
 
+// Igual que dateInputValue, pero en la zona horaria de la transacción (donde
+// se creó), no en la del navegador de quien la está mirando/editando ahora —
+// para Money Manager, "dónde estoy" solo debe influir al CREAR un registro,
+// nunca al editar uno existente ni al agruparlo por día en las listas.
+export function dateInputValueInZone(ms, tz) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms));
+}
+
 /* =========================================================================
    IMAGEN COMPARTIDA (evita duplicar handlePhoto en varias pantallas)
    ========================================================================= */

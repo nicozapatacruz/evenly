@@ -1,8 +1,8 @@
 import React, { useMemo } from "react";
 import { Plus } from "lucide-react";
 import { styles } from "../../lib/styles.js";
-import { RootHeader, MonthNav, TodayButton } from "../../components/Shared.jsx";
-import { money, measureTextWidth } from "../../lib/helpers.jsx";
+import { RootHeader, MonthNav, TodayButton, useMonthSwipe } from "../../components/Shared.jsx";
+import { money, measureTextWidth, dateInputValueInZone } from "../../lib/helpers.jsx";
 import { useMonthTransactions } from "../../lib/moneyManagerData.js";
 
 const DAY_AMOUNTS_FONT = "12.5px system-ui, sans-serif";
@@ -24,6 +24,7 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
   // Solo pedimos las transacciones del mes visible (no toda la tabla) — se
   // refetchea solo cuando cambiás de mes.
   const { transactions: monthTx, loading } = useMonthTransactions(userId, viewMonth);
+  const swipeHandlers = useMonthSwipe(viewMonth, setViewMonth);
 
   const monthIncome = monthTx.filter((t) => t.type === "income").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
   const monthExpense = monthTx.filter((t) => t.type === "expense").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
@@ -41,7 +42,10 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
   const byDay = useMemo(() => {
     const map = new Map();
     for (const t of monthTx) {
-      const key = new Date(t.date).toISOString().slice(0, 10);
+      // Agrupar por día según la zona horaria PROPIA de la transacción (con
+      // la que se creó), no la de quien la está mirando ahora — así "dónde
+      // estoy" solo importa al crear un registro, nunca al verlo o editarlo.
+      const key = dateInputValueInZone(new Date(t.date).getTime(), t.timezone);
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(t);
     }
@@ -70,7 +74,7 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
           </div>
         </div>
       </div>
-      <div style={{ ...styles.form, paddingTop: 12, paddingBottom: 100 }}>
+      <div style={{ ...styles.form, paddingTop: 12, paddingBottom: 100 }} {...swipeHandlers}>
         {loading ? (
           <div style={styles.emptyState}>
             <p style={styles.emptyTitle}>Cargando transacciones…</p>

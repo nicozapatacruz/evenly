@@ -6,7 +6,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, Footer, ConfirmInline, IconInput, PickerField } from "../../components/Shared.jsx";
-import { parseAmountInput, todayInputValue, dateInputValue, money } from "../../lib/helpers.jsx";
+import { parseAmountInput, todayInputValue, dateInputValueInZone, money } from "../../lib/helpers.jsx";
 import { RECURRING_FREQUENCIES, nextOccurrence, computeAmountMain } from "../../lib/moneyManagerData.js";
 
 const TYPE_INFO = {
@@ -29,7 +29,7 @@ export default function TransactionForm({
   const [managingCategoryType, setManagingCategoryType] = useState(null); // "income" | "expense" | null
 
   const [type, setType] = useState(editingTransaction?.type || "expense");
-  const [date, setDate] = useState(editingTransaction ? dateInputValue(new Date(editingTransaction.date).getTime()) : (defaultDate || todayInputValue()));
+  const [date, setDate] = useState(editingTransaction ? dateInputValueInZone(new Date(editingTransaction.date).getTime(), editingTransaction.timezone) : (defaultDate || todayInputValue()));
   const [amount, setAmount] = useState(editingTransaction ? String(editingTransaction.amount) : "");
   const [currency, setCurrency] = useState(editingTransaction?.currency || settings.main_currency);
   const [exchangeRate, setExchangeRate] = useState(editingTransaction?.exchange_rate ? String(editingTransaction.exchange_rate) : "");
@@ -94,7 +94,7 @@ export default function TransactionForm({
   // es "dirty" (no hay un original con qué comparar).
   const isDirty = !editingTransaction || (
     type !== editingTransaction.type
-    || date !== dateInputValue(new Date(editingTransaction.date).getTime())
+    || date !== dateInputValueInZone(new Date(editingTransaction.date).getTime(), editingTransaction.timezone)
     || amount !== String(editingTransaction.amount)
     || currency !== (editingTransaction.currency || settings.main_currency)
     || exchangeRate !== (editingTransaction.exchange_rate ? String(editingTransaction.exchange_rate) : "")

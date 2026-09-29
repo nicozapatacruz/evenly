@@ -67,6 +67,30 @@ export function MonthNav({ viewMonth, setViewMonth }) {
   );
 }
 
+// Deslizar horizontalmente el body cambia de mes (Transacciones y
+// Estadísticas) — mismo destino que las flechas de MonthNav. Se exige que
+// el gesto sea bien horizontal (mucho más ancho que alto) para no robarle
+// el scroll vertical normal de la lista.
+export function useMonthSwipe(viewMonth, setViewMonth) {
+  const startRef = useRef(null);
+  const onTouchStart = (e) => {
+    const t = e.touches[0];
+    startRef.current = { x: t.clientX, y: t.clientY };
+  };
+  const onTouchEnd = (e) => {
+    if (!startRef.current) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - startRef.current.x;
+    const dy = t.clientY - startRef.current.y;
+    startRef.current = null;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      const dir = dx < 0 ? 1 : -1; // deslizar a la izquierda = mes siguiente
+      setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + dir, 1));
+    }
+  };
+  return { onTouchStart, onTouchEnd };
+}
+
 // Botón "Hoy" para el header (misma posición que el lápiz de Cuentas) — solo
 // aparece si te alejaste del mes actual, para volver de un salto sin tener
 // que contar flechitas.

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "./supabaseClient.js";
+import { dateInputValueInZone } from "./helpers.jsx";
 
 // Todo lo de Money Manager vive en tablas con prefijo mm_, separadas de las
 // de Split Ledger a propósito (ver memoria "money-manager-categories-merge-pending":
@@ -191,8 +192,16 @@ export function useMonthTransactions(userId, viewMonth) {
   const load = useCallback(async () => {
     if (!userId) { setLoading(false); return; }
     setLoading(true);
+    // Rango ampliado ±1 día: a qué mes/día pertenece cada transacción se
+    // decide más abajo por SU PROPIA zona horaria (columna timezone), no por
+    // la del navegador de quien está mirando — este rango solo tiene que
+    // cubrir de sobra el mes pedido para no perder alguna transacción justo
+    // en el borde (nunca puede desplazarse más de un día por diferencia de
+    // huso horario).
     const start = new Date(year, month, 1);
+    start.setDate(start.getDate() - 1);
     const end = new Date(year, month + 1, 1);
+    end.setDate(end.getDate() + 1);
     const { data } = await supabase
       .from("mm_transactions")
       .select("*")
@@ -200,7 +209,10 @@ export function useMonthTransactions(userId, viewMonth) {
       .eq("deleted", false)
       .gte("date", start.toISOString())
       .lt("date", end.toISOString());
-    setTransactions(data || []);
+    // Re-acotar al mes exacto usando la zona propia de cada fila.
+    const monthKey = `${year}-${String(month + 1).padStart(2, "0")}`;
+    const filtered = (data || []).filter((t) => dateInputValueInZone(new Date(t.date).getTime(), t.timezone).startsWith(monthKey));
+    setTransactions(filtered);
     setLoading(false);
   }, [userId, year, month]);
 
@@ -260,6 +272,7 @@ async function generateDueRecurring(userId) {
         category_id: r.category_id, currency: r.currency, amount: r.amount,
         exchange_rate: r.exchange_rate, amount_main: r.amount_main,
         title: r.title, memo: r.memo, date: next.toISOString(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
       next = nextOccurrence(start, r.repeat_unit, r.repeat_interval, next);
       guard += 1;

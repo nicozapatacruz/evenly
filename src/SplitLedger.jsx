@@ -521,7 +521,10 @@ function AppShell({ session, onLogout, refreshProfile }) {
       const payload = { ...tx, date: new Date(tx.date).toISOString() };
       const { error } = id
         ? await supabase.from("mm_transactions").update(payload).eq("id", id)
-        : await supabase.from("mm_transactions").insert({ user_id: session.userId, ...payload });
+        // timezone solo se fija al crear, nunca al editar — es "dónde estabas
+        // cuando pasó esto", no algo que deba cambiar si corregís el monto
+        // de una transacción vieja desde otro país.
+        : await supabase.from("mm_transactions").insert({ user_id: session.userId, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, ...payload });
       if (error) throw error;
       if (recurring) {
         const { error: recError } = await supabase.from("mm_recurring").insert({

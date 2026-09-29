@@ -141,7 +141,14 @@ export function useMoneyManager(userId) {
     const [s, g, a, c, at, r] = await Promise.all([
       supabase.from("mm_settings").select("*").eq("user_id", userId).maybeSingle(),
       supabase.from("mm_account_groups").select("*").eq("user_id", userId).eq("deleted", false).order("sort_order"),
-      supabase.from("mm_accounts").select("*").eq("user_id", userId).eq("deleted", false).order("sort_order"),
+      // Sin filtrar deleted acá a propósito (mismo motivo que categorías,
+      // ver comentario de abajo): una cuenta eliminada tiene que seguir
+      // disponible en el cliente para poder mostrar su nombre/ícono en
+      // transacciones viejas que ya la tenían asignada. El filtrado de "no
+      // ofrecerla para elegir de nuevo" ni "no sumar su saldo" se hace acá
+      // — eso pasa más abajo, cuenta por cuenta (igual que ya hacía con
+      // `hidden`, ahora también con `deleted`).
+      supabase.from("mm_accounts").select("*").eq("user_id", userId).order("sort_order"),
       // Sin filtrar deleted acá a propósito (a diferencia de cuentas/grupos):
       // una categoría eliminada tiene que seguir disponible en el cliente
       // para poder mostrar su nombre/ícono en transacciones viejas que ya
@@ -161,7 +168,7 @@ export function useMoneyManager(userId) {
       await seedDefaults(userId);
       const [g2, a2, c2] = await Promise.all([
         supabase.from("mm_account_groups").select("*").eq("user_id", userId).eq("deleted", false).order("sort_order"),
-        supabase.from("mm_accounts").select("*").eq("user_id", userId).eq("deleted", false).order("sort_order"),
+        supabase.from("mm_accounts").select("*").eq("user_id", userId).order("sort_order"),
         supabase.from("mm_categories").select("*").eq("user_id", userId).order("sort_order"),
       ]);
       setGroups(g2.data || []);
@@ -318,7 +325,10 @@ export function accountBalance(accountId, accountTotals) {
 }
 
 export function groupBalance(groupId, accounts, accountTotals) {
+  // Oculta sigue sumando (solo se le esconde la fila individual) — eliminada
+  // no: ya no es una cuenta activa, aunque siga en memoria para poder
+  // mostrar su nombre en transacciones viejas.
   return accounts
-    .filter((a) => a.group_id === groupId)
+    .filter((a) => a.group_id === groupId && !a.deleted)
     .reduce((sum, a) => sum + accountBalance(a.id, accountTotals), 0);
 }

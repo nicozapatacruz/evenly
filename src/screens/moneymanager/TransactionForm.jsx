@@ -283,10 +283,11 @@ export default function TransactionForm({
             groups={groups
               .map((g) => ({
                 label: g.name,
-                // Las ocultas no se muestran acá — salvo que sea la que ya
-                // tenía elegida esta transacción, para no perder la selección
-                // al editar una que usaba una cuenta que después ocultaste.
-                items: accounts.filter((a) => a.group_id === g.id && (!a.hidden || a.id === accountId)).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
+                // Ocultas o eliminadas no se muestran acá — salvo que sea la
+                // que ya tenía elegida esta transacción, para no perder la
+                // selección al editar una que usaba una cuenta que después
+                // ocultaste o eliminaste.
+                items: accounts.filter((a) => a.group_id === g.id && ((!a.hidden && !a.deleted) || a.id === accountId)).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
               }))
               .filter((g) => g.items.length > 0)}
           />
@@ -302,7 +303,7 @@ export default function TransactionForm({
               groups={groups
                 .map((g) => ({
                   label: g.name,
-                  items: accounts.filter((a) => a.group_id === g.id && a.id !== accountId && (!a.hidden || a.id === toAccountId)).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
+                  items: accounts.filter((a) => a.group_id === g.id && a.id !== accountId && ((!a.hidden && !a.deleted) || a.id === toAccountId)).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
                 }))
                 .filter((g) => g.items.length > 0)}
             />

@@ -31,7 +31,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
     );
   }
 
-  const balances = accounts.map((a) => ({ account: a, balance: accountBalance(a.id, accountTotals) }));
+  const balances = accounts.filter((a) => !a.deleted).map((a) => ({ account: a, balance: accountBalance(a.id, accountTotals) }));
   const capital = balances.filter((b) => b.balance > 0).reduce((s, b) => s + b.balance, 0);
   const debt = balances.filter((b) => b.balance < 0).reduce((s, b) => s + b.balance, 0);
 
@@ -71,7 +71,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
         )}
 
         {groups.map((g) => {
-          const groupAccounts = accounts.filter((a) => a.group_id === g.id);
+          const groupAccounts = accounts.filter((a) => a.group_id === g.id && !a.deleted);
           if (groupAccounts.length === 0) return null;
           const visibleAccounts = groupAccounts.filter((a) => !a.hidden);
           const gBalance = groupBalance(g.id, accounts, accountTotals);
@@ -177,7 +177,7 @@ export function ManageGroups({ session, groups, accounts, reload, showError, onB
               {order.map((id) => {
                 const g = groups.find((x) => x.id === id);
                 if (!g) return null;
-                const accCount = accounts.filter((a) => a.group_id === id).length;
+                const accCount = accounts.filter((a) => a.group_id === id && !a.deleted).length;
                 return (
                   <div key={id}>
                     <SortableGroupRow
@@ -333,7 +333,7 @@ export function ManageAllAccounts({ session, groups, accounts, reload, showError
         right={<button style={styles.iconBtnGhost} onClick={() => setCreating(true)} aria-label="Nueva cuenta"><Plus size={20} /></button>}
       />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        {groups.filter((g) => accounts.some((a) => a.group_id === g.id)).map((g) => (
+        {groups.filter((g) => accounts.some((a) => a.group_id === g.id && !a.deleted)).map((g) => (
           <div key={g.id}>
             <p style={styles.label}>{g.name}</p>
             <AccountGroupEditor group={g} accounts={accounts} reload={reload} showError={showError} />
@@ -406,7 +406,7 @@ function NewAccountForm({ session, groups, defaultGroupId, reload, showError, on
 // pantalla) y también solo, en ManageAccounts (cuando se llega desde "Tipos
 // de cuentas" y elegís un único grupo).
 function AccountGroupEditor({ group, accounts, reload, showError }) {
-  const groupAccounts = accounts.filter((a) => a.group_id === group.id);
+  const groupAccounts = accounts.filter((a) => a.group_id === group.id && !a.deleted);
   const [names, setNames] = useState(() => Object.fromEntries(groupAccounts.map((a) => [a.id, a.name])));
   const [icons, setIcons] = useState(() => Object.fromEntries(groupAccounts.map((a) => [a.id, a.icon])));
   const [confirmRemoveId, setConfirmRemoveId] = useState(null);

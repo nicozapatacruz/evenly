@@ -326,31 +326,37 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", o
   const clearable = !!(onClear && selected);
 
   return (
-    <div ref={containerRef} style={{ position: "relative" }}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        style={{ ...styles.input, width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", borderRadius: open ? "10px 10px 0 0" : 10, paddingRight: clearable ? 34 : undefined }}
-      >
-        {selected ? (
-          <>
-            {selected.icon && <span>{selected.icon}</span>}
-            <span>{selected.label}</span>
-          </>
-        ) : (
-          <span style={{ color: "#A89A87" }}>{placeholder}</span>
-        )}
-      </button>
-      {clearable && (
+    <div ref={containerRef}>
+      {/* Wrapper propio solo para el botón+X — si el "relative" viviera en
+          containerRef (que también envuelve la grilla abierta), el 50% de
+          top se calculaba sobre esa altura total y la X terminaba flotando
+          a mitad de la grilla en vez de centrada en el input. */}
+      <div style={{ position: "relative" }}>
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); setOpen(false); onClear(); }}
-          style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", padding: 6, display: "flex", color: "#A89A87" }}
-          aria-label="Quitar selección"
+          onClick={() => setOpen((o) => !o)}
+          style={{ ...styles.input, width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", borderRadius: open ? "10px 10px 0 0" : 10, paddingRight: clearable ? 34 : undefined }}
         >
-          <X size={15} />
+          {selected ? (
+            <>
+              {selected.icon && <span>{selected.icon}</span>}
+              <span>{selected.label}</span>
+            </>
+          ) : (
+            <span style={{ color: "#A89A87" }}>{placeholder}</span>
+          )}
         </button>
-      )}
+        {clearable && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); setOpen(false); onClear(); }}
+            style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", padding: 6, display: "flex", color: "#A89A87" }}
+            aria-label="Quitar selección"
+          >
+            <X size={15} />
+          </button>
+        )}
+      </div>
       {open && (
         <div style={{ border: "1px solid #DDD2BE", borderTop: "none", borderRadius: "0 0 10px 10px", background: "#fff", overflow: "hidden" }}>
           {groups.map((g) => (

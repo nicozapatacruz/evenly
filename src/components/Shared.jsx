@@ -289,7 +289,7 @@ export function Footer({ children }) {
 // una lista plana sin encabezados (ej. categorías, que no se agrupan).
 let pickerInstanceCounter = 0;
 
-export function PickerField({ value, onChange, groups, placeholder = "Elegir" }) {
+export function PickerField({ value, onChange, groups, placeholder = "Elegir", onClear }) {
   const [open, setOpen] = useState(false);
   const idRef = useRef(null);
   if (idRef.current === null) idRef.current = ++pickerInstanceCounter;
@@ -323,12 +323,14 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir" })
     return () => document.removeEventListener("click", onClickOutside);
   }, [open]);
 
+  const clearable = !!(onClear && selected);
+
   return (
-    <div ref={containerRef}>
+    <div ref={containerRef} style={{ position: "relative" }}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        style={{ ...styles.input, width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", borderRadius: open ? "10px 10px 0 0" : 10 }}
+        style={{ ...styles.input, width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", borderRadius: open ? "10px 10px 0 0" : 10, paddingRight: clearable ? 34 : undefined }}
       >
         {selected ? (
           <>
@@ -339,6 +341,16 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir" })
           <span style={{ color: "#A89A87" }}>{placeholder}</span>
         )}
       </button>
+      {clearable && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setOpen(false); onClear(); }}
+          style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", padding: 6, display: "flex", color: "#A89A87" }}
+          aria-label="Quitar selección"
+        >
+          <X size={15} />
+        </button>
+      )}
       {open && (
         <div style={{ border: "1px solid #DDD2BE", borderTop: "none", borderRadius: "0 0 10px 10px", background: "#fff", overflow: "hidden" }}>
           {groups.map((g) => (

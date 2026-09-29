@@ -142,7 +142,12 @@ export function useMoneyManager(userId) {
       supabase.from("mm_settings").select("*").eq("user_id", userId).maybeSingle(),
       supabase.from("mm_account_groups").select("*").eq("user_id", userId).eq("deleted", false).order("sort_order"),
       supabase.from("mm_accounts").select("*").eq("user_id", userId).eq("deleted", false).order("sort_order"),
-      supabase.from("mm_categories").select("*").eq("user_id", userId).eq("deleted", false).order("sort_order"),
+      // Sin filtrar deleted acá a propósito (a diferencia de cuentas/grupos):
+      // una categoría eliminada tiene que seguir disponible en el cliente
+      // para poder mostrar su nombre/ícono en transacciones viejas que ya
+      // la tenían asignada — el filtrado de "no ofrecerla para elegir de
+      // nuevo" se hace más abajo, categoría por categoría, no acá.
+      supabase.from("mm_categories").select("*").eq("user_id", userId).order("sort_order"),
       supabase.from("mm_account_totals").select("*").eq("user_id", userId),
       supabase.from("mm_recurring").select("*").eq("user_id", userId).order("next_date"),
     ]);
@@ -157,7 +162,7 @@ export function useMoneyManager(userId) {
       const [g2, a2, c2] = await Promise.all([
         supabase.from("mm_account_groups").select("*").eq("user_id", userId).eq("deleted", false).order("sort_order"),
         supabase.from("mm_accounts").select("*").eq("user_id", userId).eq("deleted", false).order("sort_order"),
-        supabase.from("mm_categories").select("*").eq("user_id", userId).eq("deleted", false).order("sort_order"),
+        supabase.from("mm_categories").select("*").eq("user_id", userId).order("sort_order"),
       ]);
       setGroups(g2.data || []);
       setAccounts(a2.data || []);

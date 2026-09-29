@@ -177,25 +177,31 @@ export default function ConfigScreen({
 
       {section === "moneymanager" && (
         <div style={{ ...styles.form, paddingTop: 12 }}>
-          <p style={styles.label}>Categoría/Cuentas</p>
-          <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
-            <MenuRow label="Categorías de ingreso" onClick={() => setMoneyManagerScreen("categoriesIncome")} />
-            <MenuRow label="Categorías de gasto" onClick={() => setMoneyManagerScreen("categoriesExpense")} />
-            <MenuRow label="Tipos de cuentas" onClick={() => setMoneyManagerScreen("accountTypes")} />
-            <MenuRow label="Gestor de cuentas" onClick={() => setMoneyManagerScreen("accounts")} last />
+          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            <p style={styles.label}>Categoría/Cuentas</p>
+            <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
+              <MenuRow label="Categorías de ingreso" onClick={() => setMoneyManagerScreen("categoriesIncome")} />
+              <MenuRow label="Categorías de gasto" onClick={() => setMoneyManagerScreen("categoriesExpense")} />
+              <MenuRow label="Tipos de cuentas" onClick={() => setMoneyManagerScreen("accountTypes")} />
+              <MenuRow label="Gestor de cuentas" onClick={() => setMoneyManagerScreen("accounts")} last />
+            </div>
           </div>
 
-          <p style={styles.label}>Transacciones</p>
-          <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
-            <MenuRow label="Detalles del período" onClick={() => setMoneyManagerScreen("period")} />
-            <MenuRow label="Transacciones repetidas" onClick={() => setMoneyManagerScreen("recurring")} last />
+          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            <p style={styles.label}>Transacciones</p>
+            <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
+              <MenuRow label="Detalles del período" onClick={() => setMoneyManagerScreen("period")} />
+              <MenuRow label="Transacciones repetidas" onClick={() => setMoneyManagerScreen("recurring")} last />
+            </div>
           </div>
 
-          <p style={styles.label}>Ajustes</p>
-          <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
-            <MenuRow label="Ajustes de moneda" onClick={() => setMoneyManagerScreen("currency")} />
-            <MenuRow label="Respaldo" badge="Próximamente" />
-            <MenuRow label="Apariencia" badge="Próximamente" last />
+          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            <p style={styles.label}>Ajustes</p>
+            <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
+              <MenuRow label="Ajustes de moneda" onClick={() => setMoneyManagerScreen("currency")} />
+              <MenuRow label="Respaldo" badge="Próximamente" />
+              <MenuRow label="Apariencia" badge="Próximamente" last />
+            </div>
           </div>
         </div>
       )}
@@ -520,24 +526,26 @@ function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onO
         El botón de "+" en Split Ledger crea el gasto directo en este grupo.
       </p>
 
-      <p style={styles.label}>Tus grupos ({(groups || []).length})</p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+        <p style={styles.label}>Tus grupos ({(groups || []).length})</p>
 
-      {/* Invitaciones pendientes */}
-      <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
-        <p style={{ margin: 0, padding: "12px 16px 8px", fontSize: 13, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#544A3C", borderBottom: invites.length ? "1px solid #F0EBE2" : "none", display: "flex", alignItems: "center", gap: 8 }}>
-          <Bell size={15} /> Invitaciones ({invites.length})
-        </p>
-        {invites.map((inv) => (
-          <div key={inv.inviteId} style={{ padding: "10px 16px", borderBottom: "1px solid #F0EBE2", display: "flex", flexDirection: "column", gap: 6 }}>
-            <p style={{ margin: 0, fontSize: 13.5, fontFamily: "system-ui, sans-serif" }}>
-              <strong>{inv.fromUsername}</strong> te invitó a <strong>{inv.groupName}</strong> como <strong>{inv.memberName}</strong>
-            </p>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button style={styles.btnGhostSmall} onClick={() => onRejectInvite(inv)}>Rechazar</button>
-              <button style={{ ...styles.btnDangerSmall, background: "#3B6E62" }} onClick={() => onAcceptInvite(inv)}>Aceptar</button>
+        {/* Invitaciones pendientes */}
+        <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
+          <p style={{ margin: 0, padding: "12px 16px 8px", fontSize: 13, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#544A3C", borderBottom: invites.length ? "1px solid #F0EBE2" : "none", display: "flex", alignItems: "center", gap: 8 }}>
+            <Bell size={15} /> Invitaciones ({invites.length})
+          </p>
+          {invites.map((inv) => (
+            <div key={inv.inviteId} style={{ padding: "10px 16px", borderBottom: "1px solid #F0EBE2", display: "flex", flexDirection: "column", gap: 6 }}>
+              <p style={{ margin: 0, fontSize: 13.5, fontFamily: "system-ui, sans-serif" }}>
+                <strong>{inv.fromUsername}</strong> te invitó a <strong>{inv.groupName}</strong> como <strong>{inv.memberName}</strong>
+              </p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button style={styles.btnGhostSmall} onClick={() => onRejectInvite(inv)}>Rechazar</button>
+                <button style={{ ...styles.btnDangerSmall, background: "#3B6E62" }} onClick={() => onAcceptInvite(inv)}>Aceptar</button>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleGroupDragEnd}>

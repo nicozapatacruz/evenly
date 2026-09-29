@@ -50,14 +50,19 @@ export default function TransactionForm({
   const [freqInterval, setFreqInterval] = useState("3");
   const [endDate, setEndDate] = useState("");
 
-  const typeCategories = categories.filter((c) => c.type === (type === "income" ? "income" : "expense"));
+  // Igual que con cuentas ocultas: una categoría eliminada no aparece para
+  // elegir en transacciones nuevas, pero si es la que ya tiene asignada
+  // ESTA transacción, se sigue mostrando (con su nombre/ícono reales) en
+  // vez de desaparecer de golpe al abrir para editar.
+  const typeCategories = categories.filter((c) => c.type === (type === "income" ? "income" : "expense") && (!c.deleted || c.id === categoryId));
 
   useEffect(() => {
     if (type === "transfer") { setCategoryId(""); return; }
-    // Sin default — si la categoría elegida ya no es válida para este tipo
-    // (o no se eligió ninguna todavía), queda vacía en vez de autoseleccionar
-    // la primera de la lista.
-    if (!typeCategories.find((c) => c.id === categoryId)) setCategoryId("");
+    // Si la categoría elegida ya no es válida para este tipo, queda vacía
+    // en vez de autoseleccionar la primera de la lista. Sin categoría es
+    // una opción válida (queda como "Sin categoría"), no hace falta forzar
+    // ninguna acá.
+    if (categoryId && !typeCategories.find((c) => c.id === categoryId)) setCategoryId("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, categories]);
 
@@ -107,8 +112,10 @@ export default function TransactionForm({
     || recurringOpen
   );
 
+  // Categoría es opcional (queda como "Sin categoría" si no se elige
+  // ninguna) — solo transferencia exige sus dos cuentas.
   const canSave = validAmount && validRate && !!accountId && recurringValid && isDirty && (
-    type === "transfer" ? (!!toAccountId && toAccountId !== accountId) : !!categoryId
+    type !== "transfer" || (!!toAccountId && toAccountId !== accountId)
   );
 
   const handleSave = async () => {
@@ -134,7 +141,7 @@ export default function TransactionForm({
         type,
         account_id: accountId,
         to_account_id: type === "transfer" ? toAccountId : null,
-        category_id: type === "transfer" ? null : categoryId,
+        category_id: type === "transfer" ? null : (categoryId || null),
         currency,
         amount: numericAmount,
         exchange_rate: rate,
@@ -254,7 +261,8 @@ export default function TransactionForm({
                 if (v === "__new__") { setManagingCategoryType(type === "income" ? "income" : "expense"); return; }
                 setCategoryId(v);
               }}
-              placeholder="Sin categorías"
+              onClear={() => setCategoryId("")}
+              placeholder="Sin categoría"
               groups={[{
                 label: null,
                 items: [
@@ -424,7 +432,7 @@ function RecurringFields({ type, date, freqValue, setFreqValue, freqInterval, se
 
 export function ManageCategories({ session, type, categories, reload, showError, onBack, initialCreating = false }) {
   const [creating, setCreating] = useState(initialCreating);
-  const typeCategories = categories.filter((c) => c.type === type);
+  const typeCategories = categories.filter((c) => c.type === type && !c.deleted);
   const [names, setNames] = useState(() => Object.fromEntries(typeCategories.map((c) => [c.id, c.name])));
   const [icons, setIcons] = useState(() => Object.fromEntries(typeCategories.map((c) => [c.id, c.icon])));
   const [confirmRemoveId, setConfirmRemoveId] = useState(null);
@@ -556,7 +564,7 @@ function NewCategoryForm({ session, type, categories, reload, showError, onCance
     setSaving(true);
     try {
       const { error } = await supabase.from("mm_categories").insert({
-        user_id: session.userId, type, name: name.trim(), icon: icon || null, sort_order: categories.filter((c) => c.type === type).length,
+        user_id: session.userId, type, name: name.trim(), icon: icon || null, sort_order: categories.filter((c) => c.type === type && !c.deleted).length,
       });
       if (error) throw error;
       await reload();

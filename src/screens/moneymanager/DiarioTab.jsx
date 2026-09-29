@@ -18,7 +18,7 @@ const DAY_LABEL = (d) => d.toLocaleDateString("es-ES", { weekday: "short" }).rep
 
 export default function DiarioTab({ userId, settings, groups, accounts, categories, viewMonth, setViewMonth, onNewTransaction, onEditTransaction }) {
   const accountName = (id) => accounts.find((a) => a.id === id)?.name || "—";
-  const categoryName = (id) => categories.find((c) => c.id === id)?.name || "—";
+  const categoryName = (id) => categories.find((c) => c.id === id)?.name || "Sin categoría";
   const categoryIcon = (id) => categories.find((c) => c.id === id)?.icon;
 
   // Solo pedimos las transacciones del mes visible (no toda la tabla) — se

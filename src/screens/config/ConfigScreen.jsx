@@ -21,7 +21,7 @@ import CurrencySettingsScreen from "../moneymanager/CurrencySettingsScreen.jsx";
 
 export default function ConfigScreen({
   session, invites = [], onAcceptInvite, onRejectInvite, onLogout, refreshProfile,
-  groups, reloadGroups, onCreateGroup, onOpenGroup, showError, showSuccess,
+  groups, reloadGroups, onCreateGroup, onOpenGroup, showError, showSuccess, showInfo,
   changingPassword, setChangingPassword, viewingProfile, setViewingProfile,
   moneyManager, onSaveMoneyTransaction, creatingRecurring, setCreatingRecurring,
   moneyManagerScreen, setMoneyManagerScreen,
@@ -59,6 +59,7 @@ export default function ConfigScreen({
             recurring={moneyManager.recurring}
             reload={moneyManager.reload}
             showError={showError}
+            showInfo={showInfo}
             onCreateNew={() => setCreatingRecurring(true)}
           />
         </div>
@@ -73,6 +74,7 @@ export default function ConfigScreen({
         settings={moneyManager.settings}
         reload={moneyManager.reload}
         showError={showError}
+        showInfo={showInfo}
         onBack={() => setMoneyManagerScreen(null)}
       />
     );
@@ -98,6 +100,7 @@ export default function ConfigScreen({
         categories={moneyManager.categories}
         reload={moneyManager.reload}
         showError={showError}
+        showInfo={showInfo}
         onBack={() => setMoneyManagerScreen(null)}
       />
     );
@@ -111,6 +114,7 @@ export default function ConfigScreen({
         accounts={moneyManager.accounts}
         reload={moneyManager.reload}
         showError={showError}
+        showInfo={showInfo}
         onBack={() => setMoneyManagerScreen(null)}
       />
     );
@@ -124,6 +128,7 @@ export default function ConfigScreen({
         accounts={moneyManager.accounts}
         reload={moneyManager.reload}
         showError={showError}
+        showInfo={showInfo}
         onBack={() => setMoneyManagerScreen(null)}
       />
     );
@@ -216,6 +221,7 @@ export default function ConfigScreen({
           refreshProfile={refreshProfile}
           showError={showError}
           showSuccess={showSuccess}
+          showInfo={showInfo}
           invites={invites}
           onAcceptInvite={onAcceptInvite}
           onRejectInvite={onRejectInvite}
@@ -257,7 +263,7 @@ function MenuRow({ label, onClick, badge, last }) {
    para el botón de "editar" propio; acá alcanza con un estado local).
    ========================================================================= */
 
-function AccountsSettingsScreen({ session, groups, accounts, reload, showError, onBack }) {
+function AccountsSettingsScreen({ session, groups, accounts, reload, showError, showInfo, onBack }) {
   const [view, setView] = useState({ screen: "groups" });
 
   if (view.screen === "accounts") {
@@ -270,6 +276,7 @@ function AccountsSettingsScreen({ session, groups, accounts, reload, showError, 
         accounts={accounts}
         reload={reload}
         showError={showError}
+        showInfo={showInfo}
         onBack={() => setView({ screen: "groups" })}
       />
     );
@@ -282,6 +289,7 @@ function AccountsSettingsScreen({ session, groups, accounts, reload, showError, 
       accounts={accounts}
       reload={reload}
       showError={showError}
+      showInfo={showInfo}
       onBack={onBack}
       onOpenGroup={(groupId) => setView({ screen: "accounts", groupId })}
     />
@@ -417,7 +425,7 @@ function ChangePasswordScreen({ session, onBack, onSave }) {
    defecto, tus grupos)
    ========================================================================= */
 
-function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onOpenGroup, refreshProfile, showError, showSuccess, invites, onAcceptInvite, onRejectInvite }) {
+function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onOpenGroup, refreshProfile, showError, showSuccess, showInfo, invites, onAcceptInvite, onRejectInvite }) {
   const [displayName, setDisplayName] = useState(session.displayName || "");
   const [savingName, setSavingName] = useState(false);
   const [togglingEnabled, setTogglingEnabled] = useState(false);
@@ -486,6 +494,7 @@ function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onO
       const { error } = await supabase.from("profiles").update({ default_group_id: value }).eq("id", session.userId);
       if (error) throw error;
       await refreshProfile();
+      showInfo("Guardado.");
     } catch (e) { showError(`No se pudo actualizar: ${e?.message || e}`); } finally { setSavingDefault(false); }
   };
 

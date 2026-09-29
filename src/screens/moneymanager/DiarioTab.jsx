@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { styles } from "../../lib/styles.js";
 import { RootHeader, MonthNav, TodayButton, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
 import { money, measureTextWidth, dateInputValueInZone } from "../../lib/helpers.jsx";
@@ -18,8 +18,19 @@ const DAY_LABEL = (d) => d.toLocaleDateString("es-ES", { weekday: "short" }).rep
 
 export default function DiarioTab({ userId, settings, groups, accounts, categories, viewMonth, setViewMonth, onNewTransaction, onEditTransaction }) {
   const accountName = (id) => accounts.find((a) => a.id === id)?.name || "—";
-  const categoryName = (id) => categories.find((c) => c.id === id)?.name || "Sin categoría";
+  const accountDeleted = (id) => !!accounts.find((a) => a.id === id)?.deleted;
   const categoryIcon = (id) => categories.find((c) => c.id === id)?.icon;
+  const categoryDeleted = (id) => !!categories.find((c) => c.id === id)?.deleted;
+
+  // Cuentas no tienen un ícono propio en esta fila (a diferencia de
+  // categoría) — se marca directo sobre el texto: tachado, rojo, con el
+  // ícono de basura al lado.
+  const accountLabel = (id) => (
+    <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: 4, ...(accountDeleted(id) ? { textDecoration: "line-through", color: "#B0473A" } : null) }}>
+      {accountName(id)}
+      {accountDeleted(id) && <Trash2 size={11} style={{ flexShrink: 0 }} />}
+    </span>
+  );
 
   // Solo pedimos las transacciones del mes visible (no toda la tabla) — se
   // refetchea solo cuando cambiás de mes.
@@ -111,13 +122,31 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
                     {t.type !== "transfer" && categoryIcon(t.category_id) && (
-                      <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>{categoryIcon(t.category_id)}</span>
+                      <span style={{ position: "relative", flexShrink: 0, display: "inline-flex" }}>
+                        <span style={{ fontSize: 18, lineHeight: 1, opacity: categoryDeleted(t.category_id) ? 0.5 : 1 }}>{categoryIcon(t.category_id)}</span>
+                        {categoryDeleted(t.category_id) && (
+                          <span style={{ position: "absolute", bottom: -3, right: -5, background: "#fff", borderRadius: "50%", padding: 1, display: "flex" }}>
+                            <Trash2 size={10} color="#B0473A" />
+                          </span>
+                        )}
+                      </span>
                     )}
                     <div style={{ minWidth: 0 }}>
-                      <p style={{ margin: 0, fontWeight: 600 }}>{t.type === "transfer" ? (t.title || "Transferencia") : (t.title || categoryName(t.category_id))}</p>
-                      <p style={{ margin: 0, fontSize: 12, color: "#6B6355" }}>
-                        {t.type === "transfer" ? `${accountName(t.account_id)} → ${accountName(t.to_account_id)}` : accountName(t.account_id)}
-                      </p>
+                      {t.type === "transfer" ? (
+                        <>
+                          <p style={{ margin: 0, fontWeight: 600 }}>{t.title || "Transferencia"}</p>
+                          <p style={{ margin: 0, fontSize: 12, color: "#6B6355", display: "flex", alignItems: "center", gap: 4 }}>
+                            {accountLabel(t.account_id)} → {accountLabel(t.to_account_id)}
+                          </p>
+                        </>
+                      ) : t.title ? (
+                        <>
+                          <p style={{ margin: 0, fontWeight: 600 }}>{t.title}</p>
+                          <p style={{ margin: 0, fontSize: 12, color: "#6B6355" }}>{accountLabel(t.account_id)}</p>
+                        </>
+                      ) : (
+                        <p style={{ margin: 0, fontSize: 12, color: "#6B6355" }}>{accountLabel(t.account_id)}</p>
+                      )}
                     </div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0 }}>

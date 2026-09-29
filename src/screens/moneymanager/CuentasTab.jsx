@@ -102,7 +102,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
    GESTIONAR GRUPOS DE CUENTAS
    ========================================================================= */
 
-export function ManageGroups({ session, groups, accounts, reload, showError, onBack, onOpenGroup }) {
+export function ManageGroups({ session, groups, accounts, reload, showError, showInfo, onBack, onOpenGroup }) {
   const [creating, setCreating] = useState(false);
   const [names, setNames] = useState(() => Object.fromEntries(groups.map((g) => [g.id, g.name])));
   const [confirmRemoveId, setConfirmRemoveId] = useState(null);
@@ -138,14 +138,25 @@ export function ManageGroups({ session, groups, accounts, reload, showError, onB
       const { error } = await supabase.from("mm_account_groups").update({ name }).eq("id", id);
       if (error) throw error;
       await reload();
+      showInfo("Nombre actualizado.");
     } catch (e) { showError(`No se pudo renombrar: ${e?.message || e}`); }
   };
 
   const removeGroup = async (id) => {
+    const name = groups.find((g) => g.id === id)?.name;
     try {
       const { error } = await supabase.from("mm_account_groups").update({ deleted: true }).eq("id", id);
       if (error) throw error;
+      // El mensaje de confirmación avisa "se borran juntas" — hay que
+      // cumplirlo de verdad, si no las cuentas quedan huérfanas (activas,
+      // sumando al balance, pero invisibles porque su grupo ya no existe).
+      const idsToDelete = accounts.filter((a) => a.group_id === id && !a.deleted).map((a) => a.id);
+      if (idsToDelete.length) {
+        const { error: accError } = await supabase.from("mm_accounts").update({ deleted: true }).in("id", idsToDelete);
+        if (accError) throw accError;
+      }
       await reload();
+      showInfo(`"${name}" eliminado.`);
     } catch (e) { showError(`No se pudo borrar: ${e?.message || e}`); }
     setConfirmRemoveId(null);
   };
@@ -273,7 +284,7 @@ function SortableGroupRow({ group, name, onChangeName, onBlur, onOpen, onRemove,
    GESTIONAR CUENTAS DE UN GRUPO
    ========================================================================= */
 
-export function ManageAccounts({ session, group, accounts, reload, showError, onBack }) {
+export function ManageAccounts({ session, group, accounts, reload, showError, showInfo, onBack }) {
   const [creating, setCreating] = useState(false);
 
   if (creating) {
@@ -298,7 +309,7 @@ export function ManageAccounts({ session, group, accounts, reload, showError, on
         right={<button style={styles.iconBtnGhost} onClick={() => setCreating(true)} aria-label="Nueva cuenta"><Plus size={20} /></button>}
       />
       <div style={styles.form}>
-        <AccountGroupEditor group={group} accounts={accounts} reload={reload} showError={showError} />
+        <AccountGroupEditor group={group} accounts={accounts} reload={reload} showError={showError} showInfo={showInfo} />
       </div>
     </div>
   );
@@ -309,7 +320,7 @@ export function ManageAccounts({ session, group, accounts, reload, showError, on
 // "Tipos de cuentas"). Cada grupo es solo un encabezado de sección — para
 // renombrar/reordenar/crear GRUPOS está la pantalla separada "Tipos de
 // cuentas", reachable únicamente desde Configuración.
-export function ManageAllAccounts({ session, groups, accounts, reload, showError, onBack }) {
+export function ManageAllAccounts({ session, groups, accounts, reload, showError, showInfo, onBack }) {
   const [creating, setCreating] = useState(false);
 
   if (creating) {
@@ -336,7 +347,7 @@ export function ManageAllAccounts({ session, groups, accounts, reload, showError
         {groups.filter((g) => accounts.some((a) => a.group_id === g.id && !a.deleted)).map((g) => (
           <div key={g.id}>
             <p style={styles.label}>{g.name}</p>
-            <AccountGroupEditor group={g} accounts={accounts} reload={reload} showError={showError} />
+            <AccountGroupEditor group={g} accounts={accounts} reload={reload} showError={showError} showInfo={showInfo} />
           </div>
         ))}
       </div>
@@ -405,7 +416,7 @@ function NewAccountForm({ session, groups, defaultGroupId, reload, showError, on
 // por grupo en "Gestor de cuentas" (todos los grupos juntos en una sola
 // pantalla) y también solo, en ManageAccounts (cuando se llega desde "Tipos
 // de cuentas" y elegís un único grupo).
-function AccountGroupEditor({ group, accounts, reload, showError }) {
+function AccountGroupEditor({ group, accounts, reload, showError, showInfo }) {
   const groupAccounts = accounts.filter((a) => a.group_id === group.id && !a.deleted);
   const [names, setNames] = useState(() => Object.fromEntries(groupAccounts.map((a) => [a.id, a.name])));
   const [icons, setIcons] = useState(() => Object.fromEntries(groupAccounts.map((a) => [a.id, a.icon])));
@@ -443,6 +454,7 @@ function AccountGroupEditor({ group, accounts, reload, showError }) {
       const { error } = await supabase.from("mm_accounts").update({ name }).eq("id", id);
       if (error) throw error;
       await reload();
+      showInfo("Nombre actualizado.");
     } catch (e) { showError(`No se pudo renombrar: ${e?.message || e}`); }
   };
 
@@ -453,6 +465,7 @@ function AccountGroupEditor({ group, accounts, reload, showError }) {
       const { error } = await supabase.from("mm_accounts").update({ icon: icon || null }).eq("id", id);
       if (error) throw error;
       await reload();
+      showInfo("Ícono actualizado.");
     } catch (e) { showError(`No se pudo guardar el ícono: ${e?.message || e}`); }
   };
 
@@ -466,10 +479,12 @@ function AccountGroupEditor({ group, accounts, reload, showError }) {
   };
 
   const removeAccount = async (id) => {
+    const name = groupAccounts.find((a) => a.id === id)?.name;
     try {
       const { error } = await supabase.from("mm_accounts").update({ deleted: true }).eq("id", id);
       if (error) throw error;
       await reload();
+      showInfo(`"${name}" eliminada.`);
     } catch (e) { showError(`No se pudo borrar: ${e?.message || e}`); }
     setConfirmRemoveId(null);
   };

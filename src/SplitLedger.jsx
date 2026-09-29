@@ -558,6 +558,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
       const { error } = await supabase.from("mm_transactions").update({ deleted: true }).eq("id", id);
       if (error) throw error;
       await moneyManager.reload();
+      showInfo("Transacción eliminada.");
       return true;
     } catch (e) {
       showError(`No se pudo borrar: ${e?.message || e}`);
@@ -607,11 +608,14 @@ function AppShell({ session, onLogout, refreshProfile }) {
   }, [session.userId, session.displayName, reloadGroup, loadInvites]);
 
   const handleRejectInvite = useCallback(async (invite) => {
+    let rejected = false;
     try {
       const { error } = await supabase.from("invites").update({ status: "rejected" }).eq("id", invite.inviteId);
       if (error) throw error;
+      rejected = true;
     } catch { /* si falla, igual quitamos la invitación de la bandeja */ }
     await loadInvites();
+    if (rejected) showInfo("Invitación rechazada.");
   }, [loadInvites]);
 
   // Si se apaga "Use Split Ledger" mientras estás parado ahí, te manda a Configuración
@@ -691,6 +695,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           accountTotals={moneyManager.accountTotals}
           reload={moneyManager.reload}
           showError={showError}
+          showInfo={showInfo}
           view={accountsView}
           setView={setAccountsView}
         />
@@ -729,6 +734,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           categories={moneyManager.categories}
           reloadCategories={moneyManager.reload}
           showError={showError}
+          showInfo={showInfo}
           editingTransaction={ledgerView.transaction}
           defaultDate={ledgerView.date}
           onCancel={() => setLedgerView({ screen: "list" })}
@@ -757,6 +763,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           onOpenGroup={(groupId) => { setActiveTab("splitledger"); setSplitLedgerView({ screen: "group", groupId }); }}
           showError={showError}
           showSuccess={showSuccess}
+          showInfo={showInfo}
           changingPassword={changingPassword}
           setChangingPassword={setChangingPassword}
           viewingProfile={viewingProfile}

@@ -110,6 +110,7 @@ export default function SplitLedgerTab({
               const { error } = await supabase.from("expenses").update({ deleted: true }).eq("id", expenseId);
               if (error) throw error;
               await reloadGroup(activeGroup.id);
+              showInfo("Gasto eliminado.");
             } catch (e) { showError(`No se pudo borrar el gasto: ${e?.message || e}`); }
           }}
         />
@@ -175,6 +176,7 @@ export default function SplitLedgerTab({
               if (error) throw error;
               await reloadGroup(activeGroup.id);
               setView({ screen: "group", groupId: activeGroup.id });
+              showInfo("Gasto eliminado.");
             } catch (e) { showError(`No se pudo borrar el gasto: ${e?.message || e}`); }
           }}
         />
@@ -252,6 +254,7 @@ export default function SplitLedgerTab({
             try {
               await deleteGroup(activeGroup.id);
               setView({ screen: "home" });
+              showInfo(`"${activeGroup.name}" eliminado.`);
             } catch (e) { showError(`No se pudo borrar el grupo: ${e?.message || e}`); }
           }}
           onInvite={() => setView({ screen: "inviteScreen", groupId: activeGroup.id })}

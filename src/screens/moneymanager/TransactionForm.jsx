@@ -23,7 +23,7 @@ const TYPE_INFO = {
    ========================================================================= */
 
 export default function TransactionForm({
-  session, settings, groups, accounts, categories, onCancel, onSave, onDelete, reloadCategories, showError,
+  session, settings, groups, accounts, categories, onCancel, onSave, onDelete, reloadCategories, showError, showInfo,
   forceRecurringOpen = false, hideRemoveRecurring = false, editingTransaction = null, defaultDate = null,
 }) {
   const [managingCategoryType, setManagingCategoryType] = useState(null); // "income" | "expense" | null
@@ -74,6 +74,7 @@ export default function TransactionForm({
         categories={categories}
         reload={reloadCategories}
         showError={showError}
+        showInfo={showInfo}
         onBack={() => setManagingCategoryType(null)}
         initialCreating
       />
@@ -266,12 +267,17 @@ export default function TransactionForm({
               groups={[{
                 label: null,
                 items: [
-                  ...typeCategories.map((c) => ({ value: c.id, label: c.name, icon: c.icon })),
+                  ...typeCategories.map((c) => ({ value: c.id, label: c.name, icon: c.icon, deleted: c.deleted })),
                   { value: "__new__", label: "Nuevo", icon: "➕" },
                 ],
               }]}
             />
           </label>
+        )}
+        {type !== "transfer" && categories.find((c) => c.id === categoryId)?.deleted && (
+          <p style={{ ...styles.muted, padding: 0, marginTop: -8, color: "#B0473A", display: "flex", alignItems: "center", gap: 5 }}>
+            <Trash2 size={13} /> Esta categoría fue eliminada.
+          </p>
         )}
 
         <label style={styles.label}>
@@ -287,11 +293,16 @@ export default function TransactionForm({
                 // que ya tenía elegida esta transacción, para no perder la
                 // selección al editar una que usaba una cuenta que después
                 // ocultaste o eliminaste.
-                items: accounts.filter((a) => a.group_id === g.id && ((!a.hidden && !a.deleted) || a.id === accountId)).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
+                items: accounts.filter((a) => a.group_id === g.id && ((!a.hidden && !a.deleted) || a.id === accountId)).map((a) => ({ value: a.id, label: a.name, icon: a.icon, deleted: a.deleted })),
               }))
               .filter((g) => g.items.length > 0)}
           />
         </label>
+        {accounts.find((a) => a.id === accountId)?.deleted && (
+          <p style={{ ...styles.muted, padding: 0, marginTop: -8, color: "#B0473A", display: "flex", alignItems: "center", gap: 5 }}>
+            <Trash2 size={13} /> Esta cuenta fue eliminada.
+          </p>
+        )}
 
         {type === "transfer" && (
           <label style={styles.label}>
@@ -303,11 +314,16 @@ export default function TransactionForm({
               groups={groups
                 .map((g) => ({
                   label: g.name,
-                  items: accounts.filter((a) => a.group_id === g.id && a.id !== accountId && ((!a.hidden && !a.deleted) || a.id === toAccountId)).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
+                  items: accounts.filter((a) => a.group_id === g.id && a.id !== accountId && ((!a.hidden && !a.deleted) || a.id === toAccountId)).map((a) => ({ value: a.id, label: a.name, icon: a.icon, deleted: a.deleted })),
                 }))
                 .filter((g) => g.items.length > 0)}
             />
           </label>
+        )}
+        {type === "transfer" && accounts.find((a) => a.id === toAccountId)?.deleted && (
+          <p style={{ ...styles.muted, padding: 0, marginTop: -8, color: "#B0473A", display: "flex", alignItems: "center", gap: 5 }}>
+            <Trash2 size={13} /> Esta cuenta fue eliminada.
+          </p>
         )}
 
         <label style={styles.label}>
@@ -431,7 +447,7 @@ function RecurringFields({ type, date, freqValue, setFreqValue, freqInterval, se
    sin subcategorías por ahora)
    ========================================================================= */
 
-export function ManageCategories({ session, type, categories, reload, showError, onBack, initialCreating = false }) {
+export function ManageCategories({ session, type, categories, reload, showError, showInfo, onBack, initialCreating = false }) {
   const [creating, setCreating] = useState(initialCreating);
   const typeCategories = categories.filter((c) => c.type === type && !c.deleted);
   const [names, setNames] = useState(() => Object.fromEntries(typeCategories.map((c) => [c.id, c.name])));
@@ -471,6 +487,7 @@ export function ManageCategories({ session, type, categories, reload, showError,
       const { error } = await supabase.from("mm_categories").update({ name }).eq("id", id);
       if (error) throw error;
       await reload();
+      showInfo("Nombre actualizado.");
     } catch (e) { showError(`No se pudo renombrar: ${e?.message || e}`); }
   };
 
@@ -481,14 +498,17 @@ export function ManageCategories({ session, type, categories, reload, showError,
       const { error } = await supabase.from("mm_categories").update({ icon: icon || null }).eq("id", id);
       if (error) throw error;
       await reload();
+      showInfo("Ícono actualizado.");
     } catch (e) { showError(`No se pudo guardar el ícono: ${e?.message || e}`); }
   };
 
   const removeCategory = async (id) => {
+    const name = typeCategories.find((c) => c.id === id)?.name;
     try {
       const { error } = await supabase.from("mm_categories").update({ deleted: true }).eq("id", id);
       if (error) throw error;
       await reload();
+      showInfo(`"${name}" eliminada.`);
     } catch (e) { showError(`No se pudo borrar: ${e?.message || e}`); }
     setConfirmRemoveId(null);
   };
@@ -565,7 +585,11 @@ function NewCategoryForm({ session, type, categories, reload, showError, onCance
     setSaving(true);
     try {
       const { error } = await supabase.from("mm_categories").insert({
-        user_id: session.userId, type, name: name.trim(), icon: icon || null, sort_order: categories.filter((c) => c.type === type && !c.deleted).length,
+        // 999 en vez de "contar activas" — con categorías eliminadas de por
+        // medio (que ocupan sort_order pero no cuentan como activas), contar
+        // se desalinea del máximo real y la nueva no cae al final. Mismo
+        // patrón que ya usan las cuentas nuevas.
+        user_id: session.userId, type, name: name.trim(), icon: icon || null, sort_order: 999,
       });
       if (error) throw error;
       await reload();

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Camera, ChevronLeft, ChevronRight, User, X } from "lucide-react";
+import { ArrowLeft, Camera, ChevronLeft, ChevronRight, Trash2, User, X } from "lucide-react";
 import { styles } from "../lib/styles.js";
 import { ICON_OPTIONS } from "../lib/moneyManagerData.js";
 
@@ -340,7 +340,12 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", o
           {selected ? (
             <>
               {selected.icon && <span>{selected.icon}</span>}
-              <span>{selected.label}</span>
+              <span style={selected.deleted ? { textDecoration: "line-through", color: "#B0473A" } : undefined}>{selected.label}</span>
+              {selected.deleted && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 1, color: "#B0473A" }}>
+                  (<Trash2 size={12} />)
+                </span>
+              )}
             </>
           ) : (
             <span style={{ color: "#A89A87" }}>{placeholder}</span>
@@ -381,7 +386,14 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", o
                     }}
                   >
                     {it.icon && <span style={{ flexShrink: 0 }}>{it.icon}</span>}
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.label}</span>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", ...(it.deleted ? { textDecoration: "line-through", color: "#B0473A" } : null) }}>
+                      {it.label}
+                    </span>
+                    {it.deleted && (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 1, flexShrink: 0, color: "#B0473A" }}>
+                        (<Trash2 size={12} />)
+                      </span>
+                    )}
                   </button>
                 ))}
                 {/* Celdas vacías al final de la última fila — mismo gris que

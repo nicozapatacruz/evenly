@@ -24,7 +24,7 @@ function freqLabel(r) {
    header de Config).
    ========================================================================= */
 
-export default function RecurringScreen({ accounts, recurring, reload, showError, onCreateNew }) {
+export default function RecurringScreen({ accounts, recurring, reload, showError, showInfo, onCreateNew }) {
   const [confirmRemoveId, setConfirmRemoveId] = useState(null);
 
   const accountName = (id) => accounts.find((a) => a.id === id)?.name || "—";
@@ -34,6 +34,7 @@ export default function RecurringScreen({ accounts, recurring, reload, showError
       const { error } = await supabase.from("mm_recurring").delete().eq("id", id);
       if (error) throw error;
       await reload();
+      showInfo("Transacción repetida eliminada.");
     } catch (e) { showError(`No se pudo borrar: ${e?.message || e}`); }
     setConfirmRemoveId(null);
   };

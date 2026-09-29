@@ -18,19 +18,23 @@ const STARTUP_TAB_OPTIONS = [
    no está construida — ver memoria de simplificaciones) y la tab de inicio.
    ========================================================================= */
 
-export default function PeriodSettingsScreen({ session, settings, reload, showError, onBack }) {
+export default function PeriodSettingsScreen({ session, settings, reload, showError, showInfo, onBack }) {
   const [monthStartDay, setMonthStartDay] = useState(settings.month_start_day);
   const [weekStartDay, setWeekStartDay] = useState(settings.week_start_day);
   const [autocomplete, setAutocomplete] = useState(settings.autocomplete_notes);
   const [startupTab, setStartupTab] = useState(settings.startup_tab || "");
   const [saving, setSaving] = useState(false);
 
-  const save = async (patch) => {
+  // silent=true para el toggle (el switch ya se ve moverse solo — un toast
+  // ahí sería ruido); los <select> sin botón sí lo necesitan, no dan
+  // ninguna otra pista de que la elección llegó a guardarse.
+  const save = async (patch, { silent = false } = {}) => {
     setSaving(true);
     try {
       const { error } = await supabase.from("mm_settings").upsert({ user_id: session.userId, ...patch }, { onConflict: "user_id" });
       if (error) throw error;
       await reload();
+      if (!silent) showInfo("Guardado.");
     } catch (e) { showError(`No se pudo guardar: ${e?.message || e}`); }
     setSaving(false);
   };
@@ -65,7 +69,7 @@ export default function PeriodSettingsScreen({ session, settings, reload, showEr
           label="Autocompletar notas"
           description="Sugerir notas anteriores al escribir"
           checked={autocomplete}
-          onChange={(v) => { setAutocomplete(v); save({ autocomplete_notes: v }); }}
+          onChange={(v) => { setAutocomplete(v); save({ autocomplete_notes: v }, { silent: true }); }}
         />
 
         <label style={styles.label}>

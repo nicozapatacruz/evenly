@@ -551,6 +551,20 @@ function AppShell({ session, onLogout, refreshProfile }) {
     }
   };
 
+  // Soft-delete (mismo patrón que categorías/cuentas) — mm_transactions.deleted
+  // ya es lo que filtran todas las vistas/consultas existentes.
+  const deleteMoneyTransaction = async (id) => {
+    try {
+      const { error } = await supabase.from("mm_transactions").update({ deleted: true }).eq("id", id);
+      if (error) throw error;
+      await moneyManager.reload();
+      return true;
+    } catch (e) {
+      showError(`No se pudo borrar: ${e?.message || e}`);
+      return false;
+    }
+  };
+
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 3800);
@@ -621,6 +635,13 @@ function AppShell({ session, onLogout, refreshProfile }) {
 
   const handleTabClick = (tab) => {
     if (tab.comingSoon) { showInfo("Próximamente"); return; }
+    // Re-tocar la tab en la que ya estás parado (Transacciones/Estadísticas)
+    // te lleva al mes actual — mismo gesto que el botón "Hoy" del header.
+    if (tab.key === activeTab && (tab.key === "ledger" || tab.key === "stats")) {
+      const now = new Date();
+      setLedgerMonth(new Date(now.getFullYear(), now.getMonth(), 1));
+      return;
+    }
     setActiveTab(tab.key);
   };
 
@@ -713,6 +734,10 @@ function AppShell({ session, onLogout, refreshProfile }) {
           onCancel={() => setLedgerView({ screen: "list" })}
           onSave={async (tx) => {
             const ok = await saveMoneyTransaction(tx);
+            if (ok) setLedgerView({ screen: "list" });
+          }}
+          onDelete={async (id) => {
+            const ok = await deleteMoneyTransaction(id);
             if (ok) setLedgerView({ screen: "list" });
           }}
         />

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Menu, Plus, ArrowLeftRight } from "lucide-react";
+import { X, Menu, Plus, ArrowLeftRight, Trash2 } from "lucide-react";
 import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -23,10 +23,12 @@ const TYPE_INFO = {
    ========================================================================= */
 
 export default function TransactionForm({
-  session, settings, groups, accounts, categories, onCancel, onSave, reloadCategories, showError,
+  session, settings, groups, accounts, categories, onCancel, onSave, onDelete, reloadCategories, showError,
   forceRecurringOpen = false, hideRemoveRecurring = false, editingTransaction = null, defaultDate = null,
 }) {
   const [managingCategoryType, setManagingCategoryType] = useState(null); // "income" | "expense" | null
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const [type, setType] = useState(editingTransaction?.type || "expense");
   const [date, setDate] = useState(editingTransaction ? dateInputValueInZone(new Date(editingTransaction.date).getTime(), editingTransaction.timezone) : (defaultDate || todayInputValue()));
@@ -151,7 +153,29 @@ export default function TransactionForm({
 
   return (
     <div style={styles.screen}>
-      <TopBar title={editingTransaction ? `Editar ${TYPE_INFO[type].label}` : TYPE_INFO[type].label} onBack={onCancel} />
+      <TopBar
+        title={editingTransaction ? `Editar ${TYPE_INFO[type].label}` : TYPE_INFO[type].label}
+        onBack={onCancel}
+        right={editingTransaction && (
+          <button style={styles.iconBtnGhost} onClick={() => setConfirmDelete(true)} aria-label="Eliminar">
+            <Trash2 size={17} />
+          </button>
+        )}
+      />
+      {confirmDelete && (
+        <ConfirmInline
+          message={`¿Eliminar este ${TYPE_INFO[type].label.toLowerCase()}?`}
+          confirmLabel="Eliminar"
+          confirmDisabled={deleting}
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={async () => {
+            setDeleting(true);
+            await onDelete(editingTransaction.id);
+            setDeleting(false);
+          }}
+          style={{ margin: "6px 20px 12px", borderRadius: 12, borderTop: "1px solid #EBC9BA" }}
+        />
+      )}
       <div style={{ ...styles.form, paddingBottom: 100 }}>
         <div style={{ ...styles.tabRow, padding: 0 }}>
           {Object.keys(TYPE_INFO).map((t) => (

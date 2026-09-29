@@ -26,7 +26,7 @@ export default function ConfigScreen({
   moneyManager, onSaveMoneyTransaction, creatingRecurring, setCreatingRecurring,
   moneyManagerScreen, setMoneyManagerScreen,
 }) {
-  const [section, setSection] = useState("splitledger"); // "moneymanager" | "splitledger"
+  const [section, setSection] = useState("moneymanager"); // "moneymanager" | "splitledger"
 
   if (creatingRecurring) {
     return (

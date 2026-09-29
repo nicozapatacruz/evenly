@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Pencil, Plus, X, ChevronRight, Menu, Eye, EyeOff } from "lucide-react";
+import { Pencil, Plus, X, ChevronRight, ChevronUp, ChevronDown, Menu, Eye, EyeOff } from "lucide-react";
 import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -15,8 +15,9 @@ import { accountBalance, groupBalance } from "../../lib/moneyManagerData.js";
    manageGroups / manageAccounts: pantallas de edición (TopBar).
    ========================================================================= */
 
-export default function CuentasTab({ session, settings, groups, accounts, accountTotals, reload, showError, view, setView }) {
+export default function CuentasTab({ session, settings, groups, accounts, accountTotals, reload, showError, showInfo, view, setView }) {
   const balanceColor = (n) => (n > 0.004 ? "#3B6E62" : n < -0.004 ? "#B0473A" : "#6B6355");
+  const [deletedOpen, setDeletedOpen] = useState(false);
 
   if (view.screen === "manageAllAccounts") {
     return (
@@ -26,6 +27,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
         accounts={accounts}
         reload={reload}
         showError={showError}
+        showInfo={showInfo}
         onBack={() => setView({ screen: "list" })}
       />
     );
@@ -34,6 +36,15 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
   const balances = accounts.filter((a) => !a.deleted).map((a) => ({ account: a, balance: accountBalance(a.id, accountTotals) }));
   const capital = balances.filter((b) => b.balance > 0).reduce((s, b) => s + b.balance, 0);
   const debt = balances.filter((b) => b.balance < 0).reduce((s, b) => s + b.balance, 0);
+  const activeGroups = groups.filter((g) => !g.deleted);
+
+  // Solo tiene sentido mostrar una cuenta eliminada acá si alguna vez tuvo
+  // movimientos (si nunca tuvo transacciones, no hay ningún total que
+  // "rescatar" — no aporta nada verla en esta lista).
+  const deletedAccounts = accounts.filter((a) => a.deleted && accountTotals.some((t) => t.account_id === a.id));
+  const deletedByGroup = groups
+    .map((g) => ({ group: g, items: deletedAccounts.filter((a) => a.group_id === g.id) }))
+    .filter((x) => x.items.length > 0);
 
   return (
     <div style={styles.screen}>
@@ -63,14 +74,14 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
           </div>
         </div>
 
-        {groups.length === 0 && (
+        {activeGroups.length === 0 && (
           <div style={styles.emptyState}>
             <p style={styles.emptyTitle}>Todavía no tenés cuentas</p>
             <p style={{ ...styles.muted, padding: 0 }}>Tocá el lápiz arriba para crear tu primer grupo de cuentas.</p>
           </div>
         )}
 
-        {groups.map((g) => {
+        {activeGroups.map((g) => {
           const groupAccounts = accounts.filter((a) => a.group_id === g.id && !a.deleted);
           if (groupAccounts.length === 0) return null;
           const visibleAccounts = groupAccounts.filter((a) => !a.hidden);
@@ -93,6 +104,45 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
             </div>
           );
         })}
+
+        {deletedByGroup.length > 0 && (
+          <div>
+            <button
+              style={styles.collapsibleHeader}
+              onClick={() => setDeletedOpen((v) => !v)}
+              aria-expanded={deletedOpen}
+            >
+              <span style={styles.label}>Cuentas eliminadas ({deletedAccounts.length})</span>
+              {deletedOpen ? <ChevronUp size={18} color="#6B6355" /> : <ChevronDown size={18} color="#6B6355" />}
+            </button>
+
+            {deletedOpen && (
+              <>
+                {deletedByGroup.map(({ group, items }) => {
+                  const groupTotal = items.reduce((s, a) => s + accountBalance(a.id, accountTotals), 0);
+                  return (
+                  <div key={group.id} style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden", marginTop: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "#FAF7F2", borderBottom: "1px solid #F0EBE2" }}>
+                      <span style={{ fontWeight: 700, fontSize: 13.5, fontFamily: "system-ui, sans-serif" }}>{group.name}</span>
+                      <span style={{ fontWeight: 700, fontSize: 13.5, fontFamily: "system-ui, sans-serif", color: balanceColor(groupTotal) }}>{money(groupTotal, settings.main_currency)}</span>
+                    </div>
+                    {items.map((a) => (
+                      <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14, opacity: 0.6 }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, textDecoration: "line-through" }}>
+                          {a.icon && <span style={{ fontSize: 16, lineHeight: 1 }}>{a.icon}</span>}
+                          {a.name}
+                        </span>
+                        <span style={{ color: balanceColor(accountBalance(a.id, accountTotals)), flexShrink: 0 }}>{money(accountBalance(a.id, accountTotals), settings.main_currency)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  );
+                })}
+                <p style={{ ...styles.muted, padding: 0, marginTop: 8 }}>Las cuentas eliminadas no suman al balance general.</p>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -102,7 +152,8 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
    GESTIONAR GRUPOS DE CUENTAS
    ========================================================================= */
 
-export function ManageGroups({ session, groups, accounts, reload, showError, showInfo, onBack, onOpenGroup }) {
+export function ManageGroups({ session, groups: allGroups, accounts, reload, showError, showInfo, onBack, onOpenGroup }) {
+  const groups = allGroups.filter((g) => !g.deleted);
   const [creating, setCreating] = useState(false);
   const [names, setNames] = useState(() => Object.fromEntries(groups.map((g) => [g.id, g.name])));
   const [confirmRemoveId, setConfirmRemoveId] = useState(null);
@@ -111,7 +162,8 @@ export function ManageGroups({ session, groups, accounts, reload, showError, sho
   useEffect(() => {
     setOrder(groups.map((g) => g.id));
     setNames(Object.fromEntries(groups.map((g) => [g.id, g.name])));
-  }, [groups]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allGroups]);
 
   const dndSensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
@@ -327,7 +379,7 @@ export function ManageAllAccounts({ session, groups, accounts, reload, showError
     return (
       <NewAccountForm
         session={session}
-        groups={groups}
+        groups={groups.filter((g) => !g.deleted)}
         reload={reload}
         showError={showError}
         onCancel={() => setCreating(false)}
@@ -344,7 +396,7 @@ export function ManageAllAccounts({ session, groups, accounts, reload, showError
         right={<button style={styles.iconBtnGhost} onClick={() => setCreating(true)} aria-label="Nueva cuenta"><Plus size={20} /></button>}
       />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        {groups.filter((g) => accounts.some((a) => a.group_id === g.id && !a.deleted)).map((g) => (
+        {groups.filter((g) => !g.deleted && accounts.some((a) => a.group_id === g.id && !a.deleted)).map((g) => (
           <div key={g.id}>
             <p style={styles.label}>{g.name}</p>
             <AccountGroupEditor group={g} accounts={accounts} reload={reload} showError={showError} showInfo={showInfo} />

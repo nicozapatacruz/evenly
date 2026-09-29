@@ -140,20 +140,15 @@ export function useMoneyManager(userId) {
     // sin importar si tenés 2 mil o 20 mil transacciones.
     const [s, g, a, c, at, r] = await Promise.all([
       supabase.from("mm_settings").select("*").eq("user_id", userId).maybeSingle(),
-      supabase.from("mm_account_groups").select("*").eq("user_id", userId).eq("deleted", false).order("sort_order"),
-      // Sin filtrar deleted acá a propósito (mismo motivo que categorías,
-      // ver comentario de abajo): una cuenta eliminada tiene que seguir
-      // disponible en el cliente para poder mostrar su nombre/ícono en
-      // transacciones viejas que ya la tenían asignada. El filtrado de "no
-      // ofrecerla para elegir de nuevo" ni "no sumar su saldo" se hace acá
-      // — eso pasa más abajo, cuenta por cuenta (igual que ya hacía con
-      // `hidden`, ahora también con `deleted`).
+      // Ninguna de las 3 (grupos/cuentas/categorías) filtra deleted acá a
+      // propósito: un elemento eliminado tiene que seguir disponible en el
+      // cliente para poder mostrar su nombre/ícono en transacciones viejas
+      // que ya lo tenían asignado, y ahora también para la sección
+      // "Cuentas eliminadas" de Cuentas. El filtrado de "no ofrecerlo para
+      // elegir de nuevo" / "no sumar al balance" / "no listarlo como activo"
+      // se hace más abajo, elemento por elemento, no acá.
+      supabase.from("mm_account_groups").select("*").eq("user_id", userId).order("sort_order"),
       supabase.from("mm_accounts").select("*").eq("user_id", userId).order("sort_order"),
-      // Sin filtrar deleted acá a propósito (a diferencia de cuentas/grupos):
-      // una categoría eliminada tiene que seguir disponible en el cliente
-      // para poder mostrar su nombre/ícono en transacciones viejas que ya
-      // la tenían asignada — el filtrado de "no ofrecerla para elegir de
-      // nuevo" se hace más abajo, categoría por categoría, no acá.
       supabase.from("mm_categories").select("*").eq("user_id", userId).order("sort_order"),
       supabase.from("mm_account_totals").select("*").eq("user_id", userId),
       supabase.from("mm_recurring").select("*").eq("user_id", userId).order("next_date"),
@@ -167,7 +162,7 @@ export function useMoneyManager(userId) {
     if ((g.data || []).length === 0 && (c.data || []).length === 0) {
       await seedDefaults(userId);
       const [g2, a2, c2] = await Promise.all([
-        supabase.from("mm_account_groups").select("*").eq("user_id", userId).eq("deleted", false).order("sort_order"),
+        supabase.from("mm_account_groups").select("*").eq("user_id", userId).order("sort_order"),
         supabase.from("mm_accounts").select("*").eq("user_id", userId).order("sort_order"),
         supabase.from("mm_categories").select("*").eq("user_id", userId).order("sort_order"),
       ]);
@@ -220,7 +215,12 @@ export function useMonthTransactions(userId, viewMonth) {
       .eq("user_id", userId)
       .eq("deleted", false)
       .gte("date", start.toISOString())
-      .lt("date", end.toISOString());
+      .lt("date", end.toISOString())
+      // Dentro de un mismo día, "date" solo no alcanza para ordenar (todas
+      // las creadas a mano quedan ancladas al mediodía) — created_at
+      // desempata para que la más nueva quede arriba.
+      .order("date", { ascending: false })
+      .order("created_at", { ascending: false });
     // Re-acotar al mes exacto usando la zona propia de cada fila.
     const monthKey = `${year}-${String(month + 1).padStart(2, "0")}`;
     const filtered = (data || []).filter((t) => dateInputValueInZone(new Date(t.date).getTime(), t.timezone).startsWith(monthKey));

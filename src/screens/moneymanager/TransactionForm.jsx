@@ -287,6 +287,7 @@ export default function TransactionForm({
             onChange={setAccountId}
             placeholder="Elegí una cuenta"
             groups={groups
+              .filter((g) => !g.deleted)
               .map((g) => ({
                 label: g.name,
                 // Ocultas o eliminadas no se muestran acá — salvo que sea la
@@ -312,6 +313,7 @@ export default function TransactionForm({
               onChange={setToAccountId}
               placeholder="Elegí una cuenta"
               groups={groups
+                .filter((g) => !g.deleted)
                 .map((g) => ({
                   label: g.name,
                   items: accounts.filter((a) => a.group_id === g.id && a.id !== accountId && ((!a.hidden && !a.deleted) || a.id === toAccountId)).map((a) => ({ value: a.id, label: a.name, icon: a.icon, deleted: a.deleted })),

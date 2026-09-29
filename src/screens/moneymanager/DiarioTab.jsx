@@ -54,10 +54,10 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
   }, [monthTx]);
 
   return (
-    <div style={styles.screen} {...swipeHandlers}>
+    <div style={{ ...styles.screen, display: "flex", flexDirection: "column" }}>
       <div style={{ position: "sticky", top: 0, zIndex: 5 }}>
         <RootHeader title="Transacciones" right={<TodayButton viewMonth={viewMonth} setViewMonth={setViewMonth} />} />
-        <div style={styles.subHeader}>
+        <div style={styles.subHeader} {...swipeHandlers}>
           <MonthNav viewMonth={viewMonth} setViewMonth={setViewMonth} />
           <div style={{ display: "flex", justifyContent: "space-between", textAlign: "center", padding: "0 4px" }}>
             <div style={{ flex: 1 }}>
@@ -75,7 +75,7 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
           </div>
         </div>
       </div>
-      <div key={slide.key} className={slide.className} style={{ ...styles.form, paddingTop: 12, paddingBottom: 100 }}>
+      <div key={slide.key} className={slide.className} style={{ ...styles.form, flex: 1, paddingTop: 12, paddingBottom: 100 }} {...swipeHandlers}>
         {loading ? (
           <div style={styles.emptyState}>
             <p style={styles.emptyTitle}>Cargando transacciones…</p>

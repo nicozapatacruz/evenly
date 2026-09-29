@@ -84,10 +84,10 @@ export default function EstadisticasTab({ userId, settings, categories, viewMont
   });
 
   return (
-    <div style={styles.screen} {...swipeHandlers}>
+    <div style={{ ...styles.screen, display: "flex", flexDirection: "column" }}>
       <div style={{ position: "sticky", top: 0, zIndex: 5 }}>
         <RootHeader title="Estadísticas" right={<TodayButton viewMonth={viewMonth} setViewMonth={setViewMonth} />} />
-        <div style={styles.subHeader}>
+        <div style={styles.subHeader} {...swipeHandlers}>
           <MonthNav viewMonth={viewMonth} setViewMonth={setViewMonth} />
           <div style={{ ...styles.tabRow, padding: 0 }}>
             <button
@@ -107,7 +107,7 @@ export default function EstadisticasTab({ userId, settings, categories, viewMont
           </div>
         </div>
       </div>
-      <div key={slide.key} className={slide.className} style={{ ...styles.form, paddingTop: 12 }}>
+      <div key={slide.key} className={slide.className} style={{ ...styles.form, flex: 1, paddingTop: 12 }} {...swipeHandlers}>
         {loading ? (
           <div style={styles.emptyState}>
             <p style={styles.emptyTitle}>Cargando…</p>

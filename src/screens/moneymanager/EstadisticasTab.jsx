@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { styles } from "../../lib/styles.js";
-import { RootHeader, MonthNav, TodayButton, useMonthSwipe } from "../../components/Shared.jsx";
+import { RootHeader, MonthNav, TodayButton, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
 import { useCategoryMonthTotals } from "../../lib/moneyManagerData.js";
 
@@ -41,14 +41,16 @@ export default function EstadisticasTab({ userId, settings, categories, viewMont
   useEffect(() => setSelectedKey(null), [type, viewMonth]);
 
   const swipeHandlers = useMonthSwipe(viewMonth, setViewMonth);
+  const slide = useMonthSlide(viewMonth);
 
   // Totales ya agregados por categoría del lado del servidor (vista
   // mm_category_month_totals) — no traemos transacción por transacción.
   // Se piden los dos tipos siempre (no solo el seleccionado), porque los
   // botones Ingreso/Gastos muestran el total de cada uno todo el tiempo.
-  const { totals: incomeTotals } = useCategoryMonthTotals(userId, viewMonth, "income");
-  const { totals: expenseTotals } = useCategoryMonthTotals(userId, viewMonth, "expense");
+  const { totals: incomeTotals, loading: incomeLoading } = useCategoryMonthTotals(userId, viewMonth, "income");
+  const { totals: expenseTotals, loading: expenseLoading } = useCategoryMonthTotals(userId, viewMonth, "expense");
   const totals = type === "income" ? incomeTotals : expenseTotals;
+  const loading = type === "income" ? incomeLoading : expenseLoading;
   const incomeSum = useMemo(() => incomeTotals.reduce((s, t) => s + t.total, 0), [incomeTotals]);
   const expenseSum = useMemo(() => expenseTotals.reduce((s, t) => s + t.total, 0), [expenseTotals]);
 
@@ -105,8 +107,12 @@ export default function EstadisticasTab({ userId, settings, categories, viewMont
           </div>
         </div>
       </div>
-      <div style={{ ...styles.form, paddingTop: 12 }} {...swipeHandlers}>
-        {arcs.length === 0 ? (
+      <div key={slide.key} className={slide.className} style={{ ...styles.form, paddingTop: 12 }} {...swipeHandlers}>
+        {loading ? (
+          <div style={styles.emptyState}>
+            <p style={styles.emptyTitle}>Cargando…</p>
+          </div>
+        ) : arcs.length === 0 ? (
           <div style={styles.emptyState}>
             <p style={styles.emptyTitle}>Nada registrado este mes</p>
             <p style={{ ...styles.muted, padding: 0 }}>{type === "income" ? "Ingresos" : "Gastos"} de {MONTH_LABEL(viewMonth)} van a aparecer acá.</p>

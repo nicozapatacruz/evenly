@@ -91,6 +91,24 @@ export function useMonthSwipe(viewMonth, setViewMonth) {
   return { onTouchStart, onTouchEnd };
 }
 
+// Anima la entrada del body cada vez que cambia el mes (con flechas o con
+// swipe) — sin esto, un swipe rápido no se distingue de "no pasó nada" hasta
+// que cambian los números. Devuelve key+className: la key fuerza a React a
+// remontar el contenedor (así la animación CSS arranca de nuevo cada vez),
+// y la clase decide de qué lado entra según hacia dónde se movió el mes.
+export function useMonthSlide(viewMonth) {
+  const prevRef = useRef(viewMonth);
+  const [dir, setDir] = useState("mm-slide-next");
+  useEffect(() => {
+    const prev = prevRef.current;
+    if (prev.getTime() !== viewMonth.getTime()) {
+      setDir(viewMonth.getTime() > prev.getTime() ? "mm-slide-next" : "mm-slide-prev");
+      prevRef.current = viewMonth;
+    }
+  }, [viewMonth]);
+  return { key: viewMonth.getTime(), className: dir };
+}
+
 // Botón "Hoy" para el header (misma posición que el lápiz de Cuentas) — solo
 // aparece si te alejaste del mes actual, para volver de un salto sin tener
 // que contar flechitas.

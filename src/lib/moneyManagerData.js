@@ -230,6 +230,11 @@ export function useCategoryMonthTotals(userId, viewMonth, type) {
   const [totals, setTotals] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Mismo fix que useMonthTransactions: se limpia apenas cambia mes/tipo,
+  // antes de que llegue la respuesta — si no, se alcanza a ver la torta del
+  // mes anterior "pegada" un instante mientras carga la del mes nuevo.
+  useEffect(() => { setTotals([]); }, [year, month, type]);
+
   const load = useCallback(async () => {
     if (!userId) { setLoading(false); return; }
     setLoading(true);

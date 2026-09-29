@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { Plus } from "lucide-react";
 import { styles } from "../../lib/styles.js";
-import { RootHeader, MonthNav, TodayButton, useMonthSwipe } from "../../components/Shared.jsx";
+import { RootHeader, MonthNav, TodayButton, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
 import { money, measureTextWidth, dateInputValueInZone } from "../../lib/helpers.jsx";
 import { useMonthTransactions } from "../../lib/moneyManagerData.js";
 
@@ -25,6 +25,7 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
   // refetchea solo cuando cambiás de mes.
   const { transactions: monthTx, loading } = useMonthTransactions(userId, viewMonth);
   const swipeHandlers = useMonthSwipe(viewMonth, setViewMonth);
+  const slide = useMonthSlide(viewMonth);
 
   const monthIncome = monthTx.filter((t) => t.type === "income").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
   const monthExpense = monthTx.filter((t) => t.type === "expense").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
@@ -74,7 +75,7 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
           </div>
         </div>
       </div>
-      <div style={{ ...styles.form, paddingTop: 12, paddingBottom: 100 }} {...swipeHandlers}>
+      <div key={slide.key} className={slide.className} style={{ ...styles.form, paddingTop: 12, paddingBottom: 100 }} {...swipeHandlers}>
         {loading ? (
           <div style={styles.emptyState}>
             <p style={styles.emptyTitle}>Cargando transacciones…</p>

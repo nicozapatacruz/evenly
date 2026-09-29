@@ -28,6 +28,13 @@ export const globalCss = `
      (ej. la grilla de íconos) sí la muestra en desktop/otros navegadores. */
   .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
   .no-scrollbar::-webkit-scrollbar { display: none; }
+  /* Feedback visual al cambiar de mes (flechas o swipe) en Transacciones y
+     Estadísticas — sin esto, un swipe rápido no se distingue de que "no pasó
+     nada" hasta que cambian los números. */
+  @keyframes mm-slide-next { from { transform: translateX(18px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  @keyframes mm-slide-prev { from { transform: translateX(-18px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  .mm-slide-next { animation: mm-slide-next 0.22s ease-out; }
+  .mm-slide-prev { animation: mm-slide-prev 0.22s ease-out; }
 `;
 
 // Base compartida por todos los headers — quedan pegados arriba al hacer

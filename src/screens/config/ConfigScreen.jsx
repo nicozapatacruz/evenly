@@ -5,7 +5,7 @@ import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } 
 import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, RootHeader, ConfirmInline, Footer, PhotoPicker, ToggleField } from "../../components/Shared.jsx";
+import { TopBar, RootHeader, ConfirmInline, Footer, PhotoPicker, ToggleField, Field } from "../../components/Shared.jsx";
 import { useImageUpload, resolvePhotoUrl, colorFor, initials } from "../../lib/helpers.jsx";
 import RecurringScreen from "../moneymanager/RecurringScreen.jsx";
 import TransactionForm, { ManageCategories } from "../moneymanager/TransactionForm.jsx";
@@ -401,18 +401,15 @@ function ChangePasswordScreen({ session, onBack, onSave }) {
     <div style={styles.screen}>
       <TopBar title="Cambiar contraseña" onBack={onBack} />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        <label style={styles.label}>
-          Contraseña actual
+        <Field label="Contraseña actual">
           <input style={styles.input} type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Contraseña actual" />
-        </label>
-        <label style={styles.label}>
-          Nueva contraseña
+        </Field>
+        <Field label="Nueva contraseña">
           <input style={styles.input} type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Nueva contraseña" />
-        </label>
-        <label style={styles.label}>
-          Confirmar nueva contraseña
+        </Field>
+        <Field label="Confirmar nueva contraseña">
           <input style={styles.input} type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Confirmar nueva contraseña" />
-        </label>
+        </Field>
         {err && <p style={styles.errText}>{err}</p>}
       </div>
       <Footer>
@@ -518,10 +515,9 @@ function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onO
       />
 
       <div>
-        <label style={styles.label}>
-          Nombre visible
+        <Field label="Nombre visible">
           <input style={{ ...styles.input, borderRadius: nameDirty ? "10px 10px 0 0" : 10 }} value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Tu nombre" />
-        </label>
+        </Field>
         {nameDirty && (
           <ConfirmInline
             danger={false}
@@ -533,13 +529,12 @@ function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onO
         )}
       </div>
 
-      <label style={styles.label}>
-        Grupo por defecto
+      <Field label="Grupo por defecto">
         <select style={styles.input} value={session.defaultGroupId || ""} onChange={handleDefaultGroupChange} disabled={savingDefault}>
           <option value="">Ninguno</option>
           {(groups || []).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
-      </label>
+      </Field>
       <p style={{ ...styles.muted, padding: 0, marginTop: -8 }}>
         El botón de "+" en Split Ledger crea el gasto directo en este grupo.
       </p>

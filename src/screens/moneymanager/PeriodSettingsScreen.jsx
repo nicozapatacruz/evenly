@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, ToggleField } from "../../components/Shared.jsx";
+import { TopBar, ToggleField, Field } from "../../components/Shared.jsx";
 import { WEEKDAY_OPTIONS } from "../../lib/moneyManagerData.js";
 
 const STARTUP_TAB_OPTIONS = [
@@ -43,8 +43,7 @@ export default function PeriodSettingsScreen({ session, settings, reload, showEr
     <div style={styles.screen}>
       <TopBar title="Detalles del período" onBack={onBack} />
       <div style={{ ...styles.form, opacity: saving ? 0.6 : 1 }}>
-        <label style={styles.label}>
-          Día de inicio del mes
+        <Field label="Día de inicio del mes">
           <select
             style={styles.input}
             value={monthStartDay}
@@ -52,10 +51,9 @@ export default function PeriodSettingsScreen({ session, settings, reload, showEr
           >
             {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{d}</option>)}
           </select>
-        </label>
+        </Field>
 
-        <label style={styles.label}>
-          Día de inicio de la semana
+        <Field label="Día de inicio de la semana">
           <select
             style={styles.input}
             value={weekStartDay}
@@ -63,7 +61,7 @@ export default function PeriodSettingsScreen({ session, settings, reload, showEr
           >
             {WEEKDAY_OPTIONS.map((w) => <option key={w.value} value={w.value}>{w.label}</option>)}
           </select>
-        </label>
+        </Field>
 
         <ToggleField
           label="Autocompletar notas"
@@ -72,8 +70,7 @@ export default function PeriodSettingsScreen({ session, settings, reload, showEr
           onChange={(v) => { setAutocomplete(v); save({ autocomplete_notes: v }, { silent: true }); }}
         />
 
-        <label style={styles.label}>
-          Pantalla de inicio
+        <Field label="Pantalla de inicio">
           <select
             style={styles.input}
             value={startupTab}
@@ -81,7 +78,7 @@ export default function PeriodSettingsScreen({ session, settings, reload, showEr
           >
             {STARTUP_TAB_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-        </label>
+        </Field>
         <p style={{ ...styles.muted, padding: 0, marginTop: -8 }}>La app va a abrir siempre en esta pestaña, en vez de la que quedó abierta la última vez.</p>
       </div>
     </div>

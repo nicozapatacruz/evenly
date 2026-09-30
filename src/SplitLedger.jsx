@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { supabase } from "./lib/supabaseClient.js";
 import { BookOpen, BarChart3, Coins, Divide, MoreHorizontal, MailCheck } from "lucide-react";
 import { styles, globalCss } from "./lib/styles.js";
+import { Field } from "./components/Shared.jsx";
 import SplitLedgerTab from "./screens/splitledger/SplitLedgerTab.jsx";
 import ConfigScreen from "./screens/config/ConfigScreen.jsx";
 import CuentasTab from "./screens/moneymanager/CuentasTab.jsx";
@@ -364,26 +365,22 @@ function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
             heurística genérica y sugiere crear contraseña nueva incluso en login. */}
         <form style={{ display: "flex", flexDirection: "column", gap: 12 }} onSubmit={e => { e.preventDefault(); if (!loading) handle(); }}>
           {mode === "register" && (
-            <label style={styles.label}>
-              Nombre que verán los demás
+            <Field label="Nombre que verán los demás">
               <input style={styles.input} name="name" value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Tu nombre" autoComplete="name" />
-            </label>
+            </Field>
           )}
           {mode === "register" && (
-            <label style={styles.label}>
-              Usuario
+            <Field label="Usuario">
               <input style={styles.input} name="new-username" value={username} onChange={e => setUsername(e.target.value)} placeholder="nombre_de_usuario" autoCapitalize="none" autoComplete="username" />
-            </label>
+            </Field>
           )}
-          <label style={styles.label}>
-            Email
+          <Field label="Email">
             <input style={styles.input} type="email" name="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="tu@email.com" autoCapitalize="none" autoComplete={mode === "login" ? "username" : "email"} />
-          </label>
+          </Field>
           {mode !== "forgot" && (
-            <label style={styles.label}>
-              Contraseña
+            <Field label="Contraseña">
               <input style={styles.input} type="password" name={mode === "login" ? "current-password" : "new-password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="Contraseña" autoComplete={mode === "login" ? "current-password" : "new-password"} />
-            </label>
+            </Field>
           )}
           {mode === "login" && (
             <button
@@ -395,10 +392,9 @@ function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
             </button>
           )}
           {mode === "register" && (
-            <label style={styles.label}>
-              Confirmar contraseña
+            <Field label="Confirmar contraseña">
               <input style={styles.input} type="password" name="confirm-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Confirmar contraseña" autoComplete="new-password" />
-            </label>
+            </Field>
           )}
           {err && <p style={styles.errText}>{err}</p>}
           {info && <p style={{ ...styles.muted, padding: 0, color: "#3B6E62" }}>{info}</p>}
@@ -452,14 +448,12 @@ function RecoverPasswordScreen({ onComplete, onCancel }) {
         <p style={{ ...styles.muted, padding: 0, textAlign: "center", marginBottom: 28 }}>Elegí tu nueva contraseña</p>
 
         <form style={{ display: "flex", flexDirection: "column", gap: 12 }} onSubmit={e => { e.preventDefault(); if (!saving) handleSave(); }}>
-          <label style={styles.label}>
-            Nueva contraseña
+          <Field label="Nueva contraseña">
             <input style={styles.input} type="password" name="new-password" autoComplete="new-password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Nueva contraseña" />
-          </label>
-          <label style={styles.label}>
-            Confirmar nueva contraseña
+          </Field>
+          <Field label="Confirmar nueva contraseña">
             <input style={styles.input} type="password" name="confirm-password" autoComplete="new-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Confirmar nueva contraseña" />
-          </label>
+          </Field>
           {err && <p style={styles.errText}>{err}</p>}
           <button type="submit" style={{ ...styles.btnPrimary, marginTop: 4, opacity: (saving || !canSave) ? 0.5 : 1 }} disabled={saving || !canSave}>
             {saving ? "Guardando…" : "Guardar y entrar"}

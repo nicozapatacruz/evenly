@@ -5,7 +5,7 @@ import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } 
 import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, Footer, ConfirmInline, IconInput, PickerField } from "../../components/Shared.jsx";
+import { TopBar, Footer, ConfirmInline, IconInput, PickerField, Field } from "../../components/Shared.jsx";
 import { parseAmountInput, todayInputValue, dateInputValueInZone, money } from "../../lib/helpers.jsx";
 import { RECURRING_FREQUENCIES, nextOccurrence, computeAmountMain } from "../../lib/moneyManagerData.js";
 
@@ -199,16 +199,14 @@ export default function TransactionForm({
           ))}
         </div>
 
-        <label style={styles.label}>
-          Fecha
+        <Field label="Fecha">
           <input style={styles.input} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        </label>
+        </Field>
 
         <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-          <label style={{ ...styles.label, flex: 1 }}>
-            Importe
+          <Field label="Importe" style={{ flex: 1 }}>
             <input style={styles.input} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" inputMode="decimal" />
-          </label>
+          </Field>
           <select
             style={{ ...styles.input, width: 80, flexShrink: 0, padding: "11px 6px", textAlign: "center", fontWeight: 600, color: "#544A3C" }}
             value={currency}
@@ -219,8 +217,7 @@ export default function TransactionForm({
         </div>
 
         {needsRate && (
-          <label style={styles.label}>
-            1 {rateFlipped ? currency : settings.main_currency} equivale a
+          <Field label={`1 ${rateFlipped ? currency : settings.main_currency} equivale a`}>
             <div style={{ display: "flex", gap: 8 }}>
               <div style={{ position: "relative", flex: 1 }}>
                 <input style={{ ...styles.input, width: "100%", paddingRight: 50 }} value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} placeholder="1.00" inputMode="decimal" />
@@ -244,7 +241,7 @@ export default function TransactionForm({
                 <ArrowLeftRight size={16} />
               </button>
             </div>
-          </label>
+          </Field>
         )}
 
         {needsRate && validAmount && validRate && (
@@ -254,8 +251,7 @@ export default function TransactionForm({
         )}
 
         {type !== "transfer" && (
-          <label style={styles.label}>
-            Categoría
+          <Field label="Categoría">
             <PickerField
               value={categoryId}
               onChange={(v) => {
@@ -272,7 +268,7 @@ export default function TransactionForm({
                 ],
               }]}
             />
-          </label>
+          </Field>
         )}
         {type !== "transfer" && categories.find((c) => c.id === categoryId)?.deleted && (
           <p style={{ ...styles.muted, padding: 0, marginTop: -8, color: "#B0473A", display: "flex", alignItems: "center", gap: 5 }}>
@@ -280,8 +276,7 @@ export default function TransactionForm({
           </p>
         )}
 
-        <label style={styles.label}>
-          {type === "transfer" ? "De" : "Cuenta"}
+        <Field label={type === "transfer" ? "De" : "Cuenta"}>
           <PickerField
             value={accountId}
             onChange={setAccountId}
@@ -298,7 +293,7 @@ export default function TransactionForm({
               }))
               .filter((g) => g.items.length > 0)}
           />
-        </label>
+        </Field>
         {accounts.find((a) => a.id === accountId)?.deleted && (
           <p style={{ ...styles.muted, padding: 0, marginTop: -8, color: "#B0473A", display: "flex", alignItems: "center", gap: 5 }}>
             <Trash2 size={13} /> Esta cuenta fue eliminada.
@@ -306,8 +301,7 @@ export default function TransactionForm({
         )}
 
         {type === "transfer" && (
-          <label style={styles.label}>
-            A
+          <Field label="A">
             <PickerField
               value={toAccountId}
               onChange={setToAccountId}
@@ -320,7 +314,7 @@ export default function TransactionForm({
                 }))
                 .filter((g) => g.items.length > 0)}
             />
-          </label>
+          </Field>
         )}
         {type === "transfer" && accounts.find((a) => a.id === toAccountId)?.deleted && (
           <p style={{ ...styles.muted, padding: 0, marginTop: -8, color: "#B0473A", display: "flex", alignItems: "center", gap: 5 }}>
@@ -328,10 +322,9 @@ export default function TransactionForm({
           </p>
         )}
 
-        <label style={styles.label}>
-          Nota
+        <Field label="Nota">
           <input style={styles.input} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Opcional" />
-        </label>
+        </Field>
 
         {!recurringOpen && !forceRecurringOpen && (
           <button style={styles.btnDashed} onClick={() => setRecurringOpen(true)}>
@@ -409,24 +402,21 @@ function RecurringFields({ type, date, freqValue, setFreqValue, freqInterval, se
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: 14, borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff" }}>
-      <label style={styles.label}>
-        Frecuencia
+      <Field label="Frecuencia">
         <select style={styles.input} value={freqValue} onChange={(e) => setFreqValue(e.target.value)}>
           {RECURRING_FREQUENCIES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
         </select>
-      </label>
+      </Field>
 
       {freq?.interval === null && (
-        <label style={styles.label}>
-          {freq.unit === "week" ? "Cada cuántas semanas" : "Cada cuántos meses"}
+        <Field label={freq.unit === "week" ? "Cada cuántas semanas" : "Cada cuántos meses"}>
           <input style={styles.input} type="number" min={2} value={freqInterval} onChange={(e) => setFreqInterval(e.target.value)} />
-        </label>
+        </Field>
       )}
 
-      <label style={styles.label}>
-        Fecha de fin (opcional)
+      <Field label="Fecha de fin (opcional)">
         <input style={styles.input} type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-      </label>
+      </Field>
 
       {(explanation || warning) && (
         <div>
@@ -604,13 +594,12 @@ function NewCategoryForm({ session, type, categories, reload, showError, onCance
     <div style={styles.screen}>
       <TopBar title="Nueva categoría" onBack={onCancel} />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        <label style={styles.label}>
-          Nombre
+        <Field label="Nombre">
           <div style={{ display: "flex", gap: 8 }}>
             <IconInput value={icon} onChange={setIcon} />
             <input style={{ ...styles.input, flex: 1 }} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre" onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
           </div>
-        </label>
+        </Field>
       </div>
       <Footer>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>

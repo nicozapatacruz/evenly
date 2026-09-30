@@ -5,7 +5,7 @@ import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } 
 import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
-import { RootHeader, TopBar, ConfirmInline, Footer, IconInput, PickerField, ToggleField, InfoTooltip } from "../../components/Shared.jsx";
+import { RootHeader, TopBar, ConfirmInline, Footer, IconInput, PickerField, ToggleField, Field } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
 import { accountBalance, groupBalance, computeCreditCardBalance, useCreditCardActivity } from "../../lib/moneyManagerData.js";
 import AccountDetailScreen from "./AccountDetailScreen.jsx";
@@ -269,10 +269,9 @@ function NewGroupForm({ session, groups, reload, showError, onCancel, onCreated 
     <div style={styles.screen}>
       <TopBar title="Nuevo grupo" onBack={onCancel} />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        <label style={styles.label}>
-          Nombre
+        <Field label="Nombre">
           <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre (ej: Santander, Efectivo)" onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
-        </label>
+        </Field>
       </div>
       <Footer>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
@@ -424,10 +423,9 @@ export function ManageAccounts({ session, group, groups, accounts, accountTotals
         />
       )}
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        <label style={styles.label}>
-          Nombre
+        <Field label="Nombre">
           <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} />
-        </label>
+        </Field>
         {showCreatedHint && (
           <p style={{ margin: "4px 0 -8px", fontSize: 13, fontFamily: "system-ui, sans-serif", color: "#3B6E62" }}>
             <strong>Grupo creado.</strong><br />Ahora agregá las cuentas de este grupo.
@@ -557,20 +555,18 @@ function NewAccountForm({ session, groups, accounts, defaultGroupId, groupLocked
       <TopBar title="Nueva cuenta" onBack={onCancel} />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
         {groups.length > 1 && (
-          <label style={styles.label}>
-            Grupo
+          <Field label="Grupo">
             <select style={{ ...styles.input, opacity: groupLocked ? 0.6 : 1 }} value={groupId} onChange={(e) => setGroupId(e.target.value)} disabled={groupLocked}>
               {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
             </select>
-          </label>
+          </Field>
         )}
-        <label style={styles.label}>
-          Nombre
+        <Field label="Nombre">
           <div style={{ display: "flex", gap: 8 }}>
             <IconInput value={icon} onChange={setIcon} />
             <input style={{ ...styles.input, flex: 1 }} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre (ej: Saldo, Ahorros)" onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
           </div>
-        </label>
+        </Field>
 
         <ToggleField
           label="Tarjeta de crédito"
@@ -581,38 +577,25 @@ function NewAccountForm({ session, groups, accounts, defaultGroupId, groupLocked
 
         {isCreditCard && (
           <>
-            {/* div, no label — ver comentario igual en AccountDetailScreen.jsx */}
-            <div style={styles.label}>
-              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                Cuenta de pago
-                <InfoTooltip text="Cuenta de la cual se pagará esta tarjeta de crédito." />
-              </span>
+            <Field label="Cuenta de pago" info="Cuenta de la cual se pagará esta tarjeta de crédito.">
               <PickerField
                 value={paymentAccountId}
                 onChange={setPaymentAccountId}
                 placeholder="Elegí una cuenta"
                 groups={[{ label: null, items: accounts.filter((a) => !a.deleted && !a.is_credit_card).map((a) => ({ value: a.id, label: a.name, icon: a.icon })) }]}
               />
-            </div>
+            </Field>
             <div style={{ display: "flex", gap: 10 }}>
-              <div style={{ ...styles.label, flex: 1 }}>
-                <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  Fecha de liquidación
-                  <InfoTooltip text="Día del mes en que cierra el ciclo de facturación de la tarjeta." />
-                </span>
+              <Field label="Fecha de liquidación" info="Día del mes en que cierra el ciclo de facturación de la tarjeta." style={{ flex: 1 }}>
                 <select style={styles.input} value={statementDay} onChange={(e) => setStatementDay(parseInt(e.target.value, 10))}>
                   {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
-              </div>
-              <div style={{ ...styles.label, flex: 1 }}>
-                <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  Fecha de pago
-                  <InfoTooltip text="Día del mes en que se realiza el pago automático de la tarjeta." />
-                </span>
+              </Field>
+              <Field label="Fecha de pago" info="Día del mes en que se realiza el pago automático de la tarjeta." style={{ flex: 1 }}>
                 <select style={styles.input} value={paymentDay} onChange={(e) => setPaymentDay(parseInt(e.target.value, 10))}>
                   {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
-              </div>
+              </Field>
             </div>
             <ToggleField
               label="Pago automático"

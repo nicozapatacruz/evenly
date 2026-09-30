@@ -80,6 +80,26 @@ export function InfoTooltip({ text }) {
   );
 }
 
+// Envuelve un campo (label + el input/select/picker que le pases adentro),
+// con ícono de info opcional al lado del label. Usa <label> nativo cuando NO
+// hay info (así tocar el texto enfoca el input, gratis) — con info pasa a
+// <div>, porque un <label> con un <button> adentro (el del ícono) reenvía el
+// click al botón en vez de al input real (ver DESIGN_NOTES.md).
+export function Field({ label, info, style, children }) {
+  const Wrapper = info ? "div" : "label";
+  return (
+    <Wrapper style={{ ...styles.label, ...style }}>
+      {info ? (
+        <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          {label}
+          <InfoTooltip text={info} />
+        </span>
+      ) : label}
+      {children}
+    </Wrapper>
+  );
+}
+
 export function TopBar({ title, onBack, right }) {
   return (
     <div style={styles.topBar}>

@@ -9,7 +9,7 @@ import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCen
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { styles } from "../../lib/styles.js";
-import { TopBar, RootHeader, ConfirmInline, Modal, Footer, PhotoPicker } from "../../components/Shared.jsx";
+import { TopBar, RootHeader, ConfirmInline, Modal, Footer, PhotoPicker, Field } from "../../components/Shared.jsx";
 import {
   uid, CURRENCIES, CURRENCY_LIST, money, parseAmountInput, ICON_KEYS, IconComp,
   DEFAULT_CATEGORIES, groupCategories, catInfo, colorFor, initials, shortName, nameOf,
@@ -446,17 +446,15 @@ function NewGroup({ onCancel, onCreate, session, showError }) {
         {/* Foto del grupo */}
         <PhotoPicker previewUrl={photoUrl} onChange={handlePhoto} onClear={clearPhoto} shape="square" />
 
-        <label style={styles.label}>
-          Nombre del grupo
+        <Field label="Nombre del grupo">
           <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Viaje a Lisboa, Piso compartido…" />
-        </label>
+        </Field>
 
-        <label style={styles.label}>
-          Moneda principal del grupo
+        <Field label="Moneda principal del grupo">
           <select style={styles.input} value={baseCurrency} onChange={(e) => setBaseCurrency(e.target.value)}>
             {CURRENCY_LIST.map((c) => <option key={c} value={c}>{c} ({CURRENCIES[c].symbol})</option>)}
           </select>
-        </label>
+        </Field>
         <p style={{ ...styles.muted, padding: 0, marginTop: -8 }}>
           Es la moneda que se preselecciona al crear un gasto — puedes registrar gastos en
           otras monedas cuando quieras, cada una lleva su propio balance por separado.
@@ -683,17 +681,15 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
         {/* Foto del grupo */}
         <PhotoPicker previewUrl={photoUrl} onChange={handlePhoto} onClear={clearPhoto} shape="square" />
 
-        <label style={styles.label}>
-          Nombre del grupo
+        <Field label="Nombre del grupo">
           <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} />
-        </label>
+        </Field>
 
-        <label style={styles.label}>
-          Moneda principal
+        <Field label="Moneda principal">
           <select style={styles.input} value={baseCurrency} onChange={(e) => setBaseCurrency(e.target.value)}>
             {CURRENCY_LIST.map((c) => <option key={c} value={c}>{c} ({CURRENCIES[c].symbol})</option>)}
           </select>
-        </label>
+        </Field>
 
 
         <p style={styles.label}>Personas</p>
@@ -1442,16 +1438,14 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
 
       <div style={{ ...styles.form, paddingBottom: 100 }}>
         {extraHeaderField}
-        <label style={styles.label}>
-          Descripción
+        <Field label="Descripción">
           <input style={styles.input} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Cena, taxi, supermercado…" />
-        </label>
+        </Field>
 
         <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-          <label style={{ ...styles.label, flex: 1 }}>
-            Monto
+          <Field label="Monto" style={{ flex: 1 }}>
             <input style={styles.input} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" inputMode="decimal" />
-          </label>
+          </Field>
           <select
             style={{ ...styles.input, width: 80, flexShrink: 0, padding: "11px 6px", textAlign: "center", fontWeight: 600, color: "#544A3C" }}
             value={currency}
@@ -1645,18 +1639,16 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
 
         {/* Fila: Fecha + Categoría + icono Foto + icono Nota */}
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-          <label style={{ ...styles.label, flex: 1 }}>
-            Fecha
+          <Field label="Fecha" style={{ flex: 1 }}>
             <input style={{ ...styles.input, height: 44, boxSizing: "border-box" }} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          </label>
-          <label style={{ ...styles.label, flex: 1 }}>
-            Categoría
+          </Field>
+          <Field label="Categoría" style={{ flex: 1 }}>
             <select style={{ ...styles.input, height: 44, boxSizing: "border-box", paddingRight: 10 }} value={category} onChange={(e) => setCategory(e.target.value)}>
               {groupCategories(group).map((c) => (
                 <option key={c.id} value={c.id}>{c.label}</option>
               ))}
             </select>
-          </label>
+          </Field>
           <label title="Añadir foto" style={{ width: 44, height: 44, borderRadius: 10, border: `1.5px solid ${imageUrl ? "#C75D3B" : "#DDD2BE"}`, background: imageUrl ? "#C75D3B1a" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, color: imageUrl ? "#C75D3B" : "#6B6355" }}>
             <Camera size={18} />
             <input type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageChange} />
@@ -1718,13 +1710,12 @@ function NewExpense({ group, groups, defaultGroupId, expenseId, onCancel, onSave
 
   const effectiveGroup = (groups || []).find((g) => g.id === pickedGroupId) || null;
   const groupPicker = (
-    <label style={styles.label}>
-      Grupo
+    <Field label="Grupo">
       <select style={styles.input} value={pickedGroupId} onChange={(e) => setPickedGroupId(e.target.value)}>
         <option value="">Selecciona un grupo…</option>
         {(groups || []).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
       </select>
-    </label>
+    </Field>
   );
 
   if (!effectiveGroup) {
@@ -1810,27 +1801,23 @@ function SettleUp({ group, prefill, onCancel, onSave }) {
         </div>
 
         <div style={{ display: "flex", gap: 10 }}>
-          <label style={{ ...styles.label, flex: 1.4 }}>
-            Monto
+          <Field label="Monto" style={{ flex: 1.4 }}>
             <input style={styles.input} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" inputMode="decimal" />
-          </label>
-          <label style={{ ...styles.label, flex: 1 }}>
-            Moneda
+          </Field>
+          <Field label="Moneda" style={{ flex: 1 }}>
             <select style={styles.input} value={currency} onChange={(e) => setCurrency(e.target.value)}>
               {CURRENCY_LIST.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
-          </label>
+          </Field>
         </div>
 
-        <label style={styles.label}>
-          Fecha
+        <Field label="Fecha">
           <input style={styles.input} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        </label>
+        </Field>
 
-        <label style={styles.label}>
-          Nota (opcional)
+        <Field label="Nota (opcional)">
           <input style={styles.input} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Transferencia, efectivo…" />
-        </label>
+        </Field>
 
       </div>
       <Footer>
@@ -1933,10 +1920,9 @@ function InviteScreen({ group, session, groupInvites = [], onBack, onSend, onCan
           })}
         </div>
 
-        <label style={styles.label}>
-          Usuario a invitar
+        <Field label="Usuario a invitar">
           <input style={styles.input} value={targetUsername} onChange={e => setTargetUsername(e.target.value)} placeholder="nombre_de_usuario" autoCapitalize="none" onKeyDown={e => e.key === "Enter" && canSend && !sending && handle()} />
-        </label>
+        </Field>
 
         {isSelfInvite && <p style={styles.errText}>No puedes invitarte a ti mismo.</p>}
       </div>

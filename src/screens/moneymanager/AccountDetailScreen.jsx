@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, Footer, ConfirmInline, IconInput, PickerField, ToggleField, InfoTooltip } from "../../components/Shared.jsx";
+import { TopBar, Footer, ConfirmInline, IconInput, PickerField, ToggleField, Field } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
 import { accountBalance, computeCreditCardBalance, useCreditCardActivity } from "../../lib/moneyManagerData.js";
 
@@ -110,20 +110,18 @@ export default function AccountDetailScreen({ session, account, groups, accounts
         />
       )}
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        <label style={styles.label}>
-          Grupo
+        <Field label="Grupo">
           <select style={styles.input} value={groupId} onChange={(e) => setGroupId(e.target.value)}>
             {groups.filter((g) => !g.deleted).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
-        </label>
+        </Field>
 
-        <label style={styles.label}>
-          Nombre
+        <Field label="Nombre">
           <div style={{ display: "flex", gap: 8 }}>
             <IconInput value={icon} onChange={setIcon} />
             <input style={{ ...styles.input, flex: 1 }} value={name} onChange={(e) => setName(e.target.value)} />
           </div>
-        </label>
+        </Field>
 
         <ToggleField
           label="Tarjeta de crédito"
@@ -134,41 +132,25 @@ export default function AccountDetailScreen({ session, account, groups, accounts
 
         {isCreditCard && (
           <>
-            {/* div, no label — un <label> reenvía el click al primer elemento
-                etiquetable que encuentra adentro, y con el botón del ícono
-                de info ahí primero, terminaba abriendo el tooltip en vez de
-                enfocar el select/picker al tocar cualquier parte del texto. */}
-            <div style={styles.label}>
-              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                Cuenta de pago
-                <InfoTooltip text="Cuenta de la cual se pagará esta tarjeta de crédito." />
-              </span>
+            <Field label="Cuenta de pago" info="Cuenta de la cual se pagará esta tarjeta de crédito.">
               <PickerField
                 value={paymentAccountId}
                 onChange={setPaymentAccountId}
                 placeholder="Elegí una cuenta"
                 groups={[{ label: null, items: paymentAccountOptions.map((a) => ({ value: a.id, label: a.name, icon: a.icon })) }]}
               />
-            </div>
+            </Field>
             <div style={{ display: "flex", gap: 10 }}>
-              <div style={{ ...styles.label, flex: 1 }}>
-                <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  Fecha de liquidación
-                  <InfoTooltip text="Día del mes en que cierra el ciclo de facturación de la tarjeta." />
-                </span>
+              <Field label="Fecha de liquidación" info="Día del mes en que cierra el ciclo de facturación de la tarjeta." style={{ flex: 1 }}>
                 <select style={styles.input} value={statementDay} onChange={(e) => setStatementDay(parseInt(e.target.value, 10))}>
                   {DAY_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
-              </div>
-              <div style={{ ...styles.label, flex: 1 }}>
-                <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  Fecha de pago
-                  <InfoTooltip text="Día del mes en que se realiza el pago automático de la tarjeta." />
-                </span>
+              </Field>
+              <Field label="Fecha de pago" info="Día del mes en que se realiza el pago automático de la tarjeta." style={{ flex: 1 }}>
                 <select style={styles.input} value={paymentDay} onChange={(e) => setPaymentDay(parseInt(e.target.value, 10))}>
                   {DAY_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
-              </div>
+              </Field>
             </div>
             <ToggleField
               label="Pago automático"

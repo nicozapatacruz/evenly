@@ -5,7 +5,7 @@ import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } 
 import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, Footer, ConfirmInline } from "../../components/Shared.jsx";
+import { TopBar, Footer, ConfirmInline, Field } from "../../components/Shared.jsx";
 import { CURRENCIES, CURRENCY_LIST } from "../../lib/helpers.jsx";
 
 /* =========================================================================
@@ -60,12 +60,11 @@ export default function CurrencySettingsScreen({ session, settings, reload, show
     <div style={styles.screen}>
       <TopBar title="Ajustes de moneda" onBack={onBack} />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        <label style={styles.label}>
-          Moneda principal
+        <Field label="Moneda principal">
           <select style={styles.input} value={mainCurrency} onChange={(e) => setMainCurrency(e.target.value)}>
             {CURRENCY_LIST.map((c) => <option key={c} value={c}>{c} ({CURRENCIES[c].symbol})</option>)}
           </select>
-        </label>
+        </Field>
 
         <div>
           <p style={styles.label}>Otras monedas</p>

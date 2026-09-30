@@ -84,6 +84,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
         showInfo={showInfo}
         editingTransaction={view.transaction}
         defaultDate={view.date}
+        defaultAccountId={view.accountId}
         onCancel={() => setView({ screen: "activity", accountId: view.accountId, tab: view.tab, viewMonth: view.viewMonth })}
         onSave={async (tx) => {
           const ok = await onSaveMoneyTransaction(tx);

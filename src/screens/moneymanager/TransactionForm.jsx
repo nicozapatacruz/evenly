@@ -24,7 +24,7 @@ const TYPE_INFO = {
 
 export default function TransactionForm({
   session, settings, groups, accounts, categories, onCancel, onSave, onDelete, reloadCategories, showError, showInfo,
-  forceRecurringOpen = false, hideRemoveRecurring = false, editingTransaction = null, defaultDate = null,
+  forceRecurringOpen = false, hideRemoveRecurring = false, editingTransaction = null, defaultDate = null, defaultAccountId = null,
 }) {
   const [managingCategoryType, setManagingCategoryType] = useState(null); // "income" | "expense" | null
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -40,7 +40,7 @@ export default function TransactionForm({
   // qué lado se le pide escribir al usuario; se invierte antes de guardar.
   const [rateFlipped, setRateFlipped] = useState(false);
   const [categoryId, setCategoryId] = useState(editingTransaction?.category_id || "");
-  const [accountId, setAccountId] = useState(editingTransaction?.account_id || "");
+  const [accountId, setAccountId] = useState(editingTransaction?.account_id || defaultAccountId || "");
   const [toAccountId, setToAccountId] = useState(editingTransaction?.to_account_id || "");
   const [note, setNote] = useState(editingTransaction?.title || "");
   const [description, setDescription] = useState(editingTransaction?.memo || "");

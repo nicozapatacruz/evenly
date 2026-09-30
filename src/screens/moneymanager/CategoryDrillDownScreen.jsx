@@ -1,5 +1,4 @@
 import React, { useMemo } from "react";
-import { Plus } from "lucide-react";
 import { styles } from "../../lib/styles.js";
 import { TopBar, MonthNav, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
@@ -128,10 +127,6 @@ export default function CategoryDrillDownScreen({ userId, settings, accounts, ca
           </>
         )}
       </div>
-
-      <button style={{ ...styles.fab, bottom: "calc(78px + env(safe-area-inset-bottom))" }} onClick={() => onNewTransaction()} aria-label="Nueva transacción">
-        <Plus size={24} strokeWidth={2.5} />
-      </button>
     </div>
   );
 }

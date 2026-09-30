@@ -430,14 +430,22 @@ async function runCreditCardAutoPay(userId) {
   // que existiera esta columna, o cualquier otro caso en que no quedó
   // sembrada) — arrancan desde hoy, sin generar de golpe pagos retroactivos
   // de meses en los que el auto-pago en realidad nunca estuvo funcionando.
+  // El `.is(...)` de la condición hace que, si dos cargas concurrentes
+  // (StrictMode, dos pestañas) intentan sembrarla a la vez, solo la primera
+  // gane — la segunda no encuentra la fila en null y no pisa nada.
   const uninitialized = allCards.filter((c) => !c.next_payment_date);
   if (uninitialized.length) {
     await Promise.all(uninitialized.map((c) =>
-      supabase.from("mm_accounts").update({ next_payment_date: creditCardNextPaymentDate(c.payment_day || 1).toISOString() }).eq("id", c.id)
+      supabase.from("mm_accounts")
+        .update({ next_payment_date: creditCardNextPaymentDate(c.payment_day || 1).toISOString() })
+        .eq("id", c.id).is("next_payment_date", null)
     ));
   }
 
-  const cards = allCards.filter((c) => c.next_payment_date && new Date(c.next_payment_date) <= new Date());
+  // Sin cuenta de pago no hay de dónde sacar la plata — no debería poder
+  // pasar desde el formulario (ver AccountDetailScreen), pero por las dudas
+  // (datos viejos, edición directa en la base) el job no revienta por eso.
+  const cards = allCards.filter((c) => c.payment_account_id && c.next_payment_date && new Date(c.next_payment_date) <= new Date());
   if (cards.length === 0) return;
 
   const { data: settings } = await supabase.from("mm_settings").select("main_currency").eq("user_id", userId).maybeSingle();
@@ -456,10 +464,23 @@ async function runCreditCardAutoPay(userId) {
     // mira todo el historial de una, no incrementalmente).
     const transactions = [...(tx || [])];
 
-    let next = new Date(card.next_payment_date);
-    const toInsert = [];
+    let current = card.next_payment_date;
+    let next = new Date(current);
     let guard = 0;
     while (next <= new Date() && guard < 60) {
+      const upcoming = creditCardNextPaymentDate(card.payment_day, new Date(next.getTime() + 86400000));
+      // Reclamo atómico de este ciclo antes de generar nada: si otra corrida
+      // concurrente ya adelantó next_payment_date (dos pestañas, StrictMode
+      // duplicando el efecto de carga), esta condición ya no matchea ninguna
+      // fila y cortamos acá — sin esto, las dos corridas generarían el mismo
+      // pago dos veces (justo lo que pasó en la prueba manual).
+      const { data: claimed } = await supabase
+        .from("mm_accounts")
+        .update({ next_payment_date: upcoming.toISOString() })
+        .eq("id", card.id).eq("next_payment_date", current)
+        .select("id");
+      if (!claimed || claimed.length === 0) break;
+
       const { pasado } = computeCreditCardBalance(card.id, transactions, card.statement_day, next);
       if (pasado < -0.004) {
         const amount = -pasado;
@@ -469,14 +490,18 @@ async function runCreditCardAutoPay(userId) {
           title: "Pago automático", memo: null, date: next.toISOString(),
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         };
-        toInsert.push(paymentTx);
-        transactions.push(paymentTx);
+        const { error } = await supabase.from("mm_transactions").insert(paymentTx);
+        // Si el pago no se pudo insertar, ya reclamamos el ciclo igual — se
+        // pierde ese pago puntual en vez de reintentarlo, pero es preferible
+        // a arriesgar duplicarlo; queda logueado para revisar a mano.
+        if (error) { console.error("runCreditCardAutoPay: no se pudo insertar el pago", error); }
+        else transactions.push(paymentTx);
       }
-      next = creditCardNextPaymentDate(card.payment_day, new Date(next.getTime() + 86400000));
+
+      current = upcoming.toISOString();
+      next = upcoming;
       guard += 1;
     }
-    if (toInsert.length) await supabase.from("mm_transactions").insert(toInsert);
-    await supabase.from("mm_accounts").update({ next_payment_date: next.toISOString() }).eq("id", card.id);
   }
 }
 

@@ -312,10 +312,11 @@ export function IconInput({ value, onChange }) {
 // de achatar las esquinas de ABAJO de esa fila mientras el confirm está
 // abierto, y de que el contenedor de los dos no tenga gap, para que quede
 // pegado como una sola tarjeta (ver "Quitar persona" en SplitLedgerTab.jsx).
-export function ConfirmInline({ message, confirmLabel = "Confirmar", onCancel, onConfirm, style, danger = true, confirmDisabled = false, radius = 10 }) {
+export function ConfirmInline({ title, message, confirmLabel = "Confirmar", onCancel, onConfirm, style, danger = true, confirmDisabled = false, radius = 10 }) {
   return (
     <div style={{ ...styles.confirmBox, borderRadius: `0 0 ${radius}px ${radius}px`, ...style }}>
-      {message && <p style={{ margin: 0, fontSize: 14 }}>{message}</p>}
+      {title && <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700 }}>{title}</p>}
+      {message && <p style={{ margin: 0, fontSize: 14, whiteSpace: "pre-line" }}>{message}</p>}
       <div style={{ display: "flex", gap: 8, marginTop: message ? 10 : 0 }}>
         <button style={{ ...styles.btnGhostSmall, flex: 1, justifyContent: "center" }} onClick={onCancel}>Cancelar</button>
         <button

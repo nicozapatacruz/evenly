@@ -47,11 +47,23 @@ export default function AccountDetailScreen({ session, account = null, groups, a
     || autoPay !== account.auto_pay
     || hidden !== account.hidden
   );
-  const canSave = isDirty && !!name.trim() && !!groupId;
+  // Toda tarjeta de crédito necesita su cuenta de pago definida, tenga o no
+  // prendido el pago automático — no tiene sentido dejarla sin asignar.
+  const canSave = isDirty && !!name.trim() && !!groupId && (!isCreditCard || !!paymentAccountId);
 
-  // Sin otras tarjetas de crédito como opción — no tiene sentido pagar una
-  // tarjeta con otra.
-  const paymentAccountOptions = accounts.filter((a) => (!account || a.id !== account.id) && !a.deleted && !a.is_credit_card);
+  // Mismo criterio que el selector de cuentas de TransactionForm: agrupado
+  // por grupo de cuentas, sin ocultas/eliminadas (salvo que sea la ya
+  // elegida, para no perder la selección) — y sin otras tarjetas de crédito,
+  // porque no tiene sentido pagar una tarjeta con otra.
+  const paymentAccountGroups = groups
+    .filter((g) => !g.deleted)
+    .map((g) => ({
+      label: g.name,
+      items: accounts
+        .filter((a) => a.group_id === g.id && (!account || a.id !== account.id) && !a.is_credit_card && ((!a.hidden && !a.deleted) || a.id === paymentAccountId))
+        .map((a) => ({ value: a.id, label: a.name, icon: a.icon, deleted: a.deleted })),
+    }))
+    .filter((g) => g.items.length > 0);
   const balance = isCreditCard
     ? computeCreditCardBalance(account?.id, ccTx, statementDay)
     : { total: account ? accountBalance(account.id, accountTotals) : 0 };
@@ -92,6 +104,14 @@ export default function AccountDetailScreen({ session, account = null, groups, a
     setSaving(false);
   };
 
+  // Tarjetas con pago automático que quedarían sin de dónde cobrar si se
+  // borra esta cuenta — el borrado sigue siendo soft-delete (la referencia
+  // no se rompe), pero el job seguiría descontando de una cuenta que el
+  // usuario ya considera "eliminada", así que conviene avisarlo antes.
+  const dependentAutoPayCards = account
+    ? accounts.filter((a) => a.payment_account_id === account.id && a.auto_pay && !a.deleted)
+    : [];
+
   const remove = async () => {
     setDeleting(true);
     try {
@@ -117,7 +137,10 @@ export default function AccountDetailScreen({ session, account = null, groups, a
       />
       {account && confirmDelete && (
         <ConfirmInline
-          message={`¿Eliminar "${account.name}"?`}
+          title={dependentAutoPayCards.length > 0 ? "ATENCIÓN" : undefined}
+          message={dependentAutoPayCards.length > 0
+            ? `"${account.name}" es la cuenta de pago de ${dependentAutoPayCards.map((c) => `"${c.name}"`).join(", ")}\nSu pago automático dejará de tener de dónde cobrar.\n\n¿Eliminar igual?`
+            : `¿Eliminar "${account.name}"?`}
           confirmLabel="Eliminar"
           confirmDisabled={deleting}
           onCancel={() => setConfirmDelete(false)}
@@ -153,9 +176,14 @@ export default function AccountDetailScreen({ session, account = null, groups, a
                 value={paymentAccountId}
                 onChange={setPaymentAccountId}
                 placeholder="Elegí una cuenta"
-                groups={[{ label: null, items: paymentAccountOptions.map((a) => ({ value: a.id, label: a.name, icon: a.icon })) }]}
+                groups={paymentAccountGroups}
               />
             </Field>
+            {accounts.find((a) => a.id === paymentAccountId)?.deleted && (
+              <p style={{ ...styles.muted, padding: 0, marginTop: -8, color: "#B0473A", display: "flex", alignItems: "center", gap: 5 }}>
+                <Trash2 size={13} /> Esta cuenta fue eliminada.
+              </p>
+            )}
             <div style={{ display: "flex", gap: 10 }}>
               <Field label="Fecha de liquidación" info="Día del mes en que cierra el ciclo de facturación de la tarjeta." style={{ flex: 1 }}>
                 <select style={styles.input} value={statementDay} onChange={(e) => setStatementDay(parseInt(e.target.value, 10))}>

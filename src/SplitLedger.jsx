@@ -288,6 +288,8 @@ function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false); // true tras mandar el correo de recuperación
+  const [touched, setTouched] = useState({});
+  const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
 
   const canSubmit = mode === "login"
     ? !!email.trim() && !!password
@@ -296,10 +298,15 @@ function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
       : !!displayName.trim() && !!username.trim() && !!email.trim() && !!password && !!confirmPassword;
 
   const switchMode = (next) => {
-    setMode(next); setErr(""); setInfo(""); setPassword(""); setConfirmPassword(""); setSent(false);
+    setMode(next); setErr(""); setInfo(""); setPassword(""); setConfirmPassword(""); setSent(false); setTouched({});
   };
 
   const handle = async () => {
+    if (loading) return;
+    if (!canSubmit) {
+      setTouched({ displayName: true, username: true, email: true, password: true, confirmPassword: true });
+      return;
+    }
     setErr(""); setInfo(""); setLoading(true);
     try {
       if (mode === "forgot") {
@@ -365,21 +372,21 @@ function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
             heurística genérica y sugiere crear contraseña nueva incluso en login. */}
         <form style={{ display: "flex", flexDirection: "column", gap: 12 }} onSubmit={e => { e.preventDefault(); if (!loading) handle(); }}>
           {mode === "register" && (
-            <Field label="Nombre que verán los demás">
-              <input style={styles.input} name="name" value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Tu nombre" autoComplete="name" />
+            <Field label="Nombre que verán los demás" required error={touched.displayName && !displayName.trim() ? "Este campo es obligatorio." : ""}>
+              <input style={styles.input} name="name" value={displayName} onChange={e => setDisplayName(e.target.value)} onBlur={() => touch("displayName")} placeholder="Tu nombre" autoComplete="name" />
             </Field>
           )}
           {mode === "register" && (
-            <Field label="Usuario">
-              <input style={styles.input} name="new-username" value={username} onChange={e => setUsername(e.target.value)} placeholder="nombre_de_usuario" autoCapitalize="none" autoComplete="username" />
+            <Field label="Usuario" required error={touched.username && !username.trim() ? "Este campo es obligatorio." : ""}>
+              <input style={styles.input} name="new-username" value={username} onChange={e => setUsername(e.target.value)} onBlur={() => touch("username")} placeholder="nombre_de_usuario" autoCapitalize="none" autoComplete="username" />
             </Field>
           )}
-          <Field label="Email">
-            <input style={styles.input} type="email" name="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="tu@email.com" autoCapitalize="none" autoComplete={mode === "login" ? "username" : "email"} />
+          <Field label="Email" required error={touched.email && !email.trim() ? "Este campo es obligatorio." : ""}>
+            <input style={styles.input} type="email" name="email" value={email} onChange={e => setEmail(e.target.value)} onBlur={() => touch("email")} placeholder="tu@email.com" autoCapitalize="none" autoComplete={mode === "login" ? "username" : "email"} />
           </Field>
           {mode !== "forgot" && (
-            <Field label="Contraseña">
-              <input style={styles.input} type="password" name={mode === "login" ? "current-password" : "new-password"} value={password} onChange={e => setPassword(e.target.value)} placeholder="Contraseña" autoComplete={mode === "login" ? "current-password" : "new-password"} />
+            <Field label="Contraseña" required error={touched.password && !password ? "Este campo es obligatorio." : ""}>
+              <input style={styles.input} type="password" name={mode === "login" ? "current-password" : "new-password"} value={password} onChange={e => setPassword(e.target.value)} onBlur={() => touch("password")} placeholder="Contraseña" autoComplete={mode === "login" ? "current-password" : "new-password"} />
             </Field>
           )}
           {mode === "login" && (
@@ -392,13 +399,19 @@ function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
             </button>
           )}
           {mode === "register" && (
-            <Field label="Confirmar contraseña">
-              <input style={styles.input} type="password" name="confirm-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Confirmar contraseña" autoComplete="new-password" />
+            <Field
+              label="Confirmar contraseña"
+              required
+              error={touched.confirmPassword
+                ? (!confirmPassword ? "Este campo es obligatorio." : (password !== confirmPassword ? "Las contraseñas no coinciden." : ""))
+                : ""}
+            >
+              <input style={styles.input} type="password" name="confirm-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} onBlur={() => touch("confirmPassword")} placeholder="Confirmar contraseña" autoComplete="new-password" />
             </Field>
           )}
           {err && <p style={styles.errText}>{err}</p>}
           {info && <p style={{ ...styles.muted, padding: 0, color: "#3B6E62" }}>{info}</p>}
-          <button type="submit" style={{ ...styles.btnPrimary, marginTop: 4, opacity: (loading || !canSubmit) ? 0.5 : 1 }} disabled={loading || !canSubmit}>
+          <button type="submit" style={{ ...styles.btnPrimary, marginTop: 4, opacity: (loading || !canSubmit) ? 0.5 : 1 }} disabled={loading}>
             {loading ? "Un momento…" : mode === "login" ? "Entrar" : mode === "forgot" ? "Enviar enlace" : "Crear cuenta"}
           </button>
           <button
@@ -425,13 +438,15 @@ function RecoverPasswordScreen({ onComplete, onCancel }) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
+  const [touched, setTouched] = useState({});
+  const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
 
-  const canSave = newPassword.length >= 4 && confirmPassword.length >= 4;
+  const canSave = newPassword.length >= 4 && confirmPassword.length >= 4 && newPassword === confirmPassword;
 
   const handleSave = async () => {
+    if (saving) return;
     setErr("");
-    if (newPassword.length < 4) return setErr("La contraseña debe tener al menos 4 caracteres.");
-    if (newPassword !== confirmPassword) return setErr("Las contraseñas no coinciden.");
+    if (!canSave) { setTouched({ newPassword: true, confirmPassword: true }); return; }
     setSaving(true);
     try {
       await onComplete(newPassword);
@@ -448,14 +463,20 @@ function RecoverPasswordScreen({ onComplete, onCancel }) {
         <p style={{ ...styles.muted, padding: 0, textAlign: "center", marginBottom: 28 }}>Elegí tu nueva contraseña</p>
 
         <form style={{ display: "flex", flexDirection: "column", gap: 12 }} onSubmit={e => { e.preventDefault(); if (!saving) handleSave(); }}>
-          <Field label="Nueva contraseña">
-            <input style={styles.input} type="password" name="new-password" autoComplete="new-password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Nueva contraseña" />
+          <Field label="Nueva contraseña" required error={touched.newPassword && newPassword.length < 4 ? "Debe tener al menos 4 caracteres." : ""}>
+            <input style={styles.input} type="password" name="new-password" autoComplete="new-password" value={newPassword} onChange={e => setNewPassword(e.target.value)} onBlur={() => touch("newPassword")} placeholder="Nueva contraseña" />
           </Field>
-          <Field label="Confirmar nueva contraseña">
-            <input style={styles.input} type="password" name="confirm-password" autoComplete="new-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Confirmar nueva contraseña" />
+          <Field
+            label="Confirmar nueva contraseña"
+            required
+            error={touched.confirmPassword
+              ? (confirmPassword.length < 4 ? "Debe tener al menos 4 caracteres." : (newPassword !== confirmPassword ? "Las contraseñas no coinciden." : ""))
+              : ""}
+          >
+            <input style={styles.input} type="password" name="confirm-password" autoComplete="new-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} onBlur={() => touch("confirmPassword")} placeholder="Confirmar nueva contraseña" />
           </Field>
           {err && <p style={styles.errText}>{err}</p>}
-          <button type="submit" style={{ ...styles.btnPrimary, marginTop: 4, opacity: (saving || !canSave) ? 0.5 : 1 }} disabled={saving || !canSave}>
+          <button type="submit" style={{ ...styles.btnPrimary, marginTop: 4, opacity: (saving || !canSave) ? 0.5 : 1 }} disabled={saving}>
             {saving ? "Guardando…" : "Guardar y entrar"}
           </button>
           <button

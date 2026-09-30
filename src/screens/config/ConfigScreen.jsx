@@ -380,13 +380,15 @@ function ChangePasswordScreen({ session, onBack, onSave }) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
+  const [touched, setTouched] = useState({});
+  const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
+
+  const canSave = !!currentPassword && newPassword.length >= 4 && newPassword === confirmPassword && newPassword !== currentPassword;
 
   const handleSave = async () => {
+    if (saving) return;
     setErr("");
-    if (!currentPassword) return setErr("Escribe tu contraseña actual.");
-    if (!newPassword || newPassword.length < 4) return setErr("La nueva contraseña debe tener al menos 4 caracteres.");
-    if (newPassword !== confirmPassword) return setErr("Las contraseñas no coinciden.");
-    if (newPassword === currentPassword) return setErr("La nueva contraseña debe ser diferente a la actual.");
+    if (!canSave) { setTouched({ currentPassword: true, newPassword: true, confirmPassword: true }); return; }
     setSaving(true);
     try {
       const { error } = await supabase.auth.signInWithPassword({ email: session.email, password: currentPassword });
@@ -395,20 +397,30 @@ function ChangePasswordScreen({ session, onBack, onSave }) {
     } catch (e) { setErr(e?.message || "Error al guardar"); setSaving(false); }
   };
 
-  const canSave = currentPassword && newPassword && confirmPassword;
-
   return (
     <div style={styles.screen}>
       <TopBar title="Cambiar contraseña" onBack={onBack} />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        <Field label="Contraseña actual">
-          <input style={styles.input} type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Contraseña actual" />
+        <Field label="Contraseña actual" required error={touched.currentPassword && !currentPassword ? "Este campo es obligatorio." : ""}>
+          <input style={styles.input} type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} onBlur={() => touch("currentPassword")} placeholder="Contraseña actual" />
         </Field>
-        <Field label="Nueva contraseña">
-          <input style={styles.input} type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Nueva contraseña" />
+        <Field
+          label="Nueva contraseña"
+          required
+          error={touched.newPassword
+            ? (newPassword.length < 4 ? "Debe tener al menos 4 caracteres." : (newPassword === currentPassword && currentPassword ? "Debe ser diferente a la actual." : ""))
+            : ""}
+        >
+          <input style={styles.input} type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} onBlur={() => touch("newPassword")} placeholder="Nueva contraseña" />
         </Field>
-        <Field label="Confirmar nueva contraseña">
-          <input style={styles.input} type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Confirmar nueva contraseña" />
+        <Field
+          label="Confirmar nueva contraseña"
+          required
+          error={touched.confirmPassword
+            ? (!confirmPassword ? "Este campo es obligatorio." : (newPassword !== confirmPassword ? "Las contraseñas no coinciden." : ""))
+            : ""}
+        >
+          <input style={styles.input} type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} onBlur={() => touch("confirmPassword")} placeholder="Confirmar nueva contraseña" />
         </Field>
         {err && <p style={styles.errText}>{err}</p>}
       </div>
@@ -417,7 +429,7 @@ function ChangePasswordScreen({ session, onBack, onSave }) {
         <button
           style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }}
           onClick={handleSave}
-          disabled={saving || !canSave}
+          disabled={saving}
         >
           {saving ? "Actualizando…" : "Actualizar contraseña"}
         </button>

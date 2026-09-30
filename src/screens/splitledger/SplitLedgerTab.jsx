@@ -419,6 +419,8 @@ function GroupForm({ group = null, session, onCancel, onCreate, onSave, onDelete
   const [baseCurrency, setBaseCurrency] = useState(group?.baseCurrency || "EUR");
   const { previewUrl: photoUrl, pendingFile, removed, handleImageChange: handlePhoto, clear: clearPhoto } = useImageUpload(group?.photoUrl || null, showError);
   const [saving, setSaving] = useState(false);
+  const [touched, setTouched] = useState({});
+  const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
 
   // --- Solo para crear: integrantes como campos de texto en blanco ---
   const [blankMembers, setBlankMembers] = useState([""]);
@@ -429,6 +431,8 @@ function GroupForm({ group = null, session, onCancel, onCreate, onSave, onDelete
   const canCreate = name.trim() && hasEnoughMembers;
 
   const handleCreate = async () => {
+    if (saving) return;
+    if (!canCreate) { setTouched({ name: true, members: true }); return; }
     setSaving(true);
     try {
       const resolvedPhotoUrl = await resolvePhotoUrl({ pendingFile, removed, currentUrl: null });
@@ -497,6 +501,12 @@ function GroupForm({ group = null, session, onCancel, onCreate, onSave, onDelete
   };
 
   const handleSave = async () => {
+    if (saving) return;
+    if (!isDirty || !canSaveEdit) {
+      setTouched({ name: true, members: true, categories: true });
+      if (hasEmptyCategory) setCatsOpen(true);
+      return;
+    }
     setSaving(true);
     try {
       const resolvedPhotoUrl = await resolvePhotoUrl({ pendingFile, removed, currentUrl: group.photoUrl });
@@ -577,8 +587,8 @@ function GroupForm({ group = null, session, onCancel, onCreate, onSave, onDelete
         {/* Foto del grupo */}
         <PhotoPicker previewUrl={photoUrl} onChange={handlePhoto} onClear={clearPhoto} shape="square" />
 
-        <Field label="Nombre del grupo">
-          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder={isEditing ? undefined : "Viaje a Lisboa, Piso compartido…"} />
+        <Field label="Nombre del grupo" required error={touched.name && !name.trim() ? "Este campo es obligatorio." : ""}>
+          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} onBlur={() => touch("name")} placeholder={isEditing ? undefined : "Viaje a Lisboa, Piso compartido…"} />
         </Field>
 
         <Field label={isEditing ? "Moneda principal" : "Moneda principal del grupo"}>
@@ -595,7 +605,7 @@ function GroupForm({ group = null, session, onCancel, onCreate, onSave, onDelete
 
         {isEditing ? (
           <>
-            <p style={styles.label}>Personas</p>
+            <p style={styles.label}>Personas <span style={{ color: "#B0473A" }}>*</span></p>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {members.map((m) => (
                 <div key={m.id} style={{ display: "flex", flexDirection: "column", gap: 0 }}>
@@ -632,9 +642,12 @@ function GroupForm({ group = null, session, onCancel, onCreate, onSave, onDelete
               ))}
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <input style={{ ...styles.input, flex: 1 }} value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} placeholder="Nombre de la nueva persona" onKeyDown={(e) => e.key === "Enter" && newMemberName.trim() && addMember()} />
+              <input style={{ ...styles.input, flex: 1 }} value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} onBlur={() => touch("members")} placeholder="Nombre de la nueva persona" onKeyDown={(e) => e.key === "Enter" && newMemberName.trim() && addMember()} />
               <button style={{ ...styles.btnSecondarySmall, opacity: newMemberName.trim() ? 1 : 0.5 }} onClick={addMember} disabled={!newMemberName.trim()}><UserPlus size={16} /></button>
             </div>
+            {touched.members && members.length < 2 && (
+              <p style={{ margin: "-4px 0 0", fontSize: 12, color: "#B0473A", fontFamily: "system-ui, sans-serif" }}>El grupo necesita al menos 2 personas.</p>
+            )}
 
             {/* Invitar personas */}
             {group.creatorId === session?.userId && (
@@ -671,12 +684,15 @@ function GroupForm({ group = null, session, onCancel, onCreate, onSave, onDelete
                   </SortableContext>
                 </DndContext>
                 <button style={styles.btnDashed} onClick={addCategory}><Plus size={16} /> Nueva categoría</button>
+                {touched.categories && hasEmptyCategory && (
+                  <p style={{ margin: "-4px 0 0", fontSize: 12, color: "#B0473A", fontFamily: "system-ui, sans-serif" }}>Todas las categorías necesitan un nombre.</p>
+                )}
               </>
             )}
           </>
         ) : (
           <>
-            <p style={styles.label}>Integrantes</p>
+            <p style={styles.label}>Integrantes <span style={{ color: "#B0473A" }}>*</span></p>
 
             {/* Tú — fijo, no se puede quitar */}
             <div style={{ ...styles.shareRow, background: "#F3EFE5", borderColor: "#DDD2BE" }}>
@@ -692,7 +708,7 @@ function GroupForm({ group = null, session, onCancel, onCreate, onSave, onDelete
                   <span style={{ ...styles.avatar, background: m.trim() ? colorFor(m + i) : "#D9CFC1" }}>
                     {m.trim() ? initials(m) : i + 1}
                   </span>
-                  <input style={{ ...styles.input, flex: 1 }} value={m} onChange={(e) => updateMember(i, e.target.value)} placeholder={`Persona ${i + 1}`} />
+                  <input style={{ ...styles.input, flex: 1 }} value={m} onChange={(e) => updateMember(i, e.target.value)} onBlur={() => touch("members")} placeholder={`Persona ${i + 1}`} />
                   {blankMembers.length > 1 && (
                     <button style={styles.iconBtnGhost} onClick={() => removeMemberField(i)} aria-label="Quitar persona"><X size={16} /></button>
                   )}
@@ -700,6 +716,9 @@ function GroupForm({ group = null, session, onCancel, onCreate, onSave, onDelete
               ))}
             </div>
             <button style={styles.btnDashed} onClick={addMemberField}><Plus size={16} /> Agregar persona</button>
+            {touched.members && !hasEnoughMembers && (
+              <p style={{ margin: "-4px 0 0", fontSize: 12, color: "#B0473A", fontFamily: "system-ui, sans-serif" }}>Agregá al menos una persona.</p>
+            )}
           </>
         )}
       </div>
@@ -732,11 +751,11 @@ function GroupForm({ group = null, session, onCancel, onCreate, onSave, onDelete
       <Footer>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
         {isEditing ? (
-          <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !isDirty || !canSaveEdit) ? 0.5 : 1 }} onClick={handleSave} disabled={saving || !isDirty || !canSaveEdit}>
+          <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !isDirty || !canSaveEdit) ? 0.5 : 1 }} onClick={handleSave} disabled={saving}>
             {saving ? "Guardando…" : "Guardar"}
           </button>
         ) : (
-          <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canCreate) ? 0.5 : 1 }} onClick={handleCreate} disabled={saving || !canCreate}>
+          <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canCreate) ? 0.5 : 1 }} onClick={handleCreate} disabled={saving}>
             {saving ? "Creando…" : "Crear"}
           </button>
         )}
@@ -1303,6 +1322,8 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
   const { previewUrl: imageUrl, pendingFile, removed, handleImageChange, clear: clearImage } = useImageUpload(existing?.imageUrl || null, setErr);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [touched, setTouched] = useState({});
+  const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
 
   const numericAmount = parseAmountInput(amount || "");
   const validAmount = !isNaN(numericAmount) && numericAmount > 0;
@@ -1376,7 +1397,8 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
     (splitMode !== "shares" || participantIds.reduce((s, id) => s + (parseFloat(shareUnits[id] || "0") || 0), 0) > 0);
 
   const handleSave = async () => {
-    if (!canSave) return;
+    if (saving) return;
+    if (!canSave) { setTouched({ description: true, amount: true }); return; }
     const dateMs = new Date(date + "T12:00:00").getTime();
     const payers = buildPayers();
     setSaving(true);
@@ -1425,13 +1447,13 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
 
       <div style={{ ...styles.form, paddingBottom: 100 }}>
         {extraHeaderField}
-        <Field label="Descripción">
-          <input style={styles.input} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Cena, taxi, supermercado…" />
+        <Field label="Descripción" required error={touched.description && !description.trim() ? "Este campo es obligatorio." : ""}>
+          <input style={styles.input} value={description} onChange={(e) => setDescription(e.target.value)} onBlur={() => touch("description")} placeholder="Cena, taxi, supermercado…" />
         </Field>
 
         <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-          <Field label="Monto" style={{ flex: 1 }}>
-            <input style={styles.input} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" inputMode="decimal" />
+          <Field label="Monto" required error={touched.amount && !validAmount ? "Ingresá un importe válido." : ""} style={{ flex: 1 }}>
+            <input style={styles.input} value={amount} onChange={(e) => setAmount(e.target.value)} onBlur={() => touch("amount")} placeholder="0.00" inputMode="decimal" />
           </Field>
           <select
             style={{ ...styles.input, width: 80, flexShrink: 0, padding: "11px 6px", textAlign: "center", fontWeight: 600, color: "#544A3C" }}
@@ -1666,7 +1688,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
         <button
           style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }}
           onClick={handleSave}
-          disabled={saving || !canSave}
+          disabled={saving}
         >
           {saving ? "Guardando…" : "Guardar"}
         </button>
@@ -1739,6 +1761,7 @@ function SettleUp({ group, prefill, onCancel, onSave }) {
   const [date, setDate] = useState(todayInputValue());
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const [amountTouched, setAmountTouched] = useState(false);
 
   const numericAmount = parseAmountInput(amount || "");
   const validAmount = !isNaN(numericAmount) && numericAmount > 0;
@@ -1748,7 +1771,8 @@ function SettleUp({ group, prefill, onCancel, onSave }) {
   const canSave = !!from && !!to && from !== to && validAmount;
 
   const handleSave = async () => {
-    if (!canSave) return;
+    if (saving) return;
+    if (!canSave) { setAmountTouched(true); return; }
     setSaving(true);
     try {
       await onSave({
@@ -1788,8 +1812,8 @@ function SettleUp({ group, prefill, onCancel, onSave }) {
         </div>
 
         <div style={{ display: "flex", gap: 10 }}>
-          <Field label="Monto" style={{ flex: 1.4 }}>
-            <input style={styles.input} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" inputMode="decimal" />
+          <Field label="Monto" required error={amountTouched && !validAmount ? "Ingresá un importe válido." : ""} style={{ flex: 1.4 }}>
+            <input style={styles.input} value={amount} onChange={(e) => setAmount(e.target.value)} onBlur={() => setAmountTouched(true)} placeholder="0.00" inputMode="decimal" />
           </Field>
           <Field label="Moneda" style={{ flex: 1 }}>
             <select style={styles.input} value={currency} onChange={(e) => setCurrency(e.target.value)}>
@@ -1809,7 +1833,7 @@ function SettleUp({ group, prefill, onCancel, onSave }) {
       </div>
       <Footer>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
-        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }} onClick={handleSave} disabled={saving || !canSave}>
+        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }} onClick={handleSave} disabled={saving}>
           {saving ? "Registrando…" : "Registrar pago"}
         </button>
       </Footer>
@@ -1824,13 +1848,16 @@ function InviteScreen({ group, session, groupInvites = [], onBack, onSend, onCan
   const [sending, setSending] = useState(false);
   const [cancelingId, setCancelingId] = useState(null);
   const [confirmCancelId, setConfirmCancelId] = useState(null);
+  const [touched, setTouched] = useState({});
+  const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
 
   const invitableMembers = group.members.filter(m => !m.linkedUserId);
   const isSelfInvite = !!targetUsername.trim() && targetUsername.trim().toLowerCase() === session.username;
   const canSend = !!selectedMemberId && !!targetUsername.trim() && !isSelfInvite;
 
   const handle = async () => {
-    if (!canSend) return;
+    if (sending) return;
+    if (!canSend) { setTouched({ member: true, username: true }); return; }
     setSending(true);
     const ok = await onSend({ memberId: selectedMemberId, targetUsername: targetUsername.trim().toLowerCase() });
     if (ok) {
@@ -1848,7 +1875,7 @@ function InviteScreen({ group, session, groupInvites = [], onBack, onSend, onCan
           Selecciona a qué miembro del grupo corresponde la persona que vas a invitar, y escribe su nombre de usuario en la app.
         </p>
 
-        <p style={styles.label}>¿A qué miembro corresponde?</p>
+        <p style={styles.label}>¿A qué miembro corresponde? <span style={{ color: "#B0473A" }}>*</span></p>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {invitableMembers.length === 0 && (
             <p style={styles.muted}>Todos los miembros ya tienen usuario vinculado.</p>
@@ -1906,9 +1933,12 @@ function InviteScreen({ group, session, groupInvites = [], onBack, onSend, onCan
             );
           })}
         </div>
+        {touched.member && !selectedMemberId && (
+          <p style={{ margin: "-4px 0 0", fontSize: 12, color: "#B0473A", fontFamily: "system-ui, sans-serif" }}>Elegí a qué miembro corresponde.</p>
+        )}
 
-        <Field label="Usuario a invitar">
-          <input style={styles.input} value={targetUsername} onChange={e => setTargetUsername(e.target.value)} placeholder="nombre_de_usuario" autoCapitalize="none" onKeyDown={e => e.key === "Enter" && canSend && !sending && handle()} />
+        <Field label="Usuario a invitar" required error={touched.username && !targetUsername.trim() ? "Este campo es obligatorio." : ""}>
+          <input style={styles.input} value={targetUsername} onChange={e => setTargetUsername(e.target.value)} onBlur={() => touch("username")} placeholder="nombre_de_usuario" autoCapitalize="none" onKeyDown={e => e.key === "Enter" && canSend && !sending && handle()} />
         </Field>
 
         {isSelfInvite && <p style={styles.errText}>No puedes invitarte a ti mismo.</p>}
@@ -1919,7 +1949,7 @@ function InviteScreen({ group, session, groupInvites = [], onBack, onSend, onCan
         <button
           style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: (sending || !canSend) ? 0.5 : 1 }}
           onClick={handle}
-          disabled={sending || !canSend}
+          disabled={sending}
         >
           {sending ? "Enviando…" : "Enviar invitación"}
         </button>

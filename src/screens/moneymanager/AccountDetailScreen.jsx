@@ -31,6 +31,8 @@ export default function AccountDetailScreen({ session, account = null, groups, a
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [touched, setTouched] = useState({});
+  const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
 
   const { transactions: ccTx } = useCreditCardActivity(session.userId, isCreditCard && account ? [account.id] : []);
 
@@ -47,10 +49,12 @@ export default function AccountDetailScreen({ session, account = null, groups, a
     || autoPay !== account.auto_pay
     || hidden !== account.hidden
   );
+  const nameRequired = !name.trim();
   // Cuenta de pago es informativa salvo que el pago automático esté
   // prendido — ahí sí es obligatoria, porque el job no tiene de dónde sacar
   // la plata sin ella.
-  const canSave = isDirty && !!name.trim() && !!groupId && (!isCreditCard || !autoPay || !!paymentAccountId);
+  const paymentAccountRequired = isCreditCard && autoPay && !paymentAccountId;
+  const canSave = isDirty && !nameRequired && !!groupId && !paymentAccountRequired;
 
   // Mismo criterio que el selector de cuentas de TransactionForm: agrupado
   // por grupo de cuentas, sin ocultas/eliminadas (salvo que sea la ya
@@ -70,7 +74,12 @@ export default function AccountDetailScreen({ session, account = null, groups, a
     : { total: account ? accountBalance(account.id, accountTotals) : 0 };
 
   const handleSave = async () => {
-    if (!canSave) return;
+    if (saving) return;
+    // Si falta algo, en vez de quedarse callado (el botón atenuado no dice
+    // por qué) revela los textos de ayuda de los campos que nunca se
+    // llegaron a "tocar" — así siempre queda explicado, aunque el usuario
+    // nunca haya entrado/salido de ese campo.
+    if (!canSave) { setTouched({ name: true, paymentAccountId: true }); return; }
     setSaving(true);
     try {
       // next_payment_date solo se toca cuando de verdad cambia el estado
@@ -157,10 +166,10 @@ export default function AccountDetailScreen({ session, account = null, groups, a
           </select>
         </Field>
 
-        <Field label="Nombre">
+        <Field label="Nombre" required error={touched.name && nameRequired ? "Este campo es obligatorio." : ""}>
           <div style={{ display: "flex", gap: 8 }}>
             <IconInput value={icon} onChange={setIcon} />
-            <input style={{ ...styles.input, flex: 1 }} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre (ej: Saldo, Ahorros)" />
+            <input style={{ ...styles.input, flex: 1 }} value={name} onChange={(e) => setName(e.target.value)} onBlur={() => touch("name")} placeholder="Nombre (ej: Saldo, Ahorros)" />
           </div>
         </Field>
 
@@ -173,11 +182,12 @@ export default function AccountDetailScreen({ session, account = null, groups, a
 
         {isCreditCard && (
           <>
-            <Field label="Cuenta de pago" info="Cuenta de la cual se pagará esta tarjeta de crédito.">
+            <Field label="Cuenta de pago" info="Cuenta de la cual se pagará esta tarjeta de crédito." required={autoPay} error={touched.paymentAccountId && paymentAccountRequired ? "Este campo es obligatorio." : ""}>
               <PickerField
                 value={paymentAccountId}
                 onChange={setPaymentAccountId}
                 onClear={() => setPaymentAccountId("")}
+                onBlur={() => touch("paymentAccountId")}
                 placeholder="Elegí una cuenta"
                 groups={paymentAccountGroups}
               />
@@ -239,7 +249,7 @@ export default function AccountDetailScreen({ session, account = null, groups, a
       </div>
       <Footer>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onBack}>Cancelar</button>
-        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }} onClick={handleSave} disabled={saving || !canSave}>
+        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }} onClick={handleSave} disabled={saving}>
           {saving ? (account ? "Guardando…" : "Creando…") : (account ? "Guardar" : "Crear")}
         </button>
       </Footer>

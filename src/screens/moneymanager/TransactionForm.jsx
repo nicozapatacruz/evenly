@@ -44,6 +44,8 @@ export default function TransactionForm({
   const [toAccountId, setToAccountId] = useState(editingTransaction?.to_account_id || "");
   const [note, setNote] = useState(editingTransaction?.title || "");
   const [saving, setSaving] = useState(false);
+  const [touched, setTouched] = useState({});
+  const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
 
   const [recurringOpen, setRecurringOpen] = useState(forceRecurringOpen);
   const [freqValue, setFreqValue] = useState("month-1");
@@ -120,7 +122,11 @@ export default function TransactionForm({
   );
 
   const handleSave = async () => {
-    if (!canSave) return;
+    if (saving) return;
+    if (!canSave) {
+      setTouched({ amount: true, exchangeRate: true, accountId: true, toAccountId: true, freqInterval: true });
+      return;
+    }
     setSaving(true);
     try {
       const txDate = new Date(date + "T12:00:00");
@@ -204,8 +210,8 @@ export default function TransactionForm({
         </Field>
 
         <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-          <Field label="Importe" style={{ flex: 1 }}>
-            <input style={styles.input} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" inputMode="decimal" />
+          <Field label="Importe" required error={touched.amount && !validAmount ? "Ingresá un importe válido." : ""} style={{ flex: 1 }}>
+            <input style={styles.input} value={amount} onChange={(e) => setAmount(e.target.value)} onBlur={() => touch("amount")} placeholder="0.00" inputMode="decimal" />
           </Field>
           <select
             style={{ ...styles.input, width: 80, flexShrink: 0, padding: "11px 6px", textAlign: "center", fontWeight: 600, color: "#544A3C" }}
@@ -217,10 +223,10 @@ export default function TransactionForm({
         </div>
 
         {needsRate && (
-          <Field label={`1 ${rateFlipped ? currency : settings.main_currency} equivale a`}>
+          <Field label={`1 ${rateFlipped ? currency : settings.main_currency} equivale a`} required error={touched.exchangeRate && !validRate ? "Ingresá una tasa válida." : ""}>
             <div style={{ display: "flex", gap: 8 }}>
               <div style={{ position: "relative", flex: 1 }}>
-                <input style={{ ...styles.input, width: "100%", paddingRight: 50 }} value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} placeholder="1.00" inputMode="decimal" />
+                <input style={{ ...styles.input, width: "100%", paddingRight: 50 }} value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} onBlur={() => touch("exchangeRate")} placeholder="1.00" inputMode="decimal" />
                 <span style={{ position: "absolute", top: "50%", right: 13, transform: "translateY(-50%)", fontFamily: "system-ui, sans-serif", fontSize: 14, fontWeight: 600, color: "#544A3C", pointerEvents: "none" }}>
                   {rateFlipped ? settings.main_currency : currency}
                 </span>
@@ -276,11 +282,12 @@ export default function TransactionForm({
           </p>
         )}
 
-        <Field label={type === "transfer" ? "De" : "Cuenta"}>
+        <Field label={type === "transfer" ? "De" : "Cuenta"} required error={touched.accountId && !accountId ? "Este campo es obligatorio." : ""}>
           <PickerField
             value={accountId}
             onChange={setAccountId}
             onClear={() => setAccountId("")}
+            onBlur={() => touch("accountId")}
             placeholder="Elegí una cuenta"
             groups={groups
               .filter((g) => !g.deleted)
@@ -302,11 +309,18 @@ export default function TransactionForm({
         )}
 
         {type === "transfer" && (
-          <Field label="A">
+          <Field
+            label="A"
+            required
+            error={touched.toAccountId
+              ? (!toAccountId ? "Este campo es obligatorio." : (toAccountId === accountId ? 'No puede ser la misma cuenta que "De".' : ""))
+              : ""}
+          >
             <PickerField
               value={toAccountId}
               onChange={setToAccountId}
               onClear={() => setToAccountId("")}
+              onBlur={() => touch("toAccountId")}
               placeholder="Elegí una cuenta"
               groups={groups
                 .filter((g) => !g.deleted)
@@ -342,6 +356,8 @@ export default function TransactionForm({
             setFreqValue={setFreqValue}
             freqInterval={freqInterval}
             setFreqInterval={setFreqInterval}
+            intervalTouched={touched.freqInterval}
+            onIntervalBlur={() => touch("freqInterval")}
             endDate={endDate}
             setEndDate={setEndDate}
             onRemove={hideRemoveRecurring ? null : () => setRecurringOpen(false)}
@@ -354,7 +370,7 @@ export default function TransactionForm({
         <button
           style={{ flex: 1, marginTop: 0, padding: "12px", borderRadius: 12, border: "none", background: accent, color: "#fff", fontSize: 14, fontWeight: 700, fontFamily: "system-ui, sans-serif", opacity: (saving || !canSave) ? 0.5 : 1 }}
           onClick={handleSave}
-          disabled={saving || !canSave}
+          disabled={saving}
         >
           {saving ? "Guardando…" : "Guardar"}
         </button>
@@ -370,8 +386,10 @@ export default function TransactionForm({
    el día elegido puede no existir en algún mes/año futuro).
    ========================================================================= */
 
-function RecurringFields({ type, date, freqValue, setFreqValue, freqInterval, setFreqInterval, endDate, setEndDate, onRemove }) {
+function RecurringFields({ type, date, freqValue, setFreqValue, freqInterval, setFreqInterval, intervalTouched, onIntervalBlur, endDate, setEndDate, onRemove }) {
   const freq = RECURRING_FREQUENCIES.find((f) => f.value === freqValue);
+  const customInterval = parseInt(freqInterval, 10);
+  const intervalInvalid = freq?.interval === null && !(customInterval >= 2);
   const txDate = date ? new Date(date + "T12:00:00") : null;
   const dayOfMonth = txDate?.getDate();
   const monthIndex = txDate?.getMonth(); // 0 = enero, 1 = febrero...
@@ -411,8 +429,8 @@ function RecurringFields({ type, date, freqValue, setFreqValue, freqInterval, se
       </Field>
 
       {freq?.interval === null && (
-        <Field label={freq.unit === "week" ? "Cada cuántas semanas" : "Cada cuántos meses"}>
-          <input style={styles.input} type="number" min={2} value={freqInterval} onChange={(e) => setFreqInterval(e.target.value)} />
+        <Field label={freq.unit === "week" ? "Cada cuántas semanas" : "Cada cuántos meses"} required error={intervalTouched && intervalInvalid ? "Debe ser al menos 2." : ""}>
+          <input style={styles.input} type="number" min={2} value={freqInterval} onChange={(e) => setFreqInterval(e.target.value)} onBlur={onIntervalBlur} />
         </Field>
       )}
 
@@ -572,10 +590,12 @@ function NewCategoryForm({ session, type, categories, reload, showError, onCance
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("");
   const [saving, setSaving] = useState(false);
+  const [nameTouched, setNameTouched] = useState(false);
   const canSave = !!name.trim();
 
   const create = async () => {
-    if (!canSave) return;
+    if (saving) return;
+    if (!canSave) { setNameTouched(true); return; }
     setSaving(true);
     try {
       const { error } = await supabase.from("mm_categories").insert({
@@ -596,16 +616,16 @@ function NewCategoryForm({ session, type, categories, reload, showError, onCance
     <div style={styles.screen}>
       <TopBar title="Nueva categoría" onBack={onCancel} />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        <Field label="Nombre">
+        <Field label="Nombre" required error={nameTouched && !canSave ? "Este campo es obligatorio." : ""}>
           <div style={{ display: "flex", gap: 8 }}>
             <IconInput value={icon} onChange={setIcon} />
-            <input style={{ ...styles.input, flex: 1 }} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre" onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
+            <input style={{ ...styles.input, flex: 1 }} value={name} onChange={(e) => setName(e.target.value)} onBlur={() => setNameTouched(true)} placeholder="Nombre" onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
           </div>
         </Field>
       </div>
       <Footer>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
-        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }} onClick={create} disabled={saving || !canSave}>
+        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }} onClick={create} disabled={saving}>
           {saving ? "Creando…" : "Crear"}
         </button>
       </Footer>

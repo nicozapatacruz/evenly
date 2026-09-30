@@ -287,13 +287,15 @@ export function ManageAccounts({ session, group = null, groups, accounts, accoun
   const [deleting, setDeleting] = useState(false);
   const [creating, setCreating] = useState(false);
   const [viewingAccountId, setViewingAccountId] = useState(null);
+  const [nameTouched, setNameTouched] = useState(false);
 
   // Al crear siempre es "dirty" (no hay un original con qué comparar).
   const isDirty = !group || name.trim() !== group.name;
   const canSave = isDirty && !!name.trim();
 
   const handleSave = async () => {
-    if (!canSave) return;
+    if (saving) return;
+    if (!canSave) { setNameTouched(true); return; }
     setSaving(true);
     try {
       if (group) {
@@ -400,8 +402,8 @@ export function ManageAccounts({ session, group = null, groups, accounts, accoun
         />
       )}
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        <Field label="Nombre">
-          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder={group ? undefined : "Nombre (ej: Santander, Efectivo)"} />
+        <Field label="Nombre" required error={nameTouched && !name.trim() ? "Este campo es obligatorio." : ""}>
+          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} onBlur={() => setNameTouched(true)} placeholder={group ? undefined : "Nombre (ej: Santander, Efectivo)"} />
         </Field>
         {group && showCreatedHint && (
           <p style={{ margin: "4px 0 -8px", fontSize: 13, fontFamily: "system-ui, sans-serif", color: "#3B6E62" }}>
@@ -419,7 +421,7 @@ export function ManageAccounts({ session, group = null, groups, accounts, accoun
       </div>
       <Footer>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onBack}>Cancelar</button>
-        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }} onClick={handleSave} disabled={saving || !canSave}>
+        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }} onClick={handleSave} disabled={saving}>
           {saving ? (group ? "Guardando…" : "Creando…") : (group ? "Guardar" : "Crear")}
         </button>
       </Footer>

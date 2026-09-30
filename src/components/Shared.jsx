@@ -85,17 +85,30 @@ export function InfoTooltip({ text }) {
 // hay info (así tocar el texto enfoca el input, gratis) — con info pasa a
 // <div>, porque un <label> con un <button> adentro (el del ícono) reenvía el
 // click al botón en vez de al input real (ver DESIGN_NOTES.md).
-export function Field({ label, info, style, children }) {
+// `required` agrega el asterisco junto al label; `error` (solo se muestra si
+// se pasa un string no vacío — el llamador decide cuándo, típicamente en
+// blur o al intentar guardar) agrega el texto de ayuda en rojo debajo.
+export function Field({ label, info, required, error, style, children }) {
   const Wrapper = info ? "div" : "label";
+  // Envuelto en un solo <span> siempre (no un fragment) — el wrapper es
+  // flex-column, así que label+asterisco sueltos como hijos directos
+  // quedaban cada uno en su propia fila en vez de en la misma línea.
+  const labelContent = (
+    <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+      {label}
+      {required && <span style={{ color: "#B0473A" }}>*</span>}
+    </span>
+  );
   return (
     <Wrapper style={{ ...styles.label, ...style }}>
       {info ? (
         <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          {label}
+          {labelContent}
           <InfoTooltip text={info} />
         </span>
-      ) : label}
+      ) : labelContent}
       {children}
+      {error && <span style={{ fontSize: 12, fontWeight: 400, color: "#B0473A" }}>{error}</span>}
     </Wrapper>
   );
 }
@@ -362,12 +375,21 @@ export function Footer({ children }) {
 // una lista plana sin encabezados (ej. categorías, que no se agrupan).
 let pickerInstanceCounter = 0;
 
-export function PickerField({ value, onChange, groups, placeholder = "Elegir", onClear }) {
+export function PickerField({ value, onChange, groups, placeholder = "Elegir", onClear, onBlur }) {
   const [open, setOpen] = useState(false);
   const idRef = useRef(null);
   if (idRef.current === null) idRef.current = ++pickerInstanceCounter;
   const containerRef = useRef(null);
   const selected = groups.flatMap((g) => g.items).find((it) => it.value === value);
+
+  // No hay blur nativo (esto no es un <input>) — se dispara "onBlur" cuando
+  // el desplegable se cierra, sea por elegir algo, click afuera, o que se
+  // abrió otro picker. Mismo momento en que un <select> real dispararía blur.
+  const wasOpenRef = useRef(false);
+  useEffect(() => {
+    if (wasOpenRef.current && !open) onBlur?.();
+    wasOpenRef.current = open;
+  }, [open, onBlur]);
 
   // Si se abre OTRO picker, este se cierra solo — nunca hay dos abiertos a
   // la vez (se avisan entre ellos con un evento propio, en vez de levantar

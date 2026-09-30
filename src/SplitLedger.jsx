@@ -670,11 +670,11 @@ function AppShell({ session, onLogout, refreshProfile }) {
   const showTabBar = activeTab === "config"
     ? (!changingPassword && !viewingProfile && !creatingRecurring && !moneyManagerScreen)
     : activeTab === "accounts"
-      ? accountsView.screen === "list"
+      ? (accountsView.screen === "list" || accountsView.screen === "activity")
       : activeTab === "ledger"
         ? ledgerView.screen === "list"
         : activeTab === "stats"
-          ? statsView.screen === "list"
+          ? (statsView.screen === "list" || statsView.screen === "drilldown")
           : splitLedgerView.screen === "home";
 
   return (

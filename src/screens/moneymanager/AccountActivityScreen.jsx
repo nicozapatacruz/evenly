@@ -204,11 +204,13 @@ function MensualSubTab({ totals, settings, viewMonth, setViewMonth, onOpenMonth 
   // por eso compara contra `new Date()`, no contra `viewMonth`.
   const today = new Date();
   const isCurrent = (month) => year === today.getFullYear() && month === today.getMonth() + 1;
+  const swipeHandlers = useMonthSwipe(viewMonth, setViewMonth, "year");
+  const slide = useMonthSlide(viewMonth);
 
   return (
     <>
       <div style={{ position: "sticky", top: 0, zIndex: 5, background: "#FBF8F2" }}>
-        <div style={styles.subHeader}>
+        <div style={styles.subHeader} {...swipeHandlers}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <button style={styles.iconBtnGhost} onClick={() => setViewMonth(new Date(year - 1, viewMonth.getMonth(), 1))} aria-label="Año anterior">
               <ChevronLeft size={20} />
@@ -238,7 +240,7 @@ function MensualSubTab({ totals, settings, viewMonth, setViewMonth, onOpenMonth 
           </div>
         </div>
       </div>
-      <div style={{ ...styles.form, flex: 1, paddingTop: 12, paddingBottom: 100, display: "flex", flexDirection: "column", gap: 6 }}>
+      <div key={slide.key} className={slide.className} style={{ ...styles.form, flex: 1, paddingTop: 12, paddingBottom: 100, display: "flex", flexDirection: "column", gap: 6 }} {...swipeHandlers}>
         {rows.map((r) => (
           <div
             key={r.month}

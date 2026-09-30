@@ -156,7 +156,9 @@ export function MonthNav({ viewMonth, setViewMonth }) {
 // Estadísticas) — mismo destino que las flechas de MonthNav. Se exige que
 // el gesto sea bien horizontal (mucho más ancho que alto) para no robarle
 // el scroll vertical normal de la lista.
-export function useMonthSwipe(viewMonth, setViewMonth) {
+// `unit="year"` lo reusa el sub-tab Mensual del extracto de cuenta (desliza
+// para cambiar de año en vez de mes) — mismo gesto, mismo umbral.
+export function useMonthSwipe(viewMonth, setViewMonth, unit = "month") {
   const startRef = useRef(null);
   const onTouchStart = (e) => {
     const t = e.touches[0];
@@ -169,8 +171,10 @@ export function useMonthSwipe(viewMonth, setViewMonth) {
     const dy = t.clientY - startRef.current.y;
     startRef.current = null;
     if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-      const dir = dx < 0 ? 1 : -1; // deslizar a la izquierda = mes siguiente
-      setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + dir, 1));
+      const dir = dx < 0 ? 1 : -1; // deslizar a la izquierda = siguiente
+      setViewMonth(unit === "year"
+        ? new Date(viewMonth.getFullYear() + dir, viewMonth.getMonth(), 1)
+        : new Date(viewMonth.getFullYear(), viewMonth.getMonth() + dir, 1));
     }
   };
   return { onTouchStart, onTouchEnd };

@@ -187,11 +187,11 @@ export default function ConfigScreen({
       {section === "moneymanager" && (
         <div style={{ ...styles.form, paddingTop: 12 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-            <p style={styles.label}>Categoría/Cuentas</p>
+            <p style={styles.label}>Categorías/Cuentas</p>
             <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
               <MenuRow label="Categorías de ingreso" onClick={() => setMoneyManagerScreen("categoriesIncome")} />
               <MenuRow label="Categorías de gasto" onClick={() => setMoneyManagerScreen("categoriesExpense")} />
-              <MenuRow label="Tipos de cuentas" onClick={() => setMoneyManagerScreen("accountTypes")} />
+              <MenuRow label="Grupos de cuentas" onClick={() => setMoneyManagerScreen("accountTypes")} />
               <MenuRow label="Gestor de cuentas" onClick={() => setMoneyManagerScreen("accounts")} last />
             </div>
           </div>
@@ -284,7 +284,9 @@ function AccountsSettingsScreen({ session, groups, accounts, accountTotals, sett
         reload={reload}
         showError={showError}
         showInfo={showInfo}
+        justCreated={view.justCreated}
         onBack={() => setView({ screen: "groups" })}
+        onDeleted={() => setView({ screen: "groups" })}
       />
     );
   }
@@ -298,7 +300,7 @@ function AccountsSettingsScreen({ session, groups, accounts, accountTotals, sett
       showError={showError}
       showInfo={showInfo}
       onBack={onBack}
-      onOpenGroup={(groupId) => setView({ screen: "accounts", groupId })}
+      onOpenGroup={(groupId, opts) => setView({ screen: "accounts", groupId, justCreated: opts?.justCreated })}
     />
   );
 }

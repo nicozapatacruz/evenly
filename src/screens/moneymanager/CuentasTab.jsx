@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Pencil, Plus, X, ChevronRight, ChevronUp, ChevronDown, Menu } from "lucide-react";
+import { Pencil, Plus, ChevronRight, ChevronUp, ChevronDown, Menu, Trash2 } from "lucide-react";
 import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -174,13 +174,10 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
 export function ManageGroups({ session, groups: allGroups, accounts, reload, showError, showInfo, onBack, onOpenGroup }) {
   const groups = allGroups.filter((g) => !g.deleted);
   const [creating, setCreating] = useState(false);
-  const [names, setNames] = useState(() => Object.fromEntries(groups.map((g) => [g.id, g.name])));
-  const [confirmRemoveId, setConfirmRemoveId] = useState(null);
   const [order, setOrder] = useState(() => groups.map((g) => g.id));
 
   useEffect(() => {
     setOrder(groups.map((g) => g.id));
-    setNames(Object.fromEntries(groups.map((g) => [g.id, g.name])));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allGroups]);
 
@@ -201,37 +198,6 @@ export function ManageGroups({ session, groups: allGroups, accounts, reload, sho
     } catch (e) { showError(`No se pudo guardar el orden: ${e?.message || e}`); await reload(); }
   };
 
-  const renameGroup = async (id) => {
-    const name = (names[id] || "").trim();
-    const group = groups.find((g) => g.id === id);
-    if (!name || name === group.name) return;
-    try {
-      const { error } = await supabase.from("mm_account_groups").update({ name }).eq("id", id);
-      if (error) throw error;
-      await reload();
-      showInfo("Nombre actualizado.");
-    } catch (e) { showError(`No se pudo renombrar: ${e?.message || e}`); }
-  };
-
-  const removeGroup = async (id) => {
-    const name = groups.find((g) => g.id === id)?.name;
-    try {
-      const { error } = await supabase.from("mm_account_groups").update({ deleted: true }).eq("id", id);
-      if (error) throw error;
-      // El mensaje de confirmación avisa "se borran juntas" — hay que
-      // cumplirlo de verdad, si no las cuentas quedan huérfanas (activas,
-      // sumando al balance, pero invisibles porque su grupo ya no existe).
-      const idsToDelete = accounts.filter((a) => a.group_id === id && !a.deleted).map((a) => a.id);
-      if (idsToDelete.length) {
-        const { error: accError } = await supabase.from("mm_accounts").update({ deleted: true }).in("id", idsToDelete);
-        if (accError) throw accError;
-      }
-      await reload();
-      showInfo(`"${name}" eliminado.`);
-    } catch (e) { showError(`No se pudo borrar: ${e?.message || e}`); }
-    setConfirmRemoveId(null);
-  };
-
   if (creating) {
     return (
       <NewGroupForm
@@ -240,7 +206,7 @@ export function ManageGroups({ session, groups: allGroups, accounts, reload, sho
         reload={reload}
         showError={showError}
         onCancel={() => setCreating(false)}
-        onCreated={() => setCreating(false)}
+        onCreated={(newGroupId) => onOpenGroup(newGroupId, { justCreated: true })}
       />
     );
   }
@@ -248,7 +214,7 @@ export function ManageGroups({ session, groups: allGroups, accounts, reload, sho
   return (
     <div style={styles.screen}>
       <TopBar
-        title="Tipos de cuentas"
+        title="Grupos de cuentas"
         onBack={onBack}
         right={<button style={styles.iconBtnGhost} onClick={() => setCreating(true)} aria-label="Nuevo grupo"><Plus size={20} /></button>}
       />
@@ -259,27 +225,9 @@ export function ManageGroups({ session, groups: allGroups, accounts, reload, sho
               {order.map((id) => {
                 const g = groups.find((x) => x.id === id);
                 if (!g) return null;
-                const accCount = accounts.filter((a) => a.group_id === id && !a.deleted).length;
                 return (
                   <div key={id}>
-                    <SortableGroupRow
-                      group={g}
-                      name={names[id] ?? g.name}
-                      onChangeName={(v) => setNames((prev) => ({ ...prev, [id]: v }))}
-                      onBlur={() => renameGroup(id)}
-                      onOpen={() => onOpenGroup(id)}
-                      onRemove={() => setConfirmRemoveId(id)}
-                      accCount={accCount}
-                      isConfirming={confirmRemoveId === id}
-                    />
-                    {confirmRemoveId === id && (
-                      <ConfirmInline
-                        message={accCount > 0 ? `"${g.name}" tiene ${accCount} cuenta(s) adentro — se borran juntas. ¿Continuar?` : `¿Borrar "${g.name}"?`}
-                        confirmLabel="Borrar"
-                        onCancel={() => setConfirmRemoveId(null)}
-                        onConfirm={() => removeGroup(id)}
-                      />
-                    )}
+                    <SortableGroupRow group={g} onOpen={() => onOpenGroup(id)} />
                   </div>
                 );
               })}
@@ -303,12 +251,16 @@ function NewGroupForm({ session, groups, reload, showError, onCancel, onCreated 
     if (!canSave) return;
     setSaving(true);
     try {
-      const { error } = await supabase.from("mm_account_groups").insert({
+      // Se crea de una — un grupo vacío con nombre no tiene nada que
+      // "cancelar" después. Al toque se entra a Editar grupo (mismo lugar
+      // donde se agregan las cuentas), así nunca hay una cuenta apuntando a
+      // un grupo que todavía no es real.
+      const { data, error } = await supabase.from("mm_account_groups").insert({
         user_id: session.userId, name: name.trim(), type: "other", sort_order: groups.length,
-      });
+      }).select().single();
       if (error) throw error;
       await reload();
-      onCreated();
+      onCreated(data.id);
     } catch (e) { showError(`No se pudo crear: ${e?.message || e}`); }
     setSaving(false);
   };
@@ -332,20 +284,23 @@ function NewGroupForm({ session, groups, reload, showError, onCancel, onCreated 
   );
 }
 
-function SortableGroupRow({ group, name, onChangeName, onBlur, onOpen, onRemove, accCount, isConfirming }) {
+function SortableGroupRow({ group, onOpen }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: group.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   return (
-    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 6, padding: "6px 8px 6px 4px", borderRadius: isConfirming ? "10px 10px 0 0" : 10 }}>
+    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 6, padding: "6px 8px 6px 4px", borderRadius: 10 }}>
       <span {...attributes} {...listeners} style={{ display: "flex", alignItems: "center", justifyContent: "center", alignSelf: "stretch", width: 28, color: "#C9BBA0", cursor: "grab", touchAction: "none" }}>
         <Menu size={18} />
       </span>
-      <input style={{ ...styles.input, flex: 1, padding: "7px 10px", fontSize: 14 }} value={name} onChange={(e) => onChangeName(e.target.value)} onBlur={onBlur} />
-      <button style={styles.iconBtnGhost} onClick={onOpen} aria-label={`Cuentas de ${group.name} (${accCount})`}>
-        <ChevronRight size={18} color="#A89A87" />
+      <button
+        type="button"
+        onClick={onOpen}
+        style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, minWidth: 0, background: "none", border: "none", padding: "7px 10px", textAlign: "left", cursor: "pointer" }}
+      >
+        <span style={{ fontSize: 14, fontFamily: "system-ui, sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{group.name}</span>
       </button>
-      <button style={styles.iconBtnGhost} onClick={onRemove} aria-label="Borrar grupo">
-        <X size={16} />
+      <button style={styles.iconBtnGhost} onClick={onOpen} aria-label={`Editar ${group.name}`}>
+        <ChevronRight size={18} color="#A89A87" />
       </button>
     </div>
   );
@@ -355,9 +310,59 @@ function SortableGroupRow({ group, name, onChangeName, onBlur, onOpen, onRemove,
    GESTIONAR CUENTAS DE UN GRUPO
    ========================================================================= */
 
-export function ManageAccounts({ session, group, groups, accounts, accountTotals, settings, reload, showError, showInfo, onBack }) {
+// También hace de "editar grupo" (nombre + borrar) — desde el listado de
+// grupos ya no se edita nada inline, es todo acá adentro. El nombre usa
+// Footer Cancelar/Guardar (mismo criterio que AccountDetailScreen: es un
+// campo de un formulario, no un autoguardado); reordenar/agregar cuentas
+// sigue siendo inmediato, como el resto de los drag-and-drop de la app.
+export function ManageAccounts({ session, group, groups, accounts, accountTotals, settings, reload, showError, showInfo, justCreated, onBack, onDeleted }) {
+  // Solo el primer render de esta pantalla (llegando recién de "Nuevo
+  // grupo") — no se recalcula después, así que un re-render por cualquier
+  // otro motivo no lo hace reaparecer.
+  const [showCreatedHint] = useState(!!justCreated);
+  const [name, setName] = useState(group.name);
+  const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [creating, setCreating] = useState(false);
   const [viewingAccountId, setViewingAccountId] = useState(null);
+
+  const isDirty = name.trim() !== group.name;
+  const canSave = isDirty && !!name.trim();
+
+  const handleSave = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase.from("mm_account_groups").update({ name: name.trim() }).eq("id", group.id);
+      if (error) throw error;
+      await reload();
+      onBack();
+    } catch (e) { showError(`No se pudo guardar: ${e?.message || e}`); }
+    setSaving(false);
+  };
+
+  const accCount = accounts.filter((a) => a.group_id === group.id && !a.deleted).length;
+
+  const remove = async () => {
+    setDeleting(true);
+    try {
+      const { error } = await supabase.from("mm_account_groups").update({ deleted: true }).eq("id", group.id);
+      if (error) throw error;
+      // El mensaje de confirmación avisa "se borran juntas" — hay que
+      // cumplirlo de verdad, si no las cuentas quedan huérfanas (activas,
+      // sumando al balance, pero invisibles porque su grupo ya no existe).
+      const idsToDelete = accounts.filter((a) => a.group_id === group.id && !a.deleted).map((a) => a.id);
+      if (idsToDelete.length) {
+        const { error: accError } = await supabase.from("mm_accounts").update({ deleted: true }).in("id", idsToDelete);
+        if (accError) throw accError;
+      }
+      await reload();
+      showInfo(`"${group.name}" eliminado.`);
+      onDeleted();
+    } catch (e) { showError(`No se pudo borrar: ${e?.message || e}`); }
+    setDeleting(false);
+  };
 
   if (creating) {
     return (
@@ -366,6 +371,7 @@ export function ManageAccounts({ session, group, groups, accounts, accountTotals
         groups={groups.filter((g) => !g.deleted)}
         accounts={accounts}
         defaultGroupId={group.id}
+        groupLocked
         reload={reload}
         showError={showError}
         onCancel={() => setCreating(false)}
@@ -399,21 +405,53 @@ export function ManageAccounts({ session, group, groups, accounts, accountTotals
   return (
     <div style={styles.screen}>
       <TopBar
-        title={group.name}
+        title="Editar grupo"
         onBack={onBack}
-        right={<button style={styles.iconBtnGhost} onClick={() => setCreating(true)} aria-label="Nueva cuenta"><Plus size={20} /></button>}
+        right={
+          <button style={styles.iconBtnGhost} onClick={() => setConfirmDelete(true)} aria-label="Eliminar">
+            <Trash2 size={18} />
+          </button>
+        }
       />
-      <div style={styles.form}>
+      {confirmDelete && (
+        <ConfirmInline
+          message={accCount > 0 ? `"${group.name}" tiene ${accCount} cuenta(s) adentro — se borran juntas. ¿Continuar?` : `¿Eliminar "${group.name}"?`}
+          confirmLabel="Eliminar"
+          confirmDisabled={deleting}
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={remove}
+          style={{ margin: "6px 20px 12px", borderRadius: 12, borderTop: "1px solid #EBC9BA" }}
+        />
+      )}
+      <div style={{ ...styles.form, paddingBottom: 100 }}>
+        <label style={styles.label}>
+          Nombre
+          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        {showCreatedHint && (
+          <p style={{ margin: "4px 0 -8px", fontSize: 13, fontFamily: "system-ui, sans-serif", color: "#3B6E62" }}>
+            <strong>Grupo creado.</strong><br />Ahora agregá las cuentas de este grupo.
+          </p>
+        )}
         <AccountGroupEditor group={group} accounts={accounts} reload={reload} showError={showError} onOpenAccount={setViewingAccountId} />
+        <button style={styles.btnDashed} onClick={() => setCreating(true)}>
+          <Plus size={16} /> Nueva cuenta
+        </button>
       </div>
+      <Footer>
+        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onBack}>Cancelar</button>
+        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }} onClick={handleSave} disabled={saving || !canSave}>
+          {saving ? "Guardando…" : "Guardar"}
+        </button>
+      </Footer>
     </div>
   );
 }
 
 // GESTOR DE CUENTAS — todos los grupos juntos en una sola pantalla plana
 // (como en la app original: el lápiz de la tab Cuentas va directo acá, no a
-// "Tipos de cuentas"). Cada grupo es solo un encabezado de sección — para
-// renombrar/reordenar/crear GRUPOS está la pantalla separada "Tipos de
+// "Grupos de cuentas"). Cada grupo es solo un encabezado de sección — para
+// renombrar/reordenar/crear GRUPOS está la pantalla separada "Grupos de
 // cuentas", reachable únicamente desde Configuración.
 export function ManageAllAccounts({ session, groups, accounts, accountTotals, settings, reload, showError, showInfo, onBack }) {
   const [creating, setCreating] = useState(false);
@@ -480,7 +518,7 @@ export function ManageAllAccounts({ session, groups, accounts, accountTotals, se
 // ManageAccounts, llamado desde un solo grupo, no hace falta preguntarlo).
 // Misma estructura que AccountDetailScreen (Grupo, Nombre+ícono, Tarjeta de
 // crédito + sub-campos, Ocultar) — esta es su contraparte de creación.
-function NewAccountForm({ session, groups, accounts, defaultGroupId, reload, showError, onCancel, onCreated }) {
+function NewAccountForm({ session, groups, accounts, defaultGroupId, groupLocked = false, reload, showError, onCancel, onCreated }) {
   const [groupId, setGroupId] = useState(defaultGroupId || groups[0]?.id || "");
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("");
@@ -521,7 +559,7 @@ function NewAccountForm({ session, groups, accounts, defaultGroupId, reload, sho
         {groups.length > 1 && (
           <label style={styles.label}>
             Grupo
-            <select style={styles.input} value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+            <select style={{ ...styles.input, opacity: groupLocked ? 0.6 : 1 }} value={groupId} onChange={(e) => setGroupId(e.target.value)} disabled={groupLocked}>
               {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
             </select>
           </label>

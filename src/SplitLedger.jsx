@@ -9,6 +9,7 @@ import CuentasTab from "./screens/moneymanager/CuentasTab.jsx";
 import DiarioTab from "./screens/moneymanager/DiarioTab.jsx";
 import TransactionForm from "./screens/moneymanager/TransactionForm.jsx";
 import EstadisticasTab from "./screens/moneymanager/EstadisticasTab.jsx";
+import CategoryDrillDownScreen from "./screens/moneymanager/CategoryDrillDownScreen.jsx";
 import { useMoneyManager } from "./lib/moneyManagerData.js";
 
 /* =========================================================================
@@ -516,6 +517,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
   const [splitLedgerView, setSplitLedgerView] = useState({ screen: "home" });
   const [accountsView, setAccountsView] = useState({ screen: "list" });
   const [ledgerView, setLedgerView] = useState({ screen: "list" });
+  const [statsView, setStatsView] = useState({ screen: "list" });
   const [ledgerMonth, setLedgerMonth] = useState(() => new Date());
   const [changingPassword, setChangingPassword] = useState(false);
   const [viewingProfile, setViewingProfile] = useState(false);
@@ -672,7 +674,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
       : activeTab === "ledger"
         ? ledgerView.screen === "list"
         : activeTab === "stats"
-          ? true
+          ? statsView.screen === "list"
           : splitLedgerView.screen === "home";
 
   return (
@@ -716,13 +718,56 @@ function AppShell({ session, onLogout, refreshProfile }) {
         />
       )}
 
-      {activeTab === "stats" && (
+      {activeTab === "stats" && statsView.screen === "list" && (
         <EstadisticasTab
           userId={session.userId}
           settings={moneyManager.settings}
           categories={moneyManager.categories}
           viewMonth={ledgerMonth}
           setViewMonth={setLedgerMonth}
+          onDrillDown={(drill) => setStatsView({ screen: "drilldown", ...drill })}
+        />
+      )}
+
+      {activeTab === "stats" && statsView.screen === "drilldown" && (
+        <CategoryDrillDownScreen
+          userId={session.userId}
+          settings={moneyManager.settings}
+          accounts={moneyManager.accounts}
+          categories={moneyManager.categories}
+          type={statsView.type}
+          categoryId={statsView.categoryId}
+          categoryName={statsView.categoryName}
+          categoryIcon={statsView.categoryIcon}
+          viewMonth={ledgerMonth}
+          setViewMonth={setLedgerMonth}
+          onBack={() => setStatsView({ screen: "list" })}
+          onNewTransaction={(date) => setStatsView({ screen: "newTransaction", date, categoryId: statsView.categoryId, categoryName: statsView.categoryName, categoryIcon: statsView.categoryIcon, type: statsView.type })}
+          onEditTransaction={(t) => setStatsView({ screen: "editTransaction", transaction: t, categoryId: statsView.categoryId, categoryName: statsView.categoryName, categoryIcon: statsView.categoryIcon, type: statsView.type })}
+        />
+      )}
+
+      {activeTab === "stats" && (statsView.screen === "newTransaction" || statsView.screen === "editTransaction") && (
+        <TransactionForm
+          session={session}
+          settings={moneyManager.settings}
+          groups={moneyManager.groups}
+          accounts={moneyManager.accounts}
+          categories={moneyManager.categories}
+          reloadCategories={moneyManager.reload}
+          showError={showError}
+          showInfo={showInfo}
+          editingTransaction={statsView.transaction}
+          defaultDate={statsView.date}
+          onCancel={() => setStatsView({ screen: "drilldown", categoryId: statsView.categoryId, categoryName: statsView.categoryName, categoryIcon: statsView.categoryIcon, type: statsView.type })}
+          onSave={async (tx) => {
+            const ok = await saveMoneyTransaction(tx);
+            if (ok) setStatsView({ screen: "drilldown", categoryId: statsView.categoryId, categoryName: statsView.categoryName, categoryIcon: statsView.categoryIcon, type: statsView.type });
+          }}
+          onDelete={async (id) => {
+            const ok = await deleteMoneyTransaction(id);
+            if (ok) setStatsView({ screen: "drilldown", categoryId: statsView.categoryId, categoryName: statsView.categoryName, categoryIcon: statsView.categoryIcon, type: statsView.type });
+          }}
         />
       )}
 

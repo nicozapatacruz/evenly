@@ -340,6 +340,30 @@ export function useCategoryMonthTotals(userId, viewMonth, type) {
   return { totals, loading };
 }
 
+// Serie mensual de una sola categoría (drill-down de Estadísticas) — trae
+// TODOS los meses con movimiento de esa categoría (son pocas filas, una por
+// mes, no hace falta acotar por rango) y el componente arma la ventana de
+// meses a mostrar alrededor del mes elegido. `categoryId` puede ser null
+// ("Sin categoría").
+export function useCategoryTimeline(userId, type, categoryId) {
+  const [totals, setTotals] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    if (!userId) { setLoading(false); return; }
+    setLoading(true);
+    let query = supabase.from("mm_category_month_totals").select("*").eq("user_id", userId).eq("type", type);
+    query = categoryId ? query.eq("category_id", categoryId) : query.is("category_id", null);
+    const { data } = await query;
+    setTotals(data || []);
+    setLoading(false);
+  }, [userId, type, categoryId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  return { totals, loading };
+}
+
 // Transacciones relevantes para calcular "saldo a pagar"/"restante" de las
 // tarjetas de crédito — una sola consulta acotada a las cuentas que son
 // tarjeta (no toda la tabla), sin límite de fecha (el balde "pasado" no

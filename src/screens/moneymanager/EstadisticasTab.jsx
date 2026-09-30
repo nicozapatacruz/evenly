@@ -32,7 +32,7 @@ function arcPath(cx, cy, r, startAngle, endAngle) {
   return `M ${cx} ${cy} L ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 0 ${end.x} ${end.y} Z`;
 }
 
-export default function EstadisticasTab({ userId, settings, categories, viewMonth, setViewMonth }) {
+export default function EstadisticasTab({ userId, settings, categories, viewMonth, setViewMonth, onDrillDown }) {
   const [type, setType] = useState("expense");
   const [selectedKey, setSelectedKey] = useState(null);
 
@@ -156,7 +156,7 @@ export default function EstadisticasTab({ userId, settings, categories, viewMont
                 return (
                   <div
                     key={key}
-                    onClick={(e) => { e.stopPropagation(); setSelectedKey((prev) => (prev === key ? null : key)); }}
+                    onClick={(e) => { e.stopPropagation(); onDrillDown({ categoryId: a.categoryId || null, categoryName: a.name, categoryIcon: a.icon, type }); }}
                     style={{
                       display: "flex", alignItems: "center", gap: 10, padding: "8px 4px", borderBottom: "1px solid #F0EBE2",
                       background: isSelected ? "#F3EFE5" : "transparent", borderRadius: isSelected ? 8 : 0, cursor: "pointer",

@@ -737,7 +737,7 @@ function GroupForm({ group = null, session, onCancel, onCreate, onSave, onDelete
           </button>
         ) : (
           <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canCreate) ? 0.5 : 1 }} onClick={handleCreate} disabled={saving || !canCreate}>
-            {saving ? "Creando…" : "Crear grupo"}
+            {saving ? "Creando…" : "Crear"}
           </button>
         )}
       </Footer>

@@ -112,6 +112,8 @@ export default function ConfigScreen({
         session={session}
         groups={moneyManager.groups}
         accounts={moneyManager.accounts}
+        accountTotals={moneyManager.accountTotals}
+        settings={moneyManager.settings}
         reload={moneyManager.reload}
         showError={showError}
         showInfo={showInfo}
@@ -126,6 +128,8 @@ export default function ConfigScreen({
         session={session}
         groups={moneyManager.groups}
         accounts={moneyManager.accounts}
+        accountTotals={moneyManager.accountTotals}
+        settings={moneyManager.settings}
         reload={moneyManager.reload}
         showError={showError}
         showInfo={showInfo}
@@ -263,7 +267,7 @@ function MenuRow({ label, onClick, badge, last }) {
    para el botón de "editar" propio; acá alcanza con un estado local).
    ========================================================================= */
 
-function AccountsSettingsScreen({ session, groups, accounts, reload, showError, showInfo, onBack }) {
+function AccountsSettingsScreen({ session, groups, accounts, accountTotals, settings, reload, showError, showInfo, onBack }) {
   const [view, setView] = useState({ screen: "groups" });
 
   if (view.screen === "accounts") {
@@ -273,7 +277,10 @@ function AccountsSettingsScreen({ session, groups, accounts, reload, showError, 
       <ManageAccounts
         session={session}
         group={group}
+        groups={groups}
         accounts={accounts}
+        accountTotals={accountTotals}
+        settings={settings}
         reload={reload}
         showError={showError}
         showInfo={showInfo}

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Camera, ChevronLeft, ChevronRight, Trash2, User, X } from "lucide-react";
+import { ArrowLeft, Camera, ChevronLeft, ChevronRight, Info, Trash2, User, X } from "lucide-react";
 import { styles } from "../lib/styles.js";
 import { ICON_OPTIONS } from "../lib/moneyManagerData.js";
 
@@ -25,6 +25,58 @@ export function ToggleField({ label, description, checked, onChange, disabled })
         </button>
       </div>
     </label>
+  );
+}
+
+// Ícono de "i" que al tocarlo muestra un globo de texto explicativo — para
+// campos cuyo nombre no alcanza a explicar qué hacen (ej. "Fecha de
+// liquidación"). Con "click", no "hover": esta app es mobile-first, hover no
+// existe en touch. Se cierra solo al tocar afuera (mismo mecanismo que
+// PickerField).
+let infoTooltipInstanceCounter = 0;
+
+export function InfoTooltip({ text }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const idRef = useRef(null);
+  if (idRef.current === null) idRef.current = ++infoTooltipInstanceCounter;
+
+  // Si se abre OTRO tooltip, este se cierra solo — mismo mecanismo que
+  // PickerField (nunca hay dos abiertos a la vez).
+  useEffect(() => {
+    if (open) window.dispatchEvent(new CustomEvent("mm-info-open", { detail: idRef.current }));
+  }, [open]);
+  useEffect(() => {
+    const onOtherOpen = (e) => { if (e.detail !== idRef.current) setOpen(false); };
+    window.addEventListener("mm-info-open", onOtherOpen);
+    return () => window.removeEventListener("mm-info-open", onOtherOpen);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClickOutside = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("click", onClickOutside);
+    return () => document.removeEventListener("click", onClickOutside);
+  }, [open]);
+
+  return (
+    <span ref={ref} style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
+        style={{ background: "none", border: "none", padding: 0, display: "flex", color: "#4A6FA5", cursor: "pointer" }}
+        aria-label="Más información"
+      >
+        <Info size={14} />
+      </button>
+      {open && (
+        <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, width: 210, background: "#2B2620", color: "#fff", fontSize: 12, fontWeight: 400, fontFamily: "system-ui, sans-serif", padding: "8px 10px", borderRadius: 8, lineHeight: 1.4, zIndex: 20 }}>
+          {text}
+        </div>
+      )}
+    </span>
   );
 }
 

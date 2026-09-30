@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { Pencil, Plus, X, ChevronRight, ChevronUp, ChevronDown, Menu, Eye, EyeOff } from "lucide-react";
+import { Pencil, Plus, X, ChevronRight, ChevronUp, ChevronDown, Menu } from "lucide-react";
 import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
-import { RootHeader, TopBar, ConfirmInline, Footer, IconInput } from "../../components/Shared.jsx";
+import { RootHeader, TopBar, ConfirmInline, Footer, IconInput, PickerField, ToggleField, InfoTooltip } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
-import { accountBalance, groupBalance } from "../../lib/moneyManagerData.js";
+import { accountBalance, groupBalance, computeCreditCardBalance, useCreditCardActivity } from "../../lib/moneyManagerData.js";
+import AccountDetailScreen from "./AccountDetailScreen.jsx";
 
 /* =========================================================================
    CUENTAS — tab de Money Manager. Aislado de Split Ledger (tablas mm_*).
@@ -19,12 +20,20 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
   const balanceColor = (n) => (n > 0.004 ? "#3B6E62" : n < -0.004 ? "#B0473A" : "#6B6355");
   const [deletedOpen, setDeletedOpen] = useState(false);
 
+  // Antes del primer return condicional a propósito — los hooks no pueden
+  // llamarse condicionalmente (esta pantalla también puede devolver
+  // <ManageAllAccounts> temprano, más abajo).
+  const creditCardIds = accounts.filter((a) => a.is_credit_card && !a.deleted).map((a) => a.id);
+  const { transactions: ccTx } = useCreditCardActivity(session.userId, creditCardIds);
+
   if (view.screen === "manageAllAccounts") {
     return (
       <ManageAllAccounts
         session={session}
         groups={groups}
         accounts={accounts}
+        accountTotals={accountTotals}
+        settings={settings}
         reload={reload}
         showError={showError}
         showInfo={showInfo}
@@ -92,15 +101,25 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
                 <span style={{ fontWeight: 700, fontSize: 13.5, fontFamily: "system-ui, sans-serif" }}>{g.name}</span>
                 <span style={{ fontWeight: 700, fontSize: 13.5, fontFamily: "system-ui, sans-serif", color: balanceColor(gBalance) }}>{money(gBalance, settings.main_currency)}</span>
               </div>
-              {visibleAccounts.map((a) => (
-                <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14 }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                    {a.icon && <span style={{ fontSize: 16, lineHeight: 1 }}>{a.icon}</span>}
-                    {a.name}
-                  </span>
-                  <span style={{ color: balanceColor(accountBalance(a.id, accountTotals)), flexShrink: 0 }}>{money(accountBalance(a.id, accountTotals), settings.main_currency)}</span>
-                </div>
-              ))}
+              {visibleAccounts.map((a) => {
+                const cc = a.is_credit_card ? computeCreditCardBalance(a.id, ccTx, a.statement_day || 1) : null;
+                return (
+                  <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14 }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                      {a.icon && <span style={{ fontSize: 16, lineHeight: 1 }}>{a.icon}</span>}
+                      {a.name}
+                    </span>
+                    {cc ? (
+                      <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0 }}>
+                        <span style={{ color: balanceColor(cc.actual) }}>{money(cc.actual, settings.main_currency)}</span>
+                        <span style={{ fontSize: 11, color: "#6B6355" }}>A pagar: {money(cc.pasado, settings.main_currency)}</span>
+                      </span>
+                    ) : (
+                      <span style={{ color: balanceColor(accountBalance(a.id, accountTotals)), flexShrink: 0 }}>{money(accountBalance(a.id, accountTotals), settings.main_currency)}</span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           );
         })}
@@ -336,14 +355,16 @@ function SortableGroupRow({ group, name, onChangeName, onBlur, onOpen, onRemove,
    GESTIONAR CUENTAS DE UN GRUPO
    ========================================================================= */
 
-export function ManageAccounts({ session, group, accounts, reload, showError, showInfo, onBack }) {
+export function ManageAccounts({ session, group, groups, accounts, accountTotals, settings, reload, showError, showInfo, onBack }) {
   const [creating, setCreating] = useState(false);
+  const [viewingAccountId, setViewingAccountId] = useState(null);
 
   if (creating) {
     return (
       <NewAccountForm
         session={session}
-        groups={[group]}
+        groups={groups.filter((g) => !g.deleted)}
+        accounts={accounts}
         defaultGroupId={group.id}
         reload={reload}
         showError={showError}
@@ -351,6 +372,28 @@ export function ManageAccounts({ session, group, accounts, reload, showError, sh
         onCreated={() => setCreating(false)}
       />
     );
+  }
+
+  if (viewingAccountId) {
+    const acc = accounts.find((a) => a.id === viewingAccountId);
+    if (acc) {
+      return (
+        <AccountDetailScreen
+          session={session}
+          account={acc}
+          groups={groups}
+          accounts={accounts}
+          accountTotals={accountTotals}
+          settings={settings}
+          reload={reload}
+          showError={showError}
+          showInfo={showInfo}
+          onBack={() => setViewingAccountId(null)}
+          onDeleted={() => setViewingAccountId(null)}
+        />
+      );
+    }
+    setViewingAccountId(null);
   }
 
   return (
@@ -361,7 +404,7 @@ export function ManageAccounts({ session, group, accounts, reload, showError, sh
         right={<button style={styles.iconBtnGhost} onClick={() => setCreating(true)} aria-label="Nueva cuenta"><Plus size={20} /></button>}
       />
       <div style={styles.form}>
-        <AccountGroupEditor group={group} accounts={accounts} reload={reload} showError={showError} showInfo={showInfo} />
+        <AccountGroupEditor group={group} accounts={accounts} reload={reload} showError={showError} onOpenAccount={setViewingAccountId} />
       </div>
     </div>
   );
@@ -372,20 +415,44 @@ export function ManageAccounts({ session, group, accounts, reload, showError, sh
 // "Tipos de cuentas"). Cada grupo es solo un encabezado de sección — para
 // renombrar/reordenar/crear GRUPOS está la pantalla separada "Tipos de
 // cuentas", reachable únicamente desde Configuración.
-export function ManageAllAccounts({ session, groups, accounts, reload, showError, showInfo, onBack }) {
+export function ManageAllAccounts({ session, groups, accounts, accountTotals, settings, reload, showError, showInfo, onBack }) {
   const [creating, setCreating] = useState(false);
+  const [viewingAccountId, setViewingAccountId] = useState(null);
 
   if (creating) {
     return (
       <NewAccountForm
         session={session}
         groups={groups.filter((g) => !g.deleted)}
+        accounts={accounts}
         reload={reload}
         showError={showError}
         onCancel={() => setCreating(false)}
         onCreated={() => setCreating(false)}
       />
     );
+  }
+
+  if (viewingAccountId) {
+    const acc = accounts.find((a) => a.id === viewingAccountId);
+    if (acc) {
+      return (
+        <AccountDetailScreen
+          session={session}
+          account={acc}
+          groups={groups}
+          accounts={accounts}
+          accountTotals={accountTotals}
+          settings={settings}
+          reload={reload}
+          showError={showError}
+          showInfo={showInfo}
+          onBack={() => setViewingAccountId(null)}
+          onDeleted={() => setViewingAccountId(null)}
+        />
+      );
+    }
+    setViewingAccountId(null);
   }
 
   return (
@@ -399,7 +466,7 @@ export function ManageAllAccounts({ session, groups, accounts, reload, showError
         {groups.filter((g) => !g.deleted && accounts.some((a) => a.group_id === g.id && !a.deleted)).map((g) => (
           <div key={g.id}>
             <p style={styles.label}>{g.name}</p>
-            <AccountGroupEditor group={g} accounts={accounts} reload={reload} showError={showError} showInfo={showInfo} />
+            <AccountGroupEditor group={g} accounts={accounts} reload={reload} showError={showError} onOpenAccount={setViewingAccountId} />
           </div>
         ))}
       </div>
@@ -411,10 +478,18 @@ export function ManageAllAccounts({ session, groups, accounts, reload, showError
 // app) — reemplaza el input+botón sueltos que había repetidos por cada grupo.
 // El select de grupo solo aparece si hay más de uno para elegir (en
 // ManageAccounts, llamado desde un solo grupo, no hace falta preguntarlo).
-function NewAccountForm({ session, groups, defaultGroupId, reload, showError, onCancel, onCreated }) {
+// Misma estructura que AccountDetailScreen (Grupo, Nombre+ícono, Tarjeta de
+// crédito + sub-campos, Ocultar) — esta es su contraparte de creación.
+function NewAccountForm({ session, groups, accounts, defaultGroupId, reload, showError, onCancel, onCreated }) {
   const [groupId, setGroupId] = useState(defaultGroupId || groups[0]?.id || "");
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("");
+  const [isCreditCard, setIsCreditCard] = useState(false);
+  const [paymentAccountId, setPaymentAccountId] = useState("");
+  const [statementDay, setStatementDay] = useState(1);
+  const [paymentDay, setPaymentDay] = useState(1);
+  const [autoPay, setAutoPay] = useState(false);
+  const [hidden, setHidden] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const canSave = !!groupId && !!name.trim();
@@ -425,6 +500,12 @@ function NewAccountForm({ session, groups, defaultGroupId, reload, showError, on
     try {
       const { error } = await supabase.from("mm_accounts").insert({
         user_id: session.userId, group_id: groupId, name: name.trim(), icon: icon || null, sort_order: 999,
+        is_credit_card: isCreditCard,
+        payment_account_id: isCreditCard ? (paymentAccountId || null) : null,
+        statement_day: isCreditCard ? statementDay : null,
+        payment_day: isCreditCard ? paymentDay : null,
+        auto_pay: isCreditCard ? autoPay : false,
+        hidden,
       });
       if (error) throw error;
       await reload();
@@ -439,7 +520,7 @@ function NewAccountForm({ session, groups, defaultGroupId, reload, showError, on
       <div style={{ ...styles.form, paddingBottom: 100 }}>
         {groups.length > 1 && (
           <label style={styles.label}>
-            Tipo de cuenta
+            Grupo
             <select style={styles.input} value={groupId} onChange={(e) => setGroupId(e.target.value)}>
               {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
             </select>
@@ -452,6 +533,59 @@ function NewAccountForm({ session, groups, defaultGroupId, reload, showError, on
             <input style={{ ...styles.input, flex: 1 }} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre (ej: Saldo, Ahorros)" onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
           </div>
         </label>
+
+        <ToggleField label="Tarjeta de crédito" checked={isCreditCard} onChange={setIsCreditCard} />
+
+        {isCreditCard && (
+          <>
+            {/* div, no label — ver comentario igual en AccountDetailScreen.jsx */}
+            <div style={styles.label}>
+              <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                Cuenta de pago
+                <InfoTooltip text="Cuenta de la cual se pagará esta tarjeta de crédito." />
+              </span>
+              <PickerField
+                value={paymentAccountId}
+                onChange={setPaymentAccountId}
+                placeholder="Elegí una cuenta"
+                groups={[{ label: null, items: accounts.filter((a) => !a.deleted && !a.is_credit_card).map((a) => ({ value: a.id, label: a.name, icon: a.icon })) }]}
+              />
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <div style={{ ...styles.label, flex: 1 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  Fecha de liquidación
+                  <InfoTooltip text="Día del mes en que cierra el ciclo de facturación de la tarjeta." />
+                </span>
+                <select style={styles.input} value={statementDay} onChange={(e) => setStatementDay(parseInt(e.target.value, 10))}>
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              <div style={{ ...styles.label, flex: 1 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  Fecha de pago
+                  <InfoTooltip text="Día del mes en que se realiza el pago automático de la tarjeta." />
+                </span>
+                <select style={styles.input} value={paymentDay} onChange={(e) => setPaymentDay(parseInt(e.target.value, 10))}>
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+            </div>
+            <ToggleField
+              label="Pago automático"
+              description="Transfiere el saldo a pagar desde la cuenta de pago en la fecha de pago"
+              checked={autoPay}
+              onChange={setAutoPay}
+            />
+          </>
+        )}
+
+        <ToggleField
+          label="Ocultar"
+          description="No se muestra en el listado de Cuentas"
+          checked={hidden}
+          onChange={setHidden}
+        />
       </div>
       <Footer>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
@@ -468,17 +602,12 @@ function NewAccountForm({ session, groups, defaultGroupId, reload, showError, on
 // por grupo en "Gestor de cuentas" (todos los grupos juntos en una sola
 // pantalla) y también solo, en ManageAccounts (cuando se llega desde "Tipos
 // de cuentas" y elegís un único grupo).
-function AccountGroupEditor({ group, accounts, reload, showError, showInfo }) {
+function AccountGroupEditor({ group, accounts, reload, showError, onOpenAccount }) {
   const groupAccounts = accounts.filter((a) => a.group_id === group.id && !a.deleted);
-  const [names, setNames] = useState(() => Object.fromEntries(groupAccounts.map((a) => [a.id, a.name])));
-  const [icons, setIcons] = useState(() => Object.fromEntries(groupAccounts.map((a) => [a.id, a.icon])));
-  const [confirmRemoveId, setConfirmRemoveId] = useState(null);
   const [order, setOrder] = useState(() => groupAccounts.map((a) => a.id));
 
   useEffect(() => {
     setOrder(groupAccounts.map((a) => a.id));
-    setNames(Object.fromEntries(groupAccounts.map((a) => [a.id, a.name])));
-    setIcons(Object.fromEntries(groupAccounts.map((a) => [a.id, a.icon])));
   }, [accounts, group.id]);
 
   const dndSensors = useSensors(
@@ -498,49 +627,6 @@ function AccountGroupEditor({ group, accounts, reload, showError, showInfo }) {
     } catch (e) { showError(`No se pudo guardar el orden: ${e?.message || e}`); await reload(); }
   };
 
-  const renameAccount = async (id) => {
-    const name = (names[id] || "").trim();
-    const acc = groupAccounts.find((a) => a.id === id);
-    if (!name || name === acc.name) return;
-    try {
-      const { error } = await supabase.from("mm_accounts").update({ name }).eq("id", id);
-      if (error) throw error;
-      await reload();
-      showInfo("Nombre actualizado.");
-    } catch (e) { showError(`No se pudo renombrar: ${e?.message || e}`); }
-  };
-
-  const saveIcon = async (id, icon) => {
-    const acc = groupAccounts.find((a) => a.id === id);
-    if ((icon || null) === (acc.icon || null)) return;
-    try {
-      const { error } = await supabase.from("mm_accounts").update({ icon: icon || null }).eq("id", id);
-      if (error) throw error;
-      await reload();
-      showInfo("Ícono actualizado.");
-    } catch (e) { showError(`No se pudo guardar el ícono: ${e?.message || e}`); }
-  };
-
-  const toggleHidden = async (id) => {
-    const acc = groupAccounts.find((a) => a.id === id);
-    try {
-      const { error } = await supabase.from("mm_accounts").update({ hidden: !acc.hidden }).eq("id", id);
-      if (error) throw error;
-      await reload();
-    } catch (e) { showError(`No se pudo actualizar: ${e?.message || e}`); }
-  };
-
-  const removeAccount = async (id) => {
-    const name = groupAccounts.find((a) => a.id === id)?.name;
-    try {
-      const { error } = await supabase.from("mm_accounts").update({ deleted: true }).eq("id", id);
-      if (error) throw error;
-      await reload();
-      showInfo(`"${name}" eliminada.`);
-    } catch (e) { showError(`No se pudo borrar: ${e?.message || e}`); }
-    setConfirmRemoveId(null);
-  };
-
   return (
     <>
       <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -553,24 +639,11 @@ function AccountGroupEditor({ group, accounts, reload, showError, showInfo }) {
                 <div key={id}>
                   <SortableAccountRow
                     id={id}
-                    name={names[id] ?? a.name}
-                    icon={icons[id] ?? a.icon}
+                    name={a.name}
+                    icon={a.icon}
                     hidden={a.hidden}
-                    onChangeName={(v) => setNames((prev) => ({ ...prev, [id]: v }))}
-                    onBlur={() => renameAccount(id)}
-                    onChangeIcon={(v) => { setIcons((prev) => ({ ...prev, [id]: v })); saveIcon(id, v); }}
-                    onToggleHidden={() => toggleHidden(id)}
-                    onRemove={() => setConfirmRemoveId(id)}
-                    isConfirming={confirmRemoveId === id}
+                    onOpen={() => onOpenAccount(id)}
                   />
-                  {confirmRemoveId === id && (
-                    <ConfirmInline
-                      message={`¿Borrar "${a.name}"?`}
-                      confirmLabel="Borrar"
-                      onCancel={() => setConfirmRemoveId(null)}
-                      onConfirm={() => removeAccount(id)}
-                    />
-                  )}
                 </div>
               );
             })}
@@ -581,21 +654,24 @@ function AccountGroupEditor({ group, accounts, reload, showError, showInfo }) {
   );
 }
 
-function SortableAccountRow({ id, name, icon, hidden, onChangeName, onBlur, onChangeIcon, onToggleHidden, onRemove, isConfirming }) {
+function SortableAccountRow({ id, name, icon, hidden, onOpen }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   return (
-    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 6, padding: "6px 8px 6px 4px", borderRadius: isConfirming ? "10px 10px 0 0" : 10 }}>
+    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 6, padding: "6px 8px 6px 4px", borderRadius: 10 }}>
       <span {...attributes} {...listeners} style={{ display: "flex", alignItems: "center", justifyContent: "center", alignSelf: "stretch", width: 28, color: "#C9BBA0", cursor: "grab", touchAction: "none" }}>
         <Menu size={18} />
       </span>
-      <IconInput value={icon} onChange={onChangeIcon} />
-      <input style={{ ...styles.input, flex: 1, padding: "7px 10px", fontSize: 14, opacity: hidden ? 0.5 : 1 }} value={name} onChange={(e) => onChangeName(e.target.value)} onBlur={onBlur} />
-      <button style={styles.iconBtnGhost} onClick={onToggleHidden} aria-label={hidden ? "Mostrar cuenta" : "Ocultar cuenta"}>
-        {hidden ? <EyeOff size={16} /> : <Eye size={16} />}
+      <button
+        type="button"
+        onClick={onOpen}
+        style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, minWidth: 0, background: "none", border: "none", padding: "7px 10px", textAlign: "left", cursor: "pointer", opacity: hidden ? 0.5 : 1 }}
+      >
+        {icon && <span style={{ fontSize: 16, lineHeight: 1, flexShrink: 0 }}>{icon}</span>}
+        <span style={{ fontSize: 14, fontFamily: "system-ui, sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
       </button>
-      <button style={styles.iconBtnGhost} onClick={onRemove} aria-label="Borrar cuenta">
-        <X size={16} />
+      <button style={styles.iconBtnGhost} onClick={onOpen} aria-label={`Editar ${name}`}>
+        <ChevronRight size={18} color="#A89A87" />
       </button>
     </div>
   );

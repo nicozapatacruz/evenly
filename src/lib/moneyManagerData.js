@@ -122,6 +122,59 @@ export function nextOccurrence(startDate, unit, interval, currentNext) {
   return addMonthsClamped(startDate, (stepsSoFar + 1) * stepMonths);
 }
 
+// Arranque del ciclo actual de una tarjeta de crédito: la ocurrencia más
+// reciente de `statementDay` que ya pasó (o hoy mismo). Si ese día todavía
+// no llegó este mes, el corte fue el mes pasado — mismo clamp de días cortos
+// que ya usa `nextOccurrence` (29/30/31 en un mes que no los tiene cae en el
+// último día real de ese mes).
+export function creditCardCycleStart(statementDay, now = new Date()) {
+  const day = Math.min(statementDay, daysInMonth(now.getFullYear(), now.getMonth()));
+  const thisMonth = new Date(now.getFullYear(), now.getMonth(), day);
+  if (thisMonth <= now) return thisMonth;
+  const prevMonthIndex = now.getMonth() - 1;
+  const year = now.getFullYear() + (prevMonthIndex < 0 ? -1 : 0);
+  const month = (prevMonthIndex + 12) % 12;
+  return new Date(year, month, Math.min(statementDay, daysInMonth(year, month)));
+}
+
+// Separa el saldo de una tarjeta de crédito en "pasado" (ya facturado, se
+// debe pagar) y "actual" (del ciclo abierto, todavía no factura). Reglas:
+// - Un pago (transferencia QUE LLEGA a la tarjeta) siempre ataca "pasado"
+//   primero, sin importar su fecha — pagás la deuda vieja, no "la de este
+//   mes" en particular.
+// - Todo lo demás (gastos, o una transferencia que SALE de la tarjeta) se
+//   reparte por fecha: antes del corte → pasado, desde el corte en
+//   adelante → actual.
+// - Si "pasado" queda positivo (el pago fue mayor a la deuda), el
+//   excedente pasa a "actual" — "pasado" nunca es mayor a 0.
+export function computeCreditCardBalance(accountId, transactions, statementDay, now = new Date()) {
+  const cycleStart = creditCardCycleStart(statementDay, now);
+  const cycleStartKey = `${cycleStart.getFullYear()}-${String(cycleStart.getMonth() + 1).padStart(2, "0")}-${String(cycleStart.getDate()).padStart(2, "0")}`;
+  let pasado = 0;
+  let actual = 0;
+  for (const t of transactions) {
+    const isPayment = t.type === "transfer" && t.to_account_id === accountId;
+    let contribution;
+    if (t.type === "income" && t.account_id === accountId) contribution = t.amount_main;
+    else if ((t.type === "expense" || t.type === "transfer") && t.account_id === accountId) contribution = -t.amount_main;
+    else if (isPayment) contribution = t.amount_main;
+    else continue;
+
+    if (isPayment) {
+      pasado += contribution;
+    } else {
+      const dayKey = dateInputValueInZone(new Date(t.date).getTime(), t.timezone);
+      if (dayKey < cycleStartKey) pasado += contribution;
+      else actual += contribution;
+    }
+  }
+  if (pasado > 0) {
+    actual += pasado;
+    pasado = 0;
+  }
+  return { pasado, actual };
+}
+
 export function useMoneyManager(userId) {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [groups, setGroups] = useState([]);
@@ -264,6 +317,35 @@ export function useCategoryMonthTotals(userId, viewMonth, type) {
   useEffect(() => { load(); }, [load]);
 
   return { totals, loading };
+}
+
+// Transacciones relevantes para calcular "saldo a pagar"/"restante" de las
+// tarjetas de crédito — una sola consulta acotada a las cuentas que son
+// tarjeta (no toda la tabla), sin límite de fecha (el balde "pasado" no
+// tiene techo de cuánto tiempo atrás puede venir la deuda).
+export function useCreditCardActivity(userId, creditCardIds) {
+  const idsKey = [...creditCardIds].sort().join(",");
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    if (!userId || !idsKey) { setTransactions([]); setLoading(false); return; }
+    setLoading(true);
+    const idList = idsKey;
+    const { data } = await supabase
+      .from("mm_transactions")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("deleted", false)
+      .or(`account_id.in.(${idList}),to_account_id.in.(${idList})`);
+    setTransactions(data || []);
+    setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, idsKey]);
+
+  useEffect(() => { load(); }, [load]);
+
+  return { transactions, loading, reload: load };
 }
 
 // Se corre en silencio antes de cada carga: por cada recurrente vencida,

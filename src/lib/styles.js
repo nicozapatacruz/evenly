@@ -29,6 +29,17 @@ export const globalCss = `
      (ej. la grilla de íconos) sí la muestra en desktop/otros navegadores. */
   .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
   .no-scrollbar::-webkit-scrollbar { display: none; }
+  /* Scrollbar delgada y con los colores de la app (no la gris nativa del SO)
+     — para los pocos lugares donde SÍ hace falta ver que hay más contenido
+     (ej. el textarea de Descripción con altura fija). */
+  textarea {
+    scrollbar-width: thin;
+    scrollbar-color: #D9CFC1 transparent;
+  }
+  textarea::-webkit-scrollbar { width: 7px; }
+  textarea::-webkit-scrollbar-track { background: transparent; }
+  textarea::-webkit-scrollbar-thumb { background: #D9CFC1; border-radius: 10px; }
+  textarea::-webkit-scrollbar-thumb:hover { background: #C9BBA0; }
   /* Feedback visual al cambiar de mes (flechas o swipe) en Transacciones y
      Estadísticas — sin esto, un swipe rápido no se distingue de que "no pasó
      nada" hasta que cambian los números. */

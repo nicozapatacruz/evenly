@@ -43,6 +43,7 @@ export default function TransactionForm({
   const [accountId, setAccountId] = useState(editingTransaction?.account_id || "");
   const [toAccountId, setToAccountId] = useState(editingTransaction?.to_account_id || "");
   const [note, setNote] = useState(editingTransaction?.title || "");
+  const [description, setDescription] = useState(editingTransaction?.memo || "");
   const [saving, setSaving] = useState(false);
   const [touched, setTouched] = useState({});
   const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
@@ -112,6 +113,7 @@ export default function TransactionForm({
     || accountId !== (editingTransaction.account_id || "")
     || toAccountId !== (editingTransaction.to_account_id || "")
     || note !== (editingTransaction.title || "")
+    || description !== (editingTransaction.memo || "")
     || recurringOpen
   );
 
@@ -155,7 +157,7 @@ export default function TransactionForm({
         amount_main: amountMain,
         date: txDate.getTime(),
         title: note.trim() || null,
-        memo: null,
+        memo: description.trim() || null,
         recurring,
       });
     } finally {
@@ -340,6 +342,10 @@ export default function TransactionForm({
 
         <Field label="Nota">
           <input style={styles.input} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Opcional" />
+        </Field>
+
+        <Field label="Descripción">
+          <textarea rows={4} style={{ ...styles.input, resize: "none", fontFamily: "system-ui, sans-serif" }} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Opcional" />
         </Field>
 
         {!recurringOpen && !forceRecurringOpen && (

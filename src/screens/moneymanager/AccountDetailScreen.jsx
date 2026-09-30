@@ -177,6 +177,7 @@ export default function AccountDetailScreen({ session, account = null, groups, a
               <PickerField
                 value={paymentAccountId}
                 onChange={setPaymentAccountId}
+                onClear={() => setPaymentAccountId("")}
                 placeholder="Elegí una cuenta"
                 groups={paymentAccountGroups}
               />

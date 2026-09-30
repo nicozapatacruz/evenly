@@ -280,6 +280,7 @@ export default function TransactionForm({
           <PickerField
             value={accountId}
             onChange={setAccountId}
+            onClear={() => setAccountId("")}
             placeholder="Elegí una cuenta"
             groups={groups
               .filter((g) => !g.deleted)
@@ -305,6 +306,7 @@ export default function TransactionForm({
             <PickerField
               value={toAccountId}
               onChange={setToAccountId}
+              onClear={() => setToAccountId("")}
               placeholder="Elegí una cuenta"
               groups={groups
                 .filter((g) => !g.deleted)

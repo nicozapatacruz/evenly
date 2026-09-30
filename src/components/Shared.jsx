@@ -237,7 +237,6 @@ export function IconInput({ value, onChange }) {
     <>
       <button
         type="button"
-        className="icon-inset-focus"
         onClick={() => setOpen(true)}
         style={{
           ...styles.input, display: "flex", alignItems: "center", justifyContent: "center",

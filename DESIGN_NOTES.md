@@ -67,6 +67,19 @@ activando el botón en vez de enfocar el campo. Si un campo necesita un ícono
 interactivo al lado del label (como el tooltip de info), usar un `<div>` con
 el mismo estilo de `styles.label` en vez de un `<label>`.
 
+## Los botones no llevan anillo de foco, los campos sí
+
+`button:focus-visible { outline: none; }` a propósito — en botones redondeados
+(tabs, pills) el anillo se recortaba contra la esquina, y el click/tap ya se
+ve por el cambio de color propio del botón, no hace falta un anillo extra.
+`input`/`select`/`textarea` SÍ lo mantienen, pero con `box-shadow` en vez de
+`outline` (`box-shadow: 0 0 0 2px #C75D3B`) — Safari no sigue bien un
+`border-radius` asimétrico con `outline` (ej. un input con esquinas planas de
+un lado para fusionarse con un `ConfirmInline` pegado abajo), box-shadow sí lo
+respeta siempre. Si un input chico está pegado a un borde (ej. el input de
+ícono personalizado), usar la clase `icon-inset-focus` para que el anillo se
+dibuje hacia adentro en vez de salirse de la caja.
+
 ## Botón punteado ("+ Nueva X") debajo de una lista, no un "+" en el TopBar
 
 Un "+" en el TopBar es para crear algo nuevo a nivel de la pantalla misma

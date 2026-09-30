@@ -2,15 +2,26 @@ export const globalCss = `
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; overflow-x: hidden; overscroll-behavior-y: none; -webkit-text-size-adjust: 100%; background: #F7F2E9; }
   #root { height: 100%; }
-  input:focus, button:focus-visible, select:focus-visible, textarea:focus-visible {
-    outline: 2px solid #C75D3B;
-    outline-offset: 2px;
+  /* box-shadow en vez de outline: Safari no sigue bien un border-radius
+     asimétrico con outline (ej. un input con esquinas planas de un solo
+     lado para fusionarse con algo pegado abajo) — se veía redondeado
+     también del lado que debía quedar recto. box-shadow sí respeta el
+     border-radius exacto del elemento en cualquier navegador. */
+  input:focus, select:focus-visible, textarea:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px #C75D3B;
   }
-  /* El foco normal se dibuja hacia afuera (outline-offset positivo), pero en
-     cajas chicas pegadas a un borde (ej. el input de ícono personalizado)
-     eso se ve como si el borde "se saliera" — acá se dibuja hacia adentro. */
+  /* Los botones no llevan anillo de foco: el click/tap ya se ve por el
+     cambio de color propio de cada botón, y en botones redondeados el
+     anillo se recortaba contra la esquina (bug ya reportado). */
+  button:focus-visible {
+    outline: none;
+  }
+  /* Mismo anillo pero hacia ADENTRO — para cajas chicas pegadas a un borde
+     (el input de ícono personalizado), donde un anillo hacia afuera se ve
+     como si el borde "se saliera". */
   .icon-inset-focus:focus {
-    outline-offset: -2px;
+    box-shadow: inset 0 0 0 2px #C75D3B;
   }
   button { font-family: inherit; cursor: pointer; color: inherit; }
   select { appearance: none; -webkit-appearance: none; background-image: none; }

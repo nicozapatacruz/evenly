@@ -13,8 +13,8 @@ export function ToggleField({ label, description, checked, onChange, disabled })
   return (
     <label style={styles.label}>
       {label}
-      <div style={{ ...styles.input, display: "flex", alignItems: "center", justifyContent: "space-between", fontWeight: 400, padding: "7px 13px" }}>
-        <span>{description}</span>
+      <div style={{ ...styles.input, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, fontWeight: 400, padding: "7px 13px" }}>
+        <span style={{ fontSize: 13, color: "#6B6355", lineHeight: 1.4 }}>{description}</span>
         <button
           onClick={() => onChange(!checked)}
           disabled={disabled}
@@ -400,7 +400,7 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", o
               )}
             </>
           ) : (
-            <span style={{ color: "#A89A87" }}>{placeholder}</span>
+            <span style={{ color: "#A89A87", fontSize: 13 }}>{placeholder}</span>
           )}
         </button>
         {clearable && (

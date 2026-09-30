@@ -510,7 +510,7 @@ function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onO
   return (
     <div style={{ ...styles.form, paddingBottom: 100 }}>
       <ToggleField
-        label="Use Split Ledger"
+        label="Split Ledger"
         description="Activar la sección de Split Ledger"
         checked={session.splitLedgerEnabled}
         onChange={toggleEnabled}

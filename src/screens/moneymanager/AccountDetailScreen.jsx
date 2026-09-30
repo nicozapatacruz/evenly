@@ -125,7 +125,12 @@ export default function AccountDetailScreen({ session, account, groups, accounts
           </div>
         </label>
 
-        <ToggleField label="Tarjeta de crédito" checked={isCreditCard} onChange={setIsCreditCard} />
+        <ToggleField
+          label="Tarjeta de crédito"
+          description="Los gastos se reflejan como saldo a pagar según un ciclo de facturación."
+          checked={isCreditCard}
+          onChange={setIsCreditCard}
+        />
 
         {isCreditCard && (
           <>
@@ -167,7 +172,7 @@ export default function AccountDetailScreen({ session, account, groups, accounts
             </div>
             <ToggleField
               label="Pago automático"
-              description="Transfiere el saldo a pagar desde la cuenta de pago en la fecha de pago"
+              description="Transfiere automáticamente el saldo a pagar en la fecha de pago."
               checked={autoPay}
               onChange={setAutoPay}
             />
@@ -196,7 +201,7 @@ export default function AccountDetailScreen({ session, account, groups, accounts
 
         <ToggleField
           label="Ocultar"
-          description="No se muestra en el listado de Cuentas"
+          description="Oculta esta cuenta del listado de Cuentas."
           checked={hidden}
           onChange={setHidden}
         />

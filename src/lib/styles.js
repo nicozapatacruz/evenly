@@ -18,6 +18,7 @@ export const globalCss = `
      anular su apariencia nativa o el campo sale gigante en mobile. */
   input[type="date"] { appearance: none; -webkit-appearance: none; }
   input[type="date"]::-webkit-date-and-time-value { text-align: left; }
+  input::placeholder, textarea::placeholder { font-size: 13px; }
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; animation: none !important; }
   }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Pencil, Plus, ChevronRight, ChevronUp, ChevronDown, Menu, Trash2 } from "lucide-react";
+import { Pencil, Plus, ChevronRight, ChevronUp, ChevronDown, Menu, Trash2, Eye, EyeOff } from "lucide-react";
 import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -572,7 +572,12 @@ function NewAccountForm({ session, groups, accounts, defaultGroupId, groupLocked
           </div>
         </label>
 
-        <ToggleField label="Tarjeta de crédito" checked={isCreditCard} onChange={setIsCreditCard} />
+        <ToggleField
+          label="Tarjeta de crédito"
+          description="Los gastos se reflejan como saldo a pagar según un ciclo de facturación."
+          checked={isCreditCard}
+          onChange={setIsCreditCard}
+        />
 
         {isCreditCard && (
           <>
@@ -611,7 +616,7 @@ function NewAccountForm({ session, groups, accounts, defaultGroupId, groupLocked
             </div>
             <ToggleField
               label="Pago automático"
-              description="Transfiere el saldo a pagar desde la cuenta de pago en la fecha de pago"
+              description="Transfiere automáticamente el saldo a pagar en la fecha de pago."
               checked={autoPay}
               onChange={setAutoPay}
             />
@@ -620,7 +625,7 @@ function NewAccountForm({ session, groups, accounts, defaultGroupId, groupLocked
 
         <ToggleField
           label="Ocultar"
-          description="No se muestra en el listado de Cuentas"
+          description="Oculta esta cuenta del listado de Cuentas."
           checked={hidden}
           onChange={setHidden}
         />
@@ -665,6 +670,15 @@ function AccountGroupEditor({ group, accounts, reload, showError, onOpenAccount 
     } catch (e) { showError(`No se pudo guardar el orden: ${e?.message || e}`); await reload(); }
   };
 
+  const toggleHidden = async (id) => {
+    const a = groupAccounts.find((x) => x.id === id);
+    try {
+      const { error } = await supabase.from("mm_accounts").update({ hidden: !a.hidden }).eq("id", id);
+      if (error) throw error;
+      await reload();
+    } catch (e) { showError(`No se pudo actualizar: ${e?.message || e}`); }
+  };
+
   return (
     <>
       <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -681,6 +695,7 @@ function AccountGroupEditor({ group, accounts, reload, showError, onOpenAccount 
                     icon={a.icon}
                     hidden={a.hidden}
                     onOpen={() => onOpenAccount(id)}
+                    onToggleHidden={() => toggleHidden(id)}
                   />
                 </div>
               );
@@ -692,7 +707,7 @@ function AccountGroupEditor({ group, accounts, reload, showError, onOpenAccount 
   );
 }
 
-function SortableAccountRow({ id, name, icon, hidden, onOpen }) {
+function SortableAccountRow({ id, name, icon, hidden, onOpen, onToggleHidden }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   return (
@@ -707,6 +722,9 @@ function SortableAccountRow({ id, name, icon, hidden, onOpen }) {
       >
         {icon && <span style={{ fontSize: 16, lineHeight: 1, flexShrink: 0 }}>{icon}</span>}
         <span style={{ fontSize: 14, fontFamily: "system-ui, sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+      </button>
+      <button style={styles.iconBtnGhost} onClick={onToggleHidden} aria-label={hidden ? `Mostrar ${name}` : `Ocultar ${name}`}>
+        {hidden ? <EyeOff size={16} /> : <Eye size={16} />}
       </button>
       <button style={styles.iconBtnGhost} onClick={onOpen} aria-label={`Editar ${name}`}>
         <ChevronRight size={18} color="#A89A87" />

@@ -9,6 +9,8 @@ import { RootHeader, TopBar, ConfirmInline, Footer, Field } from "../../componen
 import { money } from "../../lib/helpers.jsx";
 import { accountBalance, groupBalance, computeCreditCardBalance, disableAutoPayForDeletedAccounts, useCreditCardActivity } from "../../lib/moneyManagerData.js";
 import AccountDetailScreen from "./AccountDetailScreen.jsx";
+import AccountActivityScreen from "./AccountActivityScreen.jsx";
+import TransactionForm from "./TransactionForm.jsx";
 
 /* =========================================================================
    CUENTAS — tab de Money Manager. Aislado de Split Ledger (tablas mm_*).
@@ -16,7 +18,7 @@ import AccountDetailScreen from "./AccountDetailScreen.jsx";
    manageGroups / manageAccounts: pantallas de edición (TopBar).
    ========================================================================= */
 
-export default function CuentasTab({ session, settings, groups, accounts, accountTotals, reload, showError, showInfo, view, setView }) {
+export default function CuentasTab({ session, settings, groups, accounts, accountTotals, categories, reload, reloadCategories, showError, showInfo, view, setView, onSaveMoneyTransaction, onDeleteMoneyTransaction }) {
   const balanceColor = (n) => (n > 0.004 ? "#3B6E62" : n < -0.004 ? "#B0473A" : "#6B6355");
   const [deletedOpen, setDeletedOpen] = useState(false);
 
@@ -38,6 +40,59 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
         showError={showError}
         showInfo={showInfo}
         onBack={() => setView({ screen: "list" })}
+      />
+    );
+  }
+
+  if (view.screen === "activity" || view.screen === "newTransaction" || view.screen === "editTransaction") {
+    const activityAccount = accounts.find((a) => a.id === view.accountId);
+    if (!activityAccount) { setView({ screen: "list" }); return null; }
+
+    if (view.screen === "activity") {
+      return (
+        <AccountActivityScreen
+          userId={session.userId}
+          settings={settings}
+          accounts={accounts}
+          categories={categories}
+          accountId={view.accountId}
+          accountName={activityAccount.name}
+          accountIcon={activityAccount.icon}
+          tab={view.tab}
+          setTab={(tab) => setView((v) => ({ ...v, tab }))}
+          viewMonth={view.viewMonth}
+          setViewMonth={(viewMonth) => setView((v) => ({ ...v, viewMonth }))}
+          onBack={() => setView({ screen: "list" })}
+          onNewTransaction={(date) => setView({ ...view, screen: "newTransaction", date })}
+          onEditTransaction={(t) => setView({ ...view, screen: "editTransaction", transaction: t })}
+        />
+      );
+    }
+
+    // newTransaction / editTransaction: mismo TransactionForm de siempre —
+    // Cancelar/Guardar vuelve al extracto de ESTA cuenta (mismo tab/mes en
+    // que estabas), no a la lista de Cuentas.
+    return (
+      <TransactionForm
+        session={session}
+        settings={settings}
+        groups={groups}
+        accounts={accounts}
+        categories={categories}
+        reloadCategories={reloadCategories}
+        showError={showError}
+        showInfo={showInfo}
+        editingTransaction={view.transaction}
+        defaultDate={view.date}
+        onCancel={() => setView({ screen: "activity", accountId: view.accountId, tab: view.tab, viewMonth: view.viewMonth })}
+        onSave={async (tx) => {
+          const ok = await onSaveMoneyTransaction(tx);
+          if (ok) setView({ screen: "activity", accountId: view.accountId, tab: view.tab, viewMonth: view.viewMonth });
+        }}
+        onDelete={async (id) => {
+          const ok = await onDeleteMoneyTransaction(id);
+          if (ok) setView({ screen: "activity", accountId: view.accountId, tab: view.tab, viewMonth: view.viewMonth });
+        }}
       />
     );
   }
@@ -104,7 +159,11 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
               {visibleAccounts.map((a) => {
                 const cc = a.is_credit_card ? computeCreditCardBalance(a.id, ccTx, a.statement_day || 1) : null;
                 return (
-                  <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14 }}>
+                  <div
+                    key={a.id}
+                    onClick={() => setView({ screen: "activity", accountId: a.id, tab: "diario", viewMonth: new Date() })}
+                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14, cursor: "pointer" }}
+                  >
                     <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                       {a.icon && <span style={{ fontSize: 16, lineHeight: 1 }}>{a.icon}</span>}
                       {a.name}

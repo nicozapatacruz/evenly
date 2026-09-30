@@ -710,11 +710,15 @@ function AppShell({ session, onLogout, refreshProfile }) {
           groups={moneyManager.groups}
           accounts={moneyManager.accounts}
           accountTotals={moneyManager.accountTotals}
+          categories={moneyManager.categories}
           reload={moneyManager.reload}
+          reloadCategories={moneyManager.reload}
           showError={showError}
           showInfo={showInfo}
           view={accountsView}
           setView={setAccountsView}
+          onSaveMoneyTransaction={saveMoneyTransaction}
+          onDeleteMoneyTransaction={deleteMoneyTransaction}
         />
       )}
 

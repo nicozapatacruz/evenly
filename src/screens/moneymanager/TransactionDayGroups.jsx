@@ -7,10 +7,21 @@ const DAY_AMOUNTS_FONT = "12.5px system-ui, sans-serif";
 const DAY_LABEL = (d) => d.toLocaleDateString("es-ES", { weekday: "short" }).replace(".", "");
 
 // Lista de transacciones agrupada por día — compartida entre Transacciones
-// (el mes completo) y el drill-down de categoría de Estadísticas (una
-// categoría puntual), para no duplicar el bloque de filas (ícono, cuenta
-// tachada si está eliminada, montos, click-para-editar).
-export function TransactionDayGroups({ transactions, settings, accounts, categories, onNewTransaction, onEditTransaction }) {
+// (el mes completo), el drill-down de categoría de Estadísticas (una
+// categoría puntual) y el extracto por cuenta, para no duplicar el bloque de
+// filas (ícono, cuenta tachada si está eliminada, montos, click-para-editar).
+//
+// `perspectiveAccountId` cambia la clasificación de depósito/retiro: sin él
+// (perspectiva de categoría, Transacciones/drill-down), las transferencias
+// no cuentan ni como ingreso ni como gasto. Con él (perspectiva de cuenta,
+// extracto), una transferencia que LLEGA a esa cuenta es depósito y una que
+// SALE es retiro — y el monto de cada fila se colorea según si esa cuenta
+// puntual ganó o perdió plata, no según el tipo de la transacción.
+//
+// `runningBalances` (Map id→saldo) agrega una segunda línea con el saldo
+// acumulado después de esa transacción — solo tiene sentido con
+// perspectiveAccountId.
+export function TransactionDayGroups({ transactions, settings, accounts, categories, onNewTransaction, onEditTransaction, perspectiveAccountId, runningBalances }) {
   const accountName = (id) => accounts.find((a) => a.id === id)?.name || "—";
   const accountDeleted = (id) => !!accounts.find((a) => a.id === id)?.deleted;
   const categoryIcon = (id) => categories.find((c) => c.id === id)?.icon;
@@ -22,6 +33,18 @@ export function TransactionDayGroups({ transactions, settings, accounts, categor
       {accountDeleted(id) && <Trash2 size={11} style={{ flexShrink: 0 }} />}
     </span>
   );
+
+  // Contribución de una transacción sobre la cuenta en perspectiva: positivo
+  // = depósito, negativo = retiro. Sin perspectiva (null), no se usa.
+  const contribution = (t) => {
+    if (t.type === "income" && t.account_id === perspectiveAccountId) return t.amount_main;
+    if (t.type === "expense" && t.account_id === perspectiveAccountId) return -t.amount_main;
+    if (t.type === "transfer") {
+      if (t.account_id === perspectiveAccountId) return -t.amount_main;
+      if (t.to_account_id === perspectiveAccountId) return t.amount_main;
+    }
+    return 0;
+  };
 
   const maxExpenseWidth = useMemo(
     () => Math.ceil(measureTextWidth(money(999999.99, settings.main_currency), DAY_AMOUNTS_FONT)),
@@ -42,8 +65,12 @@ export function TransactionDayGroups({ transactions, settings, accounts, categor
     <>
       {byDay.map(([dayKey, txs]) => {
         const d = new Date(dayKey + "T12:00:00");
-        const dayIncome = txs.filter((t) => t.type === "income").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
-        const dayExpense = txs.filter((t) => t.type === "expense").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+        const dayIncome = perspectiveAccountId
+          ? txs.reduce((s, t) => { const c = contribution(t); return c > 0 ? s + c : s; }, 0)
+          : txs.filter((t) => t.type === "income").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+        const dayExpense = perspectiveAccountId
+          ? txs.reduce((s, t) => { const c = contribution(t); return c < 0 ? s - c : s; }, 0)
+          : txs.filter((t) => t.type === "expense").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
         return (
           <div key={dayKey} style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
             <div
@@ -92,11 +119,19 @@ export function TransactionDayGroups({ transactions, settings, accounts, categor
                   </div>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0 }}>
-                  <span style={{ color: t.type === "income" ? "#3B6E62" : t.type === "expense" ? "#B0473A" : "#4A6FA5", fontWeight: 600 }}>
+                  <span style={{
+                    color: perspectiveAccountId
+                      ? (contribution(t) > 0 ? "#3B6E62" : contribution(t) < 0 ? "#B0473A" : "#4A6FA5")
+                      : (t.type === "income" ? "#3B6E62" : t.type === "expense" ? "#B0473A" : "#4A6FA5"),
+                    fontWeight: 600,
+                  }}>
                     {money(t.amount, t.currency)}
                   </span>
                   {t.currency !== settings.main_currency && (
                     <span style={{ fontSize: 11, color: "#6B6355" }}>= {money(t.amount_main, settings.main_currency)}</span>
+                  )}
+                  {runningBalances?.has(t.id) && (
+                    <span style={{ fontSize: 11, color: "#6B6355" }}>{money(runningBalances.get(t.id), settings.main_currency)}</span>
                   )}
                 </div>
               </div>

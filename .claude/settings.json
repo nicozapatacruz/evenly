@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx vite build 2>&1 | tail -20)",
+      "Bash(npx vitest run 2>&1 | tail -10)"
+    ]
+  }
+}

@@ -307,6 +307,71 @@ export function useMonthTransactions(userId, viewMonth) {
   return { transactions, loading, reload: load };
 }
 
+// Transacciones de una cuenta puntual (origen o destino de una
+// transferencia) del mes visible — mismo criterio de rango ±1 día + recorte
+// por zona horaria propia que useMonthTransactions, acotado además a la cuenta.
+export function useAccountMonthTransactions(userId, accountId, viewMonth) {
+  const year = viewMonth.getFullYear();
+  const month = viewMonth.getMonth();
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => { setTransactions([]); }, [year, month, accountId]);
+
+  const load = useCallback(async () => {
+    if (!userId || !accountId) { setLoading(false); return; }
+    setLoading(true);
+    const start = new Date(year, month, 1);
+    start.setDate(start.getDate() - 1);
+    const end = new Date(year, month + 1, 1);
+    end.setDate(end.getDate() + 1);
+    const { data } = await supabase
+      .from("mm_transactions")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("deleted", false)
+      .or(`account_id.eq.${accountId},to_account_id.eq.${accountId}`)
+      .gte("date", start.toISOString())
+      .lt("date", end.toISOString())
+      .order("date", { ascending: false })
+      .order("created_at", { ascending: false });
+    const monthKey = `${year}-${String(month + 1).padStart(2, "0")}`;
+    const filtered = (data || []).filter((t) => dateInputValueInZone(new Date(t.date).getTime(), t.timezone).startsWith(monthKey));
+    setTransactions(filtered);
+    setLoading(false);
+  }, [userId, accountId, year, month]);
+
+  useEffect(() => { load(); }, [load]);
+
+  return { transactions, loading };
+}
+
+// Depósitos/retiros/neto de una cuenta, agregados por mes del lado del
+// servidor (vista mm_account_month_totals) — trae TODOS los meses con
+// movimiento (son pocas filas, una por mes) para poder armar Mensual, Anual,
+// y el saldo inicial de Diario sin traer nunca el historial completo
+// transacción por transacción.
+export function useAccountMonthTotals(userId, accountId) {
+  const [totals, setTotals] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    if (!userId || !accountId) { setLoading(false); return; }
+    setLoading(true);
+    const { data } = await supabase
+      .from("mm_account_month_totals")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("account_id", accountId);
+    setTotals(data || []);
+    setLoading(false);
+  }, [userId, accountId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  return { totals, loading };
+}
+
 // Totales por categoría del mes visible (Estadísticas) — agregados del lado
 // del servidor (vista mm_category_month_totals, ver .mm_views.sql), filtrados
 // por tipo (ingreso/gasto) + año/mes. Se refetchea al cambiar mes o tipo.

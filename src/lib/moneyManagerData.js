@@ -445,7 +445,23 @@ async function runCreditCardAutoPay(userId) {
   // Sin cuenta de pago no hay de dónde sacar la plata — no debería poder
   // pasar desde el formulario (ver AccountDetailScreen), pero por las dudas
   // (datos viejos, edición directa en la base) el job no revienta por eso.
-  const cards = allCards.filter((c) => c.payment_account_id && c.next_payment_date && new Date(c.next_payment_date) <= new Date());
+  //
+  // Tampoco se paga si la cuenta de pago quedó eliminada — borrar UNA cuenta
+  // puntual ya apaga auto_pay en cascada (ver disableAutoPayForDeletedAccounts),
+  // pero borrar el GRUPO entero que la contiene la borra en masa sin pasar
+  // por esa protección, así que el job se cubre acá también: si pasa, no
+  // avanza next_payment_date y reintenta en la próxima carga, en vez de
+  // sacar plata de una cuenta que el usuario ya considera inexistente.
+  const paymentAccountIds = [...new Set(allCards.map((c) => c.payment_account_id).filter(Boolean))];
+  const { data: paymentAccounts } = paymentAccountIds.length
+    ? await supabase.from("mm_accounts").select("id, deleted").in("id", paymentAccountIds)
+    : { data: [] };
+  const deletedPaymentAccountIds = new Set((paymentAccounts || []).filter((a) => a.deleted).map((a) => a.id));
+
+  const cards = allCards.filter((c) =>
+    c.payment_account_id && !deletedPaymentAccountIds.has(c.payment_account_id)
+    && c.next_payment_date && new Date(c.next_payment_date) <= new Date()
+  );
   if (cards.length === 0) return;
 
   const { data: settings } = await supabase.from("mm_settings").select("main_currency").eq("user_id", userId).maybeSingle();
@@ -503,6 +519,17 @@ async function runCreditCardAutoPay(userId) {
       guard += 1;
     }
   }
+}
+
+// Se llama al borrar una o varias cuentas (borrado puntual, o en cascada al
+// borrar el grupo que las contiene) — cualquier tarjeta que las tuviera como
+// cuenta de pago pierde de dónde cobrar, así que se apaga su auto-pago en
+// vez de dejarlo "colgado" apuntando a una cuenta inexistente.
+export async function disableAutoPayForDeletedAccounts(deletedAccountIds) {
+  if (!deletedAccountIds || deletedAccountIds.length === 0) return;
+  await supabase.from("mm_accounts")
+    .update({ auto_pay: false, next_payment_date: null })
+    .in("payment_account_id", deletedAccountIds);
 }
 
 // Convierte un monto a la moneda principal — se llama UNA sola vez, al

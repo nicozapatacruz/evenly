@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Pencil, Plus, ChevronRight, ChevronUp, ChevronDown, Menu, Trash2, Eye, EyeOff } from "lucide-react";
+import { Pencil, Plus, ChevronRight, ChevronUp, ChevronDown, Menu, Trash2, Eye, EyeOff, CreditCard, AlertTriangle } from "lucide-react";
 import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -7,7 +7,7 @@ import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
 import { RootHeader, TopBar, ConfirmInline, Footer, Field } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
-import { accountBalance, groupBalance, computeCreditCardBalance, useCreditCardActivity } from "../../lib/moneyManagerData.js";
+import { accountBalance, groupBalance, computeCreditCardBalance, disableAutoPayForDeletedAccounts, useCreditCardActivity } from "../../lib/moneyManagerData.js";
 import AccountDetailScreen from "./AccountDetailScreen.jsx";
 
 /* =========================================================================
@@ -327,6 +327,7 @@ export function ManageAccounts({ session, group = null, groups, accounts, accoun
       if (idsToDelete.length) {
         const { error: accError } = await supabase.from("mm_accounts").update({ deleted: true }).in("id", idsToDelete);
         if (accError) throw accError;
+        await disableAutoPayForDeletedAccounts(idsToDelete);
       }
       await reload();
       showInfo(`"${group.name}" eliminado.`);
@@ -547,6 +548,8 @@ function AccountGroupEditor({ group, accounts, reload, showError, onOpenAccount 
                     name={a.name}
                     icon={a.icon}
                     hidden={a.hidden}
+                    isCreditCard={a.is_credit_card}
+                    paymentAccountDeleted={a.is_credit_card && !!a.payment_account_id && !!accounts.find((x) => x.id === a.payment_account_id)?.deleted}
                     onOpen={() => onOpenAccount(id)}
                     onToggleHidden={() => toggleHidden(id)}
                   />
@@ -560,7 +563,7 @@ function AccountGroupEditor({ group, accounts, reload, showError, onOpenAccount 
   );
 }
 
-function SortableAccountRow({ id, name, icon, hidden, onOpen, onToggleHidden }) {
+function SortableAccountRow({ id, name, icon, hidden, isCreditCard, paymentAccountDeleted, onOpen, onToggleHidden }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   return (
@@ -576,6 +579,15 @@ function SortableAccountRow({ id, name, icon, hidden, onOpen, onToggleHidden }) 
         {icon && <span style={{ fontSize: 16, lineHeight: 1, flexShrink: 0 }}>{icon}</span>}
         <span style={{ fontSize: 14, fontFamily: "system-ui, sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
       </button>
+      {paymentAccountDeleted ? (
+        <span style={{ display: "flex" }} title="Su cuenta de pago fue eliminada">
+          <AlertTriangle size={16} color="#B0473A" />
+        </span>
+      ) : isCreditCard && (
+        <span style={{ display: "flex" }} title="Tarjeta de crédito">
+          <CreditCard size={16} color="#A89A87" />
+        </span>
+      )}
       <button style={styles.iconBtnGhost} onClick={onToggleHidden} aria-label={hidden ? `Mostrar ${name}` : `Ocultar ${name}`}>
         {hidden ? <EyeOff size={16} /> : <Eye size={16} />}
       </button>

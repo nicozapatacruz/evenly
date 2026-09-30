@@ -4,7 +4,7 @@ import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, Footer, ConfirmInline, IconInput, PickerField, ToggleField, Field } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
-import { accountBalance, computeCreditCardBalance, creditCardNextPaymentDate, useCreditCardActivity } from "../../lib/moneyManagerData.js";
+import { accountBalance, computeCreditCardBalance, creditCardNextPaymentDate, disableAutoPayForDeletedAccounts, useCreditCardActivity } from "../../lib/moneyManagerData.js";
 
 const DAY_OPTIONS = Array.from({ length: 31 }, (_, i) => i + 1);
 
@@ -47,9 +47,10 @@ export default function AccountDetailScreen({ session, account = null, groups, a
     || autoPay !== account.auto_pay
     || hidden !== account.hidden
   );
-  // Toda tarjeta de crédito necesita su cuenta de pago definida, tenga o no
-  // prendido el pago automático — no tiene sentido dejarla sin asignar.
-  const canSave = isDirty && !!name.trim() && !!groupId && (!isCreditCard || !!paymentAccountId);
+  // Cuenta de pago es informativa salvo que el pago automático esté
+  // prendido — ahí sí es obligatoria, porque el job no tiene de dónde sacar
+  // la plata sin ella.
+  const canSave = isDirty && !!name.trim() && !!groupId && (!isCreditCard || !autoPay || !!paymentAccountId);
 
   // Mismo criterio que el selector de cuentas de TransactionForm: agrupado
   // por grupo de cuentas, sin ocultas/eliminadas (salvo que sea la ya
@@ -104,10 +105,10 @@ export default function AccountDetailScreen({ session, account = null, groups, a
     setSaving(false);
   };
 
-  // Tarjetas con pago automático que quedarían sin de dónde cobrar si se
-  // borra esta cuenta — el borrado sigue siendo soft-delete (la referencia
-  // no se rompe), pero el job seguiría descontando de una cuenta que el
-  // usuario ya considera "eliminada", así que conviene avisarlo antes.
+  // Tarjetas con pago automático que se van a quedar sin cuenta de pago si
+  // se borra esta cuenta — se avisa porque el borrado apaga auto_pay en
+  // cascada en esas tarjetas (ver disableAutoPayForDeletedAccounts), no
+  // porque vaya a quedar "colgado".
   const dependentAutoPayCards = account
     ? accounts.filter((a) => a.payment_account_id === account.id && a.auto_pay && !a.deleted)
     : [];
@@ -117,6 +118,7 @@ export default function AccountDetailScreen({ session, account = null, groups, a
     try {
       const { error } = await supabase.from("mm_accounts").update({ deleted: true }).eq("id", account.id);
       if (error) throw error;
+      await disableAutoPayForDeletedAccounts([account.id]);
       await reload();
       showInfo(`"${account.name}" eliminada.`);
       onDeleted();
@@ -139,7 +141,7 @@ export default function AccountDetailScreen({ session, account = null, groups, a
         <ConfirmInline
           title={dependentAutoPayCards.length > 0 ? "ATENCIÓN" : undefined}
           message={dependentAutoPayCards.length > 0
-            ? `"${account.name}" es la cuenta de pago de ${dependentAutoPayCards.map((c) => `"${c.name}"`).join(", ")}\nSu pago automático dejará de tener de dónde cobrar.\n\n¿Eliminar igual?`
+            ? `"${account.name}" es la cuenta de pago de ${dependentAutoPayCards.map((c) => `"${c.name}"`).join(", ")}\nEl pago automático de esa${dependentAutoPayCards.length > 1 ? "s tarjetas" : " tarjeta"} se desactivará al eliminar.\n\n¿Eliminar igual?`
             : `¿Eliminar "${account.name}"?`}
           confirmLabel="Eliminar"
           confirmDisabled={deleting}
@@ -220,7 +222,7 @@ export default function AccountDetailScreen({ session, account = null, groups, a
               </>
             ) : (
               <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px" }}>
-                <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 14 }}>Saldo</span>
+                <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 14 }}>Saldo actual</span>
                 <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 14, fontWeight: 700, color: balanceColor(balance.total) }}>{money(balance.total, settings.main_currency)}</span>
               </div>
             )}

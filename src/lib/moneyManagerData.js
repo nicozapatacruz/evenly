@@ -137,6 +137,26 @@ export function creditCardCycleStart(statementDay, now = new Date()) {
   return new Date(year, month, Math.min(statementDay, daysInMonth(year, month)));
 }
 
+// Próxima ocurrencia de `paymentDay` desde `now` (hoy incluido) — el espejo
+// de `creditCardCycleStart`, pero mirando hacia adelante. Se usa para fijar
+// `next_payment_date` cuando se activa el pago automático. Reclampea contra
+// `paymentDay` (no contra el día ya clampeado de este mes) al pasar al mes
+// siguiente, mismo cuidado que `creditCardCycleStart` con el mes anterior.
+export function creditCardNextPaymentDate(paymentDay, now = new Date()) {
+  const day = Math.min(paymentDay, daysInMonth(now.getFullYear(), now.getMonth()));
+  const thisMonth = new Date(now.getFullYear(), now.getMonth(), day);
+  // Comparación por día calendario, no por instante exacto — si no, "hoy"
+  // solo contaría como vigente si se evalúa justo a medianoche (mismo cuidado
+  // que ya tiene creditCardCycleStart con su `<=`, pero acá hace falta
+  // normalizar "now" a medianoche porque la comparación va al revés).
+  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (thisMonth >= todayMidnight) return thisMonth;
+  const nextMonthIndex = now.getMonth() + 1;
+  const year = now.getFullYear() + (nextMonthIndex > 11 ? 1 : 0);
+  const month = nextMonthIndex % 12;
+  return new Date(year, month, Math.min(paymentDay, daysInMonth(year, month)));
+}
+
 // Separa el saldo de una tarjeta de crédito en "pasado" (ya facturado, se
 // debe pagar) y "actual" (del ciclo abierto, todavía no factura). Reglas:
 // - Un pago (transferencia QUE LLEGA a la tarjeta) siempre ataca "pasado"
@@ -187,6 +207,7 @@ export function useMoneyManager(userId) {
   const load = useCallback(async () => {
     if (!userId) { setLoading(false); return; }
     await generateDueRecurring(userId);
+    await runCreditCardAutoPay(userId);
     // Los balances se agregan del lado del servidor (vista mm_account_totals,
     // ver .mm_views.sql) en vez de traer cada transacción y sumar acá — así
     // esta consulta siempre trae unas pocas filas (una por cuenta×moneda),
@@ -384,6 +405,78 @@ async function generateDueRecurring(userId) {
     } else {
       await supabase.from("mm_recurring").update({ next_date: next.toISOString() }).eq("id", r.id);
     }
+  }
+}
+
+// Se corre en silencio antes de cada carga, después de generar las
+// recurrentes vencidas (una recurrente puede ser justo un gasto de la
+// tarjeta, tiene que quedar reflejada antes de calcular cuánto pagarle).
+// Por cada tarjeta con auto_pay activado y next_payment_date vencida: paga el
+// "saldo a pagar" de ese ciclo (transferencia real desde payment_account_id),
+// fechada en el día que correspondía (no en el día en que corre el job) y
+// avanza next_payment_date — mismo criterio de catch-up que generateDueRecurring
+// si pasaron varios meses sin abrir la app.
+async function runCreditCardAutoPay(userId) {
+  const { data: allCards } = await supabase
+    .from("mm_accounts")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("is_credit_card", true)
+    .eq("auto_pay", true)
+    .eq("deleted", false);
+  if (!allCards || allCards.length === 0) return;
+
+  // Tarjetas que nunca tuvieron next_payment_date (auto_pay activado antes de
+  // que existiera esta columna, o cualquier otro caso en que no quedó
+  // sembrada) — arrancan desde hoy, sin generar de golpe pagos retroactivos
+  // de meses en los que el auto-pago en realidad nunca estuvo funcionando.
+  const uninitialized = allCards.filter((c) => !c.next_payment_date);
+  if (uninitialized.length) {
+    await Promise.all(uninitialized.map((c) =>
+      supabase.from("mm_accounts").update({ next_payment_date: creditCardNextPaymentDate(c.payment_day || 1).toISOString() }).eq("id", c.id)
+    ));
+  }
+
+  const cards = allCards.filter((c) => c.next_payment_date && new Date(c.next_payment_date) <= new Date());
+  if (cards.length === 0) return;
+
+  const { data: settings } = await supabase.from("mm_settings").select("main_currency").eq("user_id", userId).maybeSingle();
+  const mainCurrency = settings?.main_currency || DEFAULT_SETTINGS.main_currency;
+
+  for (const card of cards) {
+    const { data: tx } = await supabase
+      .from("mm_transactions")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("deleted", false)
+      .or(`account_id.eq.${card.id},to_account_id.eq.${card.id}`);
+    // Copia mutable: cada pago generado en una vuelta del while tiene que
+    // "verse" en la vuelta siguiente (si no, el ciclo 2 vuelve a contar como
+    // pendiente lo que el ciclo 1 ya pagó, porque computeCreditCardBalance
+    // mira todo el historial de una, no incrementalmente).
+    const transactions = [...(tx || [])];
+
+    let next = new Date(card.next_payment_date);
+    const toInsert = [];
+    let guard = 0;
+    while (next <= new Date() && guard < 60) {
+      const { pasado } = computeCreditCardBalance(card.id, transactions, card.statement_day, next);
+      if (pasado < -0.004) {
+        const amount = -pasado;
+        const paymentTx = {
+          user_id: userId, type: "transfer", account_id: card.payment_account_id, to_account_id: card.id,
+          category_id: null, currency: mainCurrency, amount, exchange_rate: null, amount_main: amount,
+          title: "Pago automático", memo: null, date: next.toISOString(),
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        };
+        toInsert.push(paymentTx);
+        transactions.push(paymentTx);
+      }
+      next = creditCardNextPaymentDate(card.payment_day, new Date(next.getTime() + 86400000));
+      guard += 1;
+    }
+    if (toInsert.length) await supabase.from("mm_transactions").insert(toInsert);
+    await supabase.from("mm_accounts").update({ next_payment_date: next.toISOString() }).eq("id", card.id);
   }
 }
 

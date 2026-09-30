@@ -4,7 +4,7 @@ import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, Footer, ConfirmInline, IconInput, PickerField, ToggleField, Field } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
-import { accountBalance, computeCreditCardBalance, useCreditCardActivity } from "../../lib/moneyManagerData.js";
+import { accountBalance, computeCreditCardBalance, creditCardNextPaymentDate, useCreditCardActivity } from "../../lib/moneyManagerData.js";
 
 const DAY_OPTIONS = Array.from({ length: 31 }, (_, i) => i + 1);
 
@@ -60,6 +60,16 @@ export default function AccountDetailScreen({ session, account = null, groups, a
     if (!canSave) return;
     setSaving(true);
     try {
+      // next_payment_date solo se toca cuando de verdad cambia el estado
+      // relevante (se prende auto_pay, o cambia payment_day mientras ya
+      // estaba prendido) — no en cada "Guardar", si no el reloj del pago
+      // automático se reiniciaría cada vez que editás cualquier otra cosa.
+      let nextPaymentDate; // undefined = no tocar la columna
+      if (!isCreditCard || !autoPay) {
+        nextPaymentDate = null;
+      } else if (!account || !account.auto_pay || paymentDay !== (account.payment_day || 1)) {
+        nextPaymentDate = creditCardNextPaymentDate(paymentDay).toISOString();
+      }
       const payload = {
         group_id: groupId,
         name: name.trim(),
@@ -70,6 +80,7 @@ export default function AccountDetailScreen({ session, account = null, groups, a
         payment_day: isCreditCard ? paymentDay : null,
         auto_pay: isCreditCard ? autoPay : false,
         hidden,
+        ...(nextPaymentDate !== undefined ? { next_payment_date: nextPaymentDate } : {}),
       };
       const { error } = account
         ? await supabase.from("mm_accounts").update(payload).eq("id", account.id)

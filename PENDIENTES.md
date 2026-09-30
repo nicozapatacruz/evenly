@@ -30,7 +30,7 @@ No tocar salvo que Nicolas las traiga de vuelta explícitamente.
 
 ## D. Simplificaciones MVP vs. la app original (Realbyte Money Manager) — pendientes de revisión/aprobación de Nicolas
 
-- [ ] Cuentas: sin tratamiento especial de tarjetas de crédito (la original separa "Saldo a pagar" / "Saldo restante"); acá todas las cuentas se muestran igual.
+- [x] ~~Cuentas: sin tratamiento especial de tarjetas de crédito (la original separa "Saldo a pagar" / "Saldo restante"); acá todas las cuentas se muestran igual.~~ Resuelto 2026-09-30: split pasado/actual, cuenta de pago, ciclo de facturación y pago automático con catch-up.
 - [ ] Categorías: lista plana, sin jerarquía padre/subcategoría (la original sí soporta subcategorías).
 - [ ] Transacciones: un solo campo "Nota" corto. No se replicó "Descripción" con foto adjunta, ni la nota larga (`memo`) editable desde el formulario (memo solo se llena vía import masivo).
 - [ ] Tab Transacciones: solo existe la sub-vista "Diario". No se construyeron Calendario/Mensual/Resumen/Descripción.

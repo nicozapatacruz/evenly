@@ -67,7 +67,7 @@ export default function SplitLedgerTab({
       )}
 
       {view.screen === "newGroup" && (
-        <NewGroup
+        <GroupForm
           onCancel={() => setView({ screen: "home" })}
           session={session}
           showError={showError}
@@ -207,7 +207,7 @@ export default function SplitLedgerTab({
       )}
 
       {view.screen === "editGroup" && activeGroup && (
-        <EditGroup
+        <GroupForm
           key={`${JSON.stringify(groupInvites)}-${activeGroup.members.length}`}
           group={activeGroup}
           session={session}
@@ -406,17 +406,26 @@ function Home({ groups, loading, session, onOpen, onNewExpense }) {
    NEW GROUP
    ========================================================================= */
 
-function NewGroup({ onCancel, onCreate, session, showError }) {
-  const [name, setName] = useState("");
-  const [members, setMembers] = useState([""]);
-  const [baseCurrency, setBaseCurrency] = useState("EUR");
-  const { previewUrl: photoUrl, pendingFile, removed, handleImageChange: handlePhoto, clear: clearPhoto } = useImageUpload(null, showError);
+// NewGroup + EditGroup fusionados en un solo componente — pero solo el
+// encabezado (foto, nombre, moneda) es realmente "lo mismo" entre crear y
+// editar. Integrantes, categorías y borrar tienen modelos de datos e
+// interacciones genuinamente distintas (nombres en blanco vs. personas reales
+// con id/invitación/balance pendiente; sin categorías vs. reordenar con
+// drag-and-drop; sin borrar vs. modal de "escribí Confirmar") — se dejan
+// como secciones propias de cada modo, no forzadas a parecerse.
+function GroupForm({ group = null, session, onCancel, onCreate, onSave, onDeleteGroup, onInvite, groupInvites = [], showError }) {
+  const isEditing = !!group;
+  const [name, setName] = useState(group?.name || "");
+  const [baseCurrency, setBaseCurrency] = useState(group?.baseCurrency || "EUR");
+  const { previewUrl: photoUrl, pendingFile, removed, handleImageChange: handlePhoto, clear: clearPhoto } = useImageUpload(group?.photoUrl || null, showError);
   const [saving, setSaving] = useState(false);
 
-  const updateMember = (i, val) => setMembers((prev) => prev.map((m, idx) => (idx === i ? val : m)));
-  const addMemberField = () => setMembers((prev) => [...prev, ""]);
-  const removeMemberField = (i) => setMembers((prev) => prev.filter((_, idx) => idx !== i));
-  const hasEnoughMembers = members.some((n) => n.trim());
+  // --- Solo para crear: integrantes como campos de texto en blanco ---
+  const [blankMembers, setBlankMembers] = useState([""]);
+  const updateMember = (i, val) => setBlankMembers((prev) => prev.map((m, idx) => (idx === i ? val : m)));
+  const addMemberField = () => setBlankMembers((prev) => [...prev, ""]);
+  const removeMemberField = (i) => setBlankMembers((prev) => prev.filter((_, idx) => idx !== i));
+  const hasEnoughMembers = blankMembers.some((n) => n.trim());
   const canCreate = name.trim() && hasEnoughMembers;
 
   const handleCreate = async () => {
@@ -425,7 +434,7 @@ function NewGroup({ onCancel, onCreate, session, showError }) {
       const resolvedPhotoUrl = await resolvePhotoUrl({ pendingFile, removed, currentUrl: null });
       // Creador siempre incluido como miembro vinculado
       const myMember = { name: session.displayName, linkedUserId: session.userId };
-      const otherMembers = members.map((n) => n.trim()).filter(Boolean).map((n) => ({ name: n }));
+      const otherMembers = blankMembers.map((n) => n.trim()).filter(Boolean).map((n) => ({ name: n }));
       await onCreate({
         name: name.trim(),
         baseCurrency,
@@ -439,132 +448,19 @@ function NewGroup({ onCancel, onCreate, session, showError }) {
     }
   };
 
-  return (
-    <div style={styles.screen}>
-      <TopBar title="Nuevo grupo" onBack={onCancel} />
-      <div style={{ ...styles.form, paddingBottom: 100 }}>
-        {/* Foto del grupo */}
-        <PhotoPicker previewUrl={photoUrl} onChange={handlePhoto} onClear={clearPhoto} shape="square" />
-
-        <Field label="Nombre del grupo">
-          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Viaje a Lisboa, Piso compartido…" />
-        </Field>
-
-        <Field label="Moneda principal del grupo">
-          <select style={styles.input} value={baseCurrency} onChange={(e) => setBaseCurrency(e.target.value)}>
-            {CURRENCY_LIST.map((c) => <option key={c} value={c}>{c} ({CURRENCIES[c].symbol})</option>)}
-          </select>
-        </Field>
-        <p style={{ ...styles.muted, padding: 0, marginTop: -8 }}>
-          Es la moneda que se preselecciona al crear un gasto — puedes registrar gastos en
-          otras monedas cuando quieras, cada una lleva su propio balance por separado.
-        </p>
-
-        <p style={styles.label}>Integrantes</p>
-
-        {/* Tú — fijo, no se puede quitar */}
-        <div style={{ ...styles.shareRow, background: "#F3EFE5", borderColor: "#DDD2BE" }}>
-          <span style={{ ...styles.avatar, background: colorFor(session.userId) }}>{initials(session.displayName)}</span>
-          <span style={{ flex: 1, fontWeight: 600 }}>{session.displayName}</span>
-          <span style={{ fontSize: 11, color: "#A8754A", fontFamily: "system-ui, sans-serif" }}>Tú</span>
-        </div>
-
-        {/* Otros miembros */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {members.map((m, i) => (
-            <div key={i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <span style={{ ...styles.avatar, background: m.trim() ? colorFor(m + i) : "#D9CFC1" }}>
-                {m.trim() ? initials(m) : i + 1}
-              </span>
-              <input style={{ ...styles.input, flex: 1 }} value={m} onChange={(e) => updateMember(i, e.target.value)} placeholder={`Persona ${i + 1}`} />
-              {members.length > 1 && (
-                <button style={styles.iconBtnGhost} onClick={() => removeMemberField(i)} aria-label="Quitar persona"><X size={16} /></button>
-              )}
-            </div>
-          ))}
-        </div>
-        <button style={styles.btnDashed} onClick={addMemberField}><Plus size={16} /> Agregar persona</button>
-      </div>
-      <Footer>
-        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
-        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canCreate) ? 0.5 : 1 }} onClick={handleCreate} disabled={saving || !canCreate}>
-          {saving ? "Creando…" : "Crear grupo"}
-        </button>
-      </Footer>
-    </div>
-  );
-}
-
-// Una fila arrastrable de la lista de categorías (dnd-kit: funciona con mouse y con touch,
-// a diferencia del drag & drop nativo de HTML que en celulares no responde al dedo).
-function SortableCategoryRow({ cat, onEditIcon, onChangeLabel, onRemove }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cat.id });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-  return (
-    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 6, padding: "8px 10px" }}>
-      {/* Handle — ícono SVG (se centra bien, a diferencia del glifo de texto) a todo el alto
-          de la fila para que el área de agarre sea más grande. touchAction:"none" es necesario
-          para que el drag responda al dedo en vez de disparar el scroll. */}
-      <span
-        {...attributes}
-        {...listeners}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          alignSelf: "stretch",
-          width: 32,
-          color: "#C9BBA0",
-          cursor: "grab",
-          touchAction: "none",
-        }}
-      >
-        <Menu size={18} />
-      </span>
-      <button
-        onClick={onEditIcon}
-        style={{ width: 34, height: 34, minWidth: 34, borderRadius: 8, border: "1px solid #DDD2BE", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#544A3C", cursor: "pointer" }}
-        aria-label="Cambiar ícono"
-      >
-        <IconComp iconKey={cat.iconKey} size={16} />
-      </button>
-      <input
-        style={{ ...styles.input, flex: 1, padding: "7px 10px", fontSize: 14 }}
-        value={cat.label}
-        onChange={(e) => onChangeLabel(e.target.value)}
-        placeholder="Nombre de categoría"
-      />
-      <button style={styles.iconBtnGhost} onClick={onRemove} aria-label="Eliminar categoría">
-        <X size={15} />
-      </button>
-    </div>
-  );
-}
-
-/* =========================================================================
-   EDIT GROUP (nombre, moneda, tasas, miembros)
-   ========================================================================= */
-
-function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, groupInvites = [], showError }) {
-  const [name, setName] = useState(group.name);
-  const [baseCurrency, setBaseCurrency] = useState(group.baseCurrency);
-  const [members, setMembers] = useState(group.members);
+  // --- Solo para editar: integrantes reales, categorías, borrar ---
+  const [members, setMembers] = useState(group?.members || []);
   const [newMemberName, setNewMemberName] = useState("");
-  const { previewUrl: photoUrl, pendingFile, removed, handleImageChange: handlePhoto, clear: clearPhoto } = useImageUpload(group.photoUrl || null, showError);
-  const [saving, setSaving] = useState(false);
   const [confirmRemoveMemberId, setConfirmRemoveMemberId] = useState(null);
-  const [categories, setCategories] = useState(() => groupCategories(group).map(c => ({ ...c })));
+  const [categories, setCategories] = useState(() => (group ? groupCategories(group).map(c => ({ ...c })) : []));
   const [editingCatId, setEditingCatId] = useState(null);
   const [catsOpen, setCatsOpen] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
-  const balances = useMemo(() => computeBalances(group), [group]);
+  const balances = useMemo(() => (group ? computeBalances(group) : {}), [group]);
 
   const isDirty = useMemo(() => {
+    if (!group) return true;
     if (name.trim() !== group.name) return true;
     if (baseCurrency !== group.baseCurrency) return true;
     if (pendingFile || removed) return true;
@@ -577,7 +473,7 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
     return false;
   }, [name, baseCurrency, pendingFile, removed, members, categories, group]);
   const hasEmptyCategory = categories.some((c) => !c.label.trim());
-  const canSave = name.trim() && members.length >= 2 && !hasEmptyCategory;
+  const canSaveEdit = name.trim() && members.length >= 2 && !hasEmptyCategory;
 
   const addMember = () => {
     const n = newMemberName.trim();
@@ -669,9 +565,9 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
   return (
     <div style={styles.screen}>
       <TopBar
-        title="Editar grupo"
+        title={isEditing ? "Editar grupo" : "Nuevo grupo"}
         onBack={onCancel}
-        right={group.creatorId === session?.userId && (
+        right={isEditing && group.creatorId === session?.userId && (
           <button style={styles.iconBtnGhost} onClick={() => setShowDeleteModal(true)} aria-label="Borrar grupo">
             <Trash2 size={18} color="#B0473A" />
           </button>
@@ -682,98 +578,133 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
         <PhotoPicker previewUrl={photoUrl} onChange={handlePhoto} onClear={clearPhoto} shape="square" />
 
         <Field label="Nombre del grupo">
-          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} />
+          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder={isEditing ? undefined : "Viaje a Lisboa, Piso compartido…"} />
         </Field>
 
-        <Field label="Moneda principal">
+        <Field label={isEditing ? "Moneda principal" : "Moneda principal del grupo"}>
           <select style={styles.input} value={baseCurrency} onChange={(e) => setBaseCurrency(e.target.value)}>
             {CURRENCY_LIST.map((c) => <option key={c} value={c}>{c} ({CURRENCIES[c].symbol})</option>)}
           </select>
         </Field>
+        {!isEditing && (
+          <p style={{ ...styles.muted, padding: 0, marginTop: -8 }}>
+            Es la moneda que se preselecciona al crear un gasto — puedes registrar gastos en
+            otras monedas cuando quieras, cada una lleva su propio balance por separado.
+          </p>
+        )}
 
-
-        <p style={styles.label}>Personas</p>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {members.map((m) => (
-            <div key={m.id} style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-              <div style={{ ...styles.shareRow, borderRadius: confirmRemoveMemberId === m.id ? "10px 10px 0 0" : 10 }}>
-                <span style={{ ...styles.avatar, background: colorFor(m.id) }}>{initials(m.name)}</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ display: "block" }}>{m.name}</span>
-                  {groupInvites.find((i) => i.memberId === m.id) && (
-                    <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#3B6E62", fontFamily: "system-ui, sans-serif" }}>
-                      <Send size={10} /> Invitación enviada a @{groupInvites.find((i) => i.memberId === m.id).username}
-                    </span>
+        {isEditing ? (
+          <>
+            <p style={styles.label}>Personas</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {members.map((m) => (
+                <div key={m.id} style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+                  <div style={{ ...styles.shareRow, borderRadius: confirmRemoveMemberId === m.id ? "10px 10px 0 0" : 10 }}>
+                    <span style={{ ...styles.avatar, background: colorFor(m.id) }}>{initials(m.name)}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ display: "block" }}>{m.name}</span>
+                      {groupInvites.find((i) => i.memberId === m.id) && (
+                        <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#3B6E62", fontFamily: "system-ui, sans-serif" }}>
+                          <Send size={10} /> Invitación enviada a @{groupInvites.find((i) => i.memberId === m.id).username}
+                        </span>
+                      )}
+                    </div>
+                    {Object.values(balances).some((bal) => Math.abs(bal[m.id] || 0) > 0.01) && (
+                      <span style={{ fontSize: 11, color: "#A8754A", fontFamily: "system-ui, sans-serif" }}>balance pendiente</span>
+                    )}
+                    {m.linkedUserId === session?.userId ? (
+                      <span style={{ width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#A8754A" }}>Tú</span>
+                    ) : (
+                      <button style={styles.iconBtnGhost} onClick={() => confirmRemoveMemberId === m.id ? setConfirmRemoveMemberId(null) : removeMember(m.id)} aria-label="Quitar persona">
+                        <X size={16} color={confirmRemoveMemberId === m.id ? "#B0473A" : undefined} />
+                      </button>
+                    )}
+                  </div>
+                  {confirmRemoveMemberId === m.id && (
+                    <ConfirmInline
+                      message={`¿Quitar a ${m.name} del grupo?`}
+                      confirmLabel="Quitar"
+                      onCancel={() => setConfirmRemoveMemberId(null)}
+                      onConfirm={() => confirmRemoveMember(m.id)}
+                    />
                   )}
                 </div>
-                {Object.values(balances).some((bal) => Math.abs(bal[m.id] || 0) > 0.01) && (
-                  <span style={{ fontSize: 11, color: "#A8754A", fontFamily: "system-ui, sans-serif" }}>balance pendiente</span>
-                )}
-                {m.linkedUserId === session?.userId ? (
-                  <span style={{ width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#A8754A" }}>Tú</span>
-                ) : (
-                  <button style={styles.iconBtnGhost} onClick={() => confirmRemoveMemberId === m.id ? setConfirmRemoveMemberId(null) : removeMember(m.id)} aria-label="Quitar persona">
-                    <X size={16} color={confirmRemoveMemberId === m.id ? "#B0473A" : undefined} />
-                  </button>
-                )}
-              </div>
-              {confirmRemoveMemberId === m.id && (
-                <ConfirmInline
-                  message={`¿Quitar a ${m.name} del grupo?`}
-                  confirmLabel="Quitar"
-                  onCancel={() => setConfirmRemoveMemberId(null)}
-                  onConfirm={() => confirmRemoveMember(m.id)}
-                />
-              )}
+              ))}
             </div>
-          ))}
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input style={{ ...styles.input, flex: 1 }} value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} placeholder="Nombre de la nueva persona" onKeyDown={(e) => e.key === "Enter" && newMemberName.trim() && addMember()} />
-          <button style={{ ...styles.btnSecondarySmall, opacity: newMemberName.trim() ? 1 : 0.5 }} onClick={addMember} disabled={!newMemberName.trim()}><UserPlus size={16} /></button>
-        </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input style={{ ...styles.input, flex: 1 }} value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} placeholder="Nombre de la nueva persona" onKeyDown={(e) => e.key === "Enter" && newMemberName.trim() && addMember()} />
+              <button style={{ ...styles.btnSecondarySmall, opacity: newMemberName.trim() ? 1 : 0.5 }} onClick={addMember} disabled={!newMemberName.trim()}><UserPlus size={16} /></button>
+            </div>
 
-        {/* Invitar personas */}
-        {group.creatorId === session?.userId && (
-          <button style={styles.btnSecondary} onClick={onInvite}>
-            <UserPlus size={16} /> Invitar a alguien al grupo
-          </button>
-        )}
+            {/* Invitar personas */}
+            {group.creatorId === session?.userId && (
+              <button style={styles.btnSecondary} onClick={onInvite}>
+                <UserPlus size={16} /> Invitar a alguien al grupo
+              </button>
+            )}
 
-        {/* ── Categorías colapsables ── */}
-        <button
-          style={styles.collapsibleHeader}
-          onClick={() => setCatsOpen(v => !v)}
-          aria-expanded={catsOpen}
-        >
-          <span style={styles.label}>Categorías de gasto ({categories.length})</span>
-          {catsOpen ? <ChevronUp size={18} color="#6B6355" /> : <ChevronDownIcon size={18} color="#6B6355" />}
-        </button>
+            {/* ── Categorías colapsables ── */}
+            <button
+              style={styles.collapsibleHeader}
+              onClick={() => setCatsOpen(v => !v)}
+              aria-expanded={catsOpen}
+            >
+              <span style={styles.label}>Categorías de gasto ({categories.length})</span>
+              {catsOpen ? <ChevronUp size={18} color="#6B6355" /> : <ChevronDownIcon size={18} color="#6B6355" />}
+            </button>
 
-        {catsOpen && (
+            {catsOpen && (
+              <>
+                <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleCategoryDragEnd}>
+                  <SortableContext items={categories.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {categories.map((cat) => (
+                        <SortableCategoryRow
+                          key={cat.id}
+                          cat={cat}
+                          onEditIcon={() => setEditingCatId(cat.id)}
+                          onChangeLabel={(label) => updateCategory(cat.id, { label })}
+                          onRemove={() => removeCategory(cat.id)}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+                <button style={styles.btnDashed} onClick={addCategory}><Plus size={16} /> Nueva categoría</button>
+              </>
+            )}
+          </>
+        ) : (
           <>
-            <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleCategoryDragEnd}>
-              <SortableContext items={categories.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {categories.map((cat) => (
-                    <SortableCategoryRow
-                      key={cat.id}
-                      cat={cat}
-                      onEditIcon={() => setEditingCatId(cat.id)}
-                      onChangeLabel={(label) => updateCategory(cat.id, { label })}
-                      onRemove={() => removeCategory(cat.id)}
-                    />
-                  ))}
+            <p style={styles.label}>Integrantes</p>
+
+            {/* Tú — fijo, no se puede quitar */}
+            <div style={{ ...styles.shareRow, background: "#F3EFE5", borderColor: "#DDD2BE" }}>
+              <span style={{ ...styles.avatar, background: colorFor(session.userId) }}>{initials(session.displayName)}</span>
+              <span style={{ flex: 1, fontWeight: 600 }}>{session.displayName}</span>
+              <span style={{ fontSize: 11, color: "#A8754A", fontFamily: "system-ui, sans-serif" }}>Tú</span>
+            </div>
+
+            {/* Otros miembros */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {blankMembers.map((m, i) => (
+                <div key={i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <span style={{ ...styles.avatar, background: m.trim() ? colorFor(m + i) : "#D9CFC1" }}>
+                    {m.trim() ? initials(m) : i + 1}
+                  </span>
+                  <input style={{ ...styles.input, flex: 1 }} value={m} onChange={(e) => updateMember(i, e.target.value)} placeholder={`Persona ${i + 1}`} />
+                  {blankMembers.length > 1 && (
+                    <button style={styles.iconBtnGhost} onClick={() => removeMemberField(i)} aria-label="Quitar persona"><X size={16} /></button>
+                  )}
                 </div>
-              </SortableContext>
-            </DndContext>
-            <button style={styles.btnDashed} onClick={addCategory}><Plus size={16} /> Nueva categoría</button>
+              ))}
+            </div>
+            <button style={styles.btnDashed} onClick={addMemberField}><Plus size={16} /> Agregar persona</button>
           </>
         )}
-
       </div>
 
-      {editingCatId && (() => {
+      {isEditing && editingCatId && (() => {
         const editingCat = categories.find((c) => c.id === editingCatId);
         return (
           <Modal title="Elegir ícono" onClose={() => setEditingCatId(null)}>
@@ -800,12 +731,18 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
 
       <Footer>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
-        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !isDirty || !canSave) ? 0.5 : 1 }} onClick={handleSave} disabled={saving || !isDirty || !canSave}>
-          {saving ? "Guardando…" : "Guardar"}
-        </button>
+        {isEditing ? (
+          <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !isDirty || !canSaveEdit) ? 0.5 : 1 }} onClick={handleSave} disabled={saving || !isDirty || !canSaveEdit}>
+            {saving ? "Guardando…" : "Guardar"}
+          </button>
+        ) : (
+          <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canCreate) ? 0.5 : 1 }} onClick={handleCreate} disabled={saving || !canCreate}>
+            {saving ? "Creando…" : "Crear grupo"}
+          </button>
+        )}
       </Footer>
 
-      {showDeleteModal && (
+      {isEditing && showDeleteModal && (
         <Modal title={`¿Borrar "${group.name}"?`} onClose={() => { setShowDeleteModal(false); setDeleteConfirmText(""); }}>
           <p style={{ margin: "0 0 14px", fontSize: 14, fontFamily: "system-ui, sans-serif", color: "#6B6355" }}>
             Esta acción no se puede deshacer.
@@ -827,6 +764,56 @@ function EditGroup({ group, session, onCancel, onSave, onDeleteGroup, onInvite, 
           </div>
         </Modal>
       )}
+    </div>
+  );
+}
+
+// Una fila arrastrable de la lista de categorías (dnd-kit: funciona con mouse y con touch,
+// a diferencia del drag & drop nativo de HTML que en celulares no responde al dedo).
+function SortableCategoryRow({ cat, onEditIcon, onChangeLabel, onRemove }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cat.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 6, padding: "8px 10px" }}>
+      {/* Handle — ícono SVG (se centra bien, a diferencia del glifo de texto) a todo el alto
+          de la fila para que el área de agarre sea más grande. touchAction:"none" es necesario
+          para que el drag responda al dedo en vez de disparar el scroll. */}
+      <span
+        {...attributes}
+        {...listeners}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          alignSelf: "stretch",
+          width: 32,
+          color: "#C9BBA0",
+          cursor: "grab",
+          touchAction: "none",
+        }}
+      >
+        <Menu size={18} />
+      </span>
+      <button
+        onClick={onEditIcon}
+        style={{ width: 34, height: 34, minWidth: 34, borderRadius: 8, border: "1px solid #DDD2BE", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#544A3C", cursor: "pointer" }}
+        aria-label="Cambiar ícono"
+      >
+        <IconComp iconKey={cat.iconKey} size={16} />
+      </button>
+      <input
+        style={{ ...styles.input, flex: 1, padding: "7px 10px", fontSize: 14 }}
+        value={cat.label}
+        onChange={(e) => onChangeLabel(e.target.value)}
+        placeholder="Nombre de categoría"
+      />
+      <button style={styles.iconBtnGhost} onClick={onRemove} aria-label="Eliminar categoría">
+        <X size={15} />
+      </button>
     </div>
   );
 }

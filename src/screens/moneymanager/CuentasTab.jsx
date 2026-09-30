@@ -5,7 +5,7 @@ import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } 
 import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
-import { RootHeader, TopBar, ConfirmInline, Footer, IconInput, PickerField, ToggleField, Field } from "../../components/Shared.jsx";
+import { RootHeader, TopBar, ConfirmInline, Footer, Field } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
 import { accountBalance, groupBalance, computeCreditCardBalance, useCreditCardActivity } from "../../lib/moneyManagerData.js";
 import AccountDetailScreen from "./AccountDetailScreen.jsx";
@@ -200,12 +200,14 @@ export function ManageGroups({ session, groups: allGroups, accounts, reload, sho
 
   if (creating) {
     return (
-      <NewGroupForm
+      <ManageAccounts
         session={session}
+        group={null}
         groups={groups}
+        accounts={accounts}
         reload={reload}
         showError={showError}
-        onCancel={() => setCreating(false)}
+        onBack={() => setCreating(false)}
         onCreated={(newGroupId) => onOpenGroup(newGroupId, { justCreated: true })}
       />
     );
@@ -239,50 +241,6 @@ export function ManageGroups({ session, groups: allGroups, accounts, reload, sho
   );
 }
 
-// Formulario de "nuevo grupo" propio (TopBar + Footer), mismo patrón que
-// NewAccountForm — reemplaza el input+select+botón sueltos que había abajo.
-function NewGroupForm({ session, groups, reload, showError, onCancel, onCreated }) {
-  const [name, setName] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const canSave = !!name.trim();
-
-  const create = async () => {
-    if (!canSave) return;
-    setSaving(true);
-    try {
-      // Se crea de una — un grupo vacío con nombre no tiene nada que
-      // "cancelar" después. Al toque se entra a Editar grupo (mismo lugar
-      // donde se agregan las cuentas), así nunca hay una cuenta apuntando a
-      // un grupo que todavía no es real.
-      const { data, error } = await supabase.from("mm_account_groups").insert({
-        user_id: session.userId, name: name.trim(), type: "other", sort_order: groups.length,
-      }).select().single();
-      if (error) throw error;
-      await reload();
-      onCreated(data.id);
-    } catch (e) { showError(`No se pudo crear: ${e?.message || e}`); }
-    setSaving(false);
-  };
-
-  return (
-    <div style={styles.screen}>
-      <TopBar title="Nuevo grupo" onBack={onCancel} />
-      <div style={{ ...styles.form, paddingBottom: 100 }}>
-        <Field label="Nombre">
-          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre (ej: Santander, Efectivo)" onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
-        </Field>
-      </div>
-      <Footer>
-        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
-        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }} onClick={create} disabled={saving || !canSave}>
-          {saving ? "Creando…" : "Crear"}
-        </button>
-      </Footer>
-    </div>
-  );
-}
-
 function SortableGroupRow({ group, onOpen }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: group.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
@@ -309,39 +267,53 @@ function SortableGroupRow({ group, onOpen }) {
    GESTIONAR CUENTAS DE UN GRUPO
    ========================================================================= */
 
-// También hace de "editar grupo" (nombre + borrar) — desde el listado de
-// grupos ya no se edita nada inline, es todo acá adentro. El nombre usa
-// Footer Cancelar/Guardar (mismo criterio que AccountDetailScreen: es un
-// campo de un formulario, no un autoguardado); reordenar/agregar cuentas
-// sigue siendo inmediato, como el resto de los drag-and-drop de la app.
-export function ManageAccounts({ session, group, groups, accounts, accountTotals, settings, reload, showError, showInfo, justCreated, onBack, onDeleted }) {
+// Un solo componente para crear y editar un grupo (mismo patrón que
+// AccountDetailScreen/TransactionForm: `group` null es "nuevo"). Al crear,
+// se guarda de una (un grupo vacío con nombre no tiene nada que "cancelar"
+// después) y el padre (ManageGroups) nos manda derecho a este mismo
+// componente en modo edición para esa cuenta — nunca hay una cuenta
+// apuntando a un grupo que todavía no es real. Editando, además del nombre
+// (Footer Cancelar/Guardar, igual que AccountDetailScreen) se administra acá
+// la lista de cuentas hijas — eso sigue siendo inmediato, como el resto de
+// los drag-and-drop de la app.
+export function ManageAccounts({ session, group = null, groups, accounts, accountTotals, settings, reload, showError, showInfo, justCreated, onBack, onCreated, onDeleted }) {
   // Solo el primer render de esta pantalla (llegando recién de "Nuevo
   // grupo") — no se recalcula después, así que un re-render por cualquier
   // otro motivo no lo hace reaparecer.
   const [showCreatedHint] = useState(!!justCreated);
-  const [name, setName] = useState(group.name);
+  const [name, setName] = useState(group?.name || "");
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [creating, setCreating] = useState(false);
   const [viewingAccountId, setViewingAccountId] = useState(null);
 
-  const isDirty = name.trim() !== group.name;
+  // Al crear siempre es "dirty" (no hay un original con qué comparar).
+  const isDirty = !group || name.trim() !== group.name;
   const canSave = isDirty && !!name.trim();
 
   const handleSave = async () => {
     if (!canSave) return;
     setSaving(true);
     try {
-      const { error } = await supabase.from("mm_account_groups").update({ name: name.trim() }).eq("id", group.id);
-      if (error) throw error;
-      await reload();
-      onBack();
-    } catch (e) { showError(`No se pudo guardar: ${e?.message || e}`); }
+      if (group) {
+        const { error } = await supabase.from("mm_account_groups").update({ name: name.trim() }).eq("id", group.id);
+        if (error) throw error;
+        await reload();
+        onBack();
+      } else {
+        const { data, error } = await supabase.from("mm_account_groups").insert({
+          user_id: session.userId, name: name.trim(), type: "other", sort_order: groups.length,
+        }).select().single();
+        if (error) throw error;
+        await reload();
+        onCreated(data.id);
+      }
+    } catch (e) { showError(`No se pudo ${group ? "guardar" : "crear"}: ${e?.message || e}`); }
     setSaving(false);
   };
 
-  const accCount = accounts.filter((a) => a.group_id === group.id && !a.deleted).length;
+  const accCount = group ? accounts.filter((a) => a.group_id === group.id && !a.deleted).length : 0;
 
   const remove = async () => {
     setDeleting(true);
@@ -365,16 +337,19 @@ export function ManageAccounts({ session, group, groups, accounts, accountTotals
 
   if (creating) {
     return (
-      <NewAccountForm
+      <AccountDetailScreen
         session={session}
+        account={null}
         groups={groups.filter((g) => !g.deleted)}
         accounts={accounts}
+        accountTotals={accountTotals}
+        settings={settings}
         defaultGroupId={group.id}
         groupLocked
         reload={reload}
         showError={showError}
-        onCancel={() => setCreating(false)}
-        onCreated={() => setCreating(false)}
+        showInfo={showInfo}
+        onBack={() => setCreating(false)}
       />
     );
   }
@@ -390,6 +365,7 @@ export function ManageAccounts({ session, group, groups, accounts, accountTotals
           accounts={accounts}
           accountTotals={accountTotals}
           settings={settings}
+          groupLocked
           reload={reload}
           showError={showError}
           showInfo={showInfo}
@@ -404,15 +380,15 @@ export function ManageAccounts({ session, group, groups, accounts, accountTotals
   return (
     <div style={styles.screen}>
       <TopBar
-        title="Editar grupo"
+        title={group ? "Editar grupo" : "Nuevo grupo"}
         onBack={onBack}
-        right={
+        right={group && (
           <button style={styles.iconBtnGhost} onClick={() => setConfirmDelete(true)} aria-label="Eliminar">
             <Trash2 size={18} />
           </button>
-        }
+        )}
       />
-      {confirmDelete && (
+      {group && confirmDelete && (
         <ConfirmInline
           message={accCount > 0 ? `"${group.name}" tiene ${accCount} cuenta(s) adentro — se borran juntas. ¿Continuar?` : `¿Eliminar "${group.name}"?`}
           confirmLabel="Eliminar"
@@ -424,22 +400,26 @@ export function ManageAccounts({ session, group, groups, accounts, accountTotals
       )}
       <div style={{ ...styles.form, paddingBottom: 100 }}>
         <Field label="Nombre">
-          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} />
+          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} placeholder={group ? undefined : "Nombre (ej: Santander, Efectivo)"} />
         </Field>
-        {showCreatedHint && (
+        {group && showCreatedHint && (
           <p style={{ margin: "4px 0 -8px", fontSize: 13, fontFamily: "system-ui, sans-serif", color: "#3B6E62" }}>
             <strong>Grupo creado.</strong><br />Ahora agregá las cuentas de este grupo.
           </p>
         )}
-        <AccountGroupEditor group={group} accounts={accounts} reload={reload} showError={showError} onOpenAccount={setViewingAccountId} />
-        <button style={styles.btnDashed} onClick={() => setCreating(true)}>
-          <Plus size={16} /> Nueva cuenta
-        </button>
+        {group && (
+          <>
+            <AccountGroupEditor group={group} accounts={accounts} reload={reload} showError={showError} onOpenAccount={setViewingAccountId} />
+            <button style={styles.btnDashed} onClick={() => setCreating(true)}>
+              <Plus size={16} /> Nueva cuenta
+            </button>
+          </>
+        )}
       </div>
       <Footer>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onBack}>Cancelar</button>
         <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }} onClick={handleSave} disabled={saving || !canSave}>
-          {saving ? "Guardando…" : "Guardar"}
+          {saving ? (group ? "Guardando…" : "Creando…") : (group ? "Guardar" : "Crear")}
         </button>
       </Footer>
     </div>
@@ -457,14 +437,17 @@ export function ManageAllAccounts({ session, groups, accounts, accountTotals, se
 
   if (creating) {
     return (
-      <NewAccountForm
+      <AccountDetailScreen
         session={session}
+        account={null}
         groups={groups.filter((g) => !g.deleted)}
         accounts={accounts}
+        accountTotals={accountTotals}
+        settings={settings}
         reload={reload}
         showError={showError}
-        onCancel={() => setCreating(false)}
-        onCreated={() => setCreating(false)}
+        showInfo={showInfo}
+        onBack={() => setCreating(false)}
       />
     );
   }
@@ -506,119 +489,6 @@ export function ManageAllAccounts({ session, groups, accounts, accountTotals, se
           </div>
         ))}
       </div>
-    </div>
-  );
-}
-
-// Formulario de "nueva cuenta" propio (TopBar + Footer, como el resto de la
-// app) — reemplaza el input+botón sueltos que había repetidos por cada grupo.
-// El select de grupo solo aparece si hay más de uno para elegir (en
-// ManageAccounts, llamado desde un solo grupo, no hace falta preguntarlo).
-// Misma estructura que AccountDetailScreen (Grupo, Nombre+ícono, Tarjeta de
-// crédito + sub-campos, Ocultar) — esta es su contraparte de creación.
-function NewAccountForm({ session, groups, accounts, defaultGroupId, groupLocked = false, reload, showError, onCancel, onCreated }) {
-  const [groupId, setGroupId] = useState(defaultGroupId || groups[0]?.id || "");
-  const [name, setName] = useState("");
-  const [icon, setIcon] = useState("");
-  const [isCreditCard, setIsCreditCard] = useState(false);
-  const [paymentAccountId, setPaymentAccountId] = useState("");
-  const [statementDay, setStatementDay] = useState(1);
-  const [paymentDay, setPaymentDay] = useState(1);
-  const [autoPay, setAutoPay] = useState(false);
-  const [hidden, setHidden] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  const canSave = !!groupId && !!name.trim();
-
-  const create = async () => {
-    if (!canSave) return;
-    setSaving(true);
-    try {
-      const { error } = await supabase.from("mm_accounts").insert({
-        user_id: session.userId, group_id: groupId, name: name.trim(), icon: icon || null, sort_order: 999,
-        is_credit_card: isCreditCard,
-        payment_account_id: isCreditCard ? (paymentAccountId || null) : null,
-        statement_day: isCreditCard ? statementDay : null,
-        payment_day: isCreditCard ? paymentDay : null,
-        auto_pay: isCreditCard ? autoPay : false,
-        hidden,
-      });
-      if (error) throw error;
-      await reload();
-      onCreated();
-    } catch (e) { showError(`No se pudo crear: ${e?.message || e}`); }
-    setSaving(false);
-  };
-
-  return (
-    <div style={styles.screen}>
-      <TopBar title="Nueva cuenta" onBack={onCancel} />
-      <div style={{ ...styles.form, paddingBottom: 100 }}>
-        {groups.length > 1 && (
-          <Field label="Grupo">
-            <select style={{ ...styles.input, opacity: groupLocked ? 0.6 : 1 }} value={groupId} onChange={(e) => setGroupId(e.target.value)} disabled={groupLocked}>
-              {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-            </select>
-          </Field>
-        )}
-        <Field label="Nombre">
-          <div style={{ display: "flex", gap: 8 }}>
-            <IconInput value={icon} onChange={setIcon} />
-            <input style={{ ...styles.input, flex: 1 }} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre (ej: Saldo, Ahorros)" onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
-          </div>
-        </Field>
-
-        <ToggleField
-          label="Tarjeta de crédito"
-          description="Los gastos se reflejan como saldo a pagar según un ciclo de facturación."
-          checked={isCreditCard}
-          onChange={setIsCreditCard}
-        />
-
-        {isCreditCard && (
-          <>
-            <Field label="Cuenta de pago" info="Cuenta de la cual se pagará esta tarjeta de crédito.">
-              <PickerField
-                value={paymentAccountId}
-                onChange={setPaymentAccountId}
-                placeholder="Elegí una cuenta"
-                groups={[{ label: null, items: accounts.filter((a) => !a.deleted && !a.is_credit_card).map((a) => ({ value: a.id, label: a.name, icon: a.icon })) }]}
-              />
-            </Field>
-            <div style={{ display: "flex", gap: 10 }}>
-              <Field label="Fecha de liquidación" info="Día del mes en que cierra el ciclo de facturación de la tarjeta." style={{ flex: 1 }}>
-                <select style={styles.input} value={statementDay} onChange={(e) => setStatementDay(parseInt(e.target.value, 10))}>
-                  {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{d}</option>)}
-                </select>
-              </Field>
-              <Field label="Fecha de pago" info="Día del mes en que se realiza el pago automático de la tarjeta." style={{ flex: 1 }}>
-                <select style={styles.input} value={paymentDay} onChange={(e) => setPaymentDay(parseInt(e.target.value, 10))}>
-                  {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{d}</option>)}
-                </select>
-              </Field>
-            </div>
-            <ToggleField
-              label="Pago automático"
-              description="Transfiere automáticamente el saldo a pagar en la fecha de pago."
-              checked={autoPay}
-              onChange={setAutoPay}
-            />
-          </>
-        )}
-
-        <ToggleField
-          label="Ocultar"
-          description="Oculta esta cuenta del listado de Cuentas."
-          checked={hidden}
-          onChange={setHidden}
-        />
-      </div>
-      <Footer>
-        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
-        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }} onClick={create} disabled={saving || !canSave}>
-          {saving ? "Creando…" : "Crear"}
-        </button>
-      </Footer>
     </div>
   );
 }

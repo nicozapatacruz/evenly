@@ -11,30 +11,32 @@ const DAY_OPTIONS = Array.from({ length: 31 }, (_, i) => i + 1);
 const balanceColor = (n) => (n > 0.004 ? "#3B6E62" : n < -0.004 ? "#B0473A" : "#6B6355");
 
 /* =========================================================================
-   DETALLE DE CUENTA — reemplaza la edición inline que había en la fila
-   (nombre/ícono/ocultar/borrar) y agrega lo de tarjeta de crédito. Es un
-   formulario con Footer Cancelar/Guardar (no autoguarda como Configuración)
-   — mismos campos y misma estructura que NewAccountForm, esto es su
-   contraparte de edición.
+   FORMULARIO DE CUENTA — un solo componente para crear y editar (mismo
+   patrón que TransactionForm: `account` null es "nueva", con datos es
+   "editar"). `groupLocked` aplica en los dos modos por igual — si entraste
+   desde un grupo puntual (Editar grupo), no tiene sentido crear NI mover una
+   cuenta a otro grupo desde ahí.
    ========================================================================= */
 
-export default function AccountDetailScreen({ session, account, groups, accounts, accountTotals, settings, reload, showError, showInfo, onBack, onDeleted }) {
-  const [groupId, setGroupId] = useState(account.group_id);
-  const [name, setName] = useState(account.name);
-  const [icon, setIcon] = useState(account.icon || "");
-  const [isCreditCard, setIsCreditCard] = useState(account.is_credit_card);
-  const [paymentAccountId, setPaymentAccountId] = useState(account.payment_account_id || "");
-  const [statementDay, setStatementDay] = useState(account.statement_day || 1);
-  const [paymentDay, setPaymentDay] = useState(account.payment_day || 1);
-  const [autoPay, setAutoPay] = useState(account.auto_pay);
-  const [hidden, setHidden] = useState(account.hidden);
+export default function AccountDetailScreen({ session, account = null, groups, accounts, accountTotals, settings, defaultGroupId, groupLocked = false, reload, showError, showInfo, onBack, onDeleted }) {
+  const [groupId, setGroupId] = useState(account?.group_id || defaultGroupId || groups[0]?.id || "");
+  const [name, setName] = useState(account?.name || "");
+  const [icon, setIcon] = useState(account?.icon || "");
+  const [isCreditCard, setIsCreditCard] = useState(account?.is_credit_card || false);
+  const [paymentAccountId, setPaymentAccountId] = useState(account?.payment_account_id || "");
+  const [statementDay, setStatementDay] = useState(account?.statement_day || 1);
+  const [paymentDay, setPaymentDay] = useState(account?.payment_day || 1);
+  const [autoPay, setAutoPay] = useState(account?.auto_pay || false);
+  const [hidden, setHidden] = useState(account?.hidden || false);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const { transactions: ccTx } = useCreditCardActivity(session.userId, isCreditCard ? [account.id] : []);
+  const { transactions: ccTx } = useCreditCardActivity(session.userId, isCreditCard && account ? [account.id] : []);
 
-  const isDirty = (
+  // Al crear siempre es "dirty" (no hay un original con qué comparar) —
+  // mismo criterio que TransactionForm.
+  const isDirty = !account || (
     groupId !== account.group_id
     || name.trim() !== account.name
     || icon !== (account.icon || "")
@@ -49,16 +51,16 @@ export default function AccountDetailScreen({ session, account, groups, accounts
 
   // Sin otras tarjetas de crédito como opción — no tiene sentido pagar una
   // tarjeta con otra.
-  const paymentAccountOptions = accounts.filter((a) => a.id !== account.id && !a.deleted && !a.is_credit_card);
+  const paymentAccountOptions = accounts.filter((a) => (!account || a.id !== account.id) && !a.deleted && !a.is_credit_card);
   const balance = isCreditCard
-    ? computeCreditCardBalance(account.id, ccTx, statementDay)
-    : { total: accountBalance(account.id, accountTotals) };
+    ? computeCreditCardBalance(account?.id, ccTx, statementDay)
+    : { total: account ? accountBalance(account.id, accountTotals) : 0 };
 
   const handleSave = async () => {
     if (!canSave) return;
     setSaving(true);
     try {
-      const { error } = await supabase.from("mm_accounts").update({
+      const payload = {
         group_id: groupId,
         name: name.trim(),
         icon: icon || null,
@@ -68,11 +70,14 @@ export default function AccountDetailScreen({ session, account, groups, accounts
         payment_day: isCreditCard ? paymentDay : null,
         auto_pay: isCreditCard ? autoPay : false,
         hidden,
-      }).eq("id", account.id);
+      };
+      const { error } = account
+        ? await supabase.from("mm_accounts").update(payload).eq("id", account.id)
+        : await supabase.from("mm_accounts").insert({ user_id: session.userId, sort_order: 999, ...payload });
       if (error) throw error;
       await reload();
       onBack();
-    } catch (e) { showError(`No se pudo guardar: ${e?.message || e}`); }
+    } catch (e) { showError(`No se pudo ${account ? "guardar" : "crear"}: ${e?.message || e}`); }
     setSaving(false);
   };
 
@@ -91,15 +96,15 @@ export default function AccountDetailScreen({ session, account, groups, accounts
   return (
     <div style={styles.screen}>
       <TopBar
-        title="Editar cuenta"
+        title={account ? "Editar cuenta" : "Nueva cuenta"}
         onBack={onBack}
-        right={
+        right={account && (
           <button style={styles.iconBtnGhost} onClick={() => setConfirmDelete(true)} aria-label="Eliminar">
             <Trash2 size={18} />
           </button>
-        }
+        )}
       />
-      {confirmDelete && (
+      {account && confirmDelete && (
         <ConfirmInline
           message={`¿Eliminar "${account.name}"?`}
           confirmLabel="Eliminar"
@@ -111,7 +116,7 @@ export default function AccountDetailScreen({ session, account, groups, accounts
       )}
       <div style={{ ...styles.form, paddingBottom: 100 }}>
         <Field label="Grupo">
-          <select style={styles.input} value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+          <select style={{ ...styles.input, opacity: groupLocked ? 0.6 : 1 }} value={groupId} onChange={(e) => setGroupId(e.target.value)} disabled={groupLocked}>
             {groups.filter((g) => !g.deleted).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
         </Field>
@@ -119,7 +124,7 @@ export default function AccountDetailScreen({ session, account, groups, accounts
         <Field label="Nombre">
           <div style={{ display: "flex", gap: 8 }}>
             <IconInput value={icon} onChange={setIcon} />
-            <input style={{ ...styles.input, flex: 1 }} value={name} onChange={(e) => setName(e.target.value)} />
+            <input style={{ ...styles.input, flex: 1 }} value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre (ej: Saldo, Ahorros)" />
           </div>
         </Field>
 
@@ -161,25 +166,27 @@ export default function AccountDetailScreen({ session, account, groups, accounts
           </>
         )}
 
-        <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
-          {isCreditCard ? (
-            <>
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", borderBottom: "1px solid #F0EBE2" }}>
-                <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 14 }}>Saldo a pagar</span>
-                <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 14, fontWeight: 700, color: balanceColor(balance.pasado) }}>{money(balance.pasado, settings.main_currency)}</span>
-              </div>
+        {account && (
+          <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
+            {isCreditCard ? (
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", borderBottom: "1px solid #F0EBE2" }}>
+                  <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 14 }}>Saldo a pagar</span>
+                  <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 14, fontWeight: 700, color: balanceColor(balance.pasado) }}>{money(balance.pasado, settings.main_currency)}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px" }}>
+                  <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 14 }}>Saldo restante</span>
+                  <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 14, fontWeight: 700, color: balanceColor(balance.actual) }}>{money(balance.actual, settings.main_currency)}</span>
+                </div>
+              </>
+            ) : (
               <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px" }}>
-                <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 14 }}>Saldo restante</span>
-                <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 14, fontWeight: 700, color: balanceColor(balance.actual) }}>{money(balance.actual, settings.main_currency)}</span>
+                <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 14 }}>Saldo</span>
+                <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 14, fontWeight: 700, color: balanceColor(balance.total) }}>{money(balance.total, settings.main_currency)}</span>
               </div>
-            </>
-          ) : (
-            <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px" }}>
-              <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 14 }}>Saldo</span>
-              <span style={{ fontFamily: "system-ui, sans-serif", fontSize: 14, fontWeight: 700, color: balanceColor(balance.total) }}>{money(balance.total, settings.main_currency)}</span>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         <ToggleField
           label="Ocultar"
@@ -191,7 +198,7 @@ export default function AccountDetailScreen({ session, account, groups, accounts
       <Footer>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onBack}>Cancelar</button>
         <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }} onClick={handleSave} disabled={saving || !canSave}>
-          {saving ? "Guardando…" : "Guardar"}
+          {saving ? (account ? "Guardando…" : "Creando…") : (account ? "Guardar" : "Crear")}
         </button>
       </Footer>
     </div>

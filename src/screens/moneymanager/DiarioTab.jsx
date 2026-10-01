@@ -1,9 +1,10 @@
 import React from "react";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, SlidersHorizontal } from "lucide-react";
 import { styles } from "../../lib/styles.js";
-import { RootHeader, MonthNav, TodayButton, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
+import { RootHeader, MonthNav, TodayButton, FiltersActiveBanner, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
 import { useMonthTransactions } from "../../lib/moneyManagerData.js";
+import { hasActiveFilters, matchesFilters } from "../../lib/filterHelpers.js";
 import { TransactionDayGroups } from "./TransactionDayGroups.jsx";
 
 /* =========================================================================
@@ -13,15 +14,16 @@ import { TransactionDayGroups } from "./TransactionDayGroups.jsx";
    Resumen que acá no replicamos.
    ========================================================================= */
 
-export default function DiarioTab({ userId, settings, groups, accounts, categories, viewMonth, setViewMonth, onNewTransaction, onEditTransaction, onOpenSearch }) {
+export default function DiarioTab({ userId, settings, groups, accounts, categories, viewMonth, setViewMonth, onNewTransaction, onEditTransaction, onOpenSearch, filters, onOpenFilters, onClearFilters }) {
   // Solo pedimos las transacciones del mes visible (no toda la tabla) — se
   // refetchea solo cuando cambiás de mes.
   const { transactions: monthTx, loading } = useMonthTransactions(userId, viewMonth);
   const swipeHandlers = useMonthSwipe(viewMonth, setViewMonth);
   const slide = useMonthSlide(viewMonth);
+  const filtered = hasActiveFilters(filters) ? monthTx.filter((t) => matchesFilters(t, filters)) : monthTx;
 
-  const monthIncome = monthTx.filter((t) => t.type === "income").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
-  const monthExpense = monthTx.filter((t) => t.type === "expense").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+  const monthIncome = filtered.filter((t) => t.type === "income").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+  const monthExpense = filtered.filter((t) => t.type === "expense").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
 
   return (
     <div style={{ ...styles.screen, display: "flex", flexDirection: "column" }}>
@@ -30,6 +32,9 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
           title="Transacciones"
           right={
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <button style={styles.iconBtnGhost} onClick={onOpenFilters} aria-label="Filtros">
+                <SlidersHorizontal size={19} />
+              </button>
               <button style={styles.iconBtnGhost} onClick={onOpenSearch} aria-label="Buscar">
                 <Search size={19} />
               </button>
@@ -56,18 +61,21 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
         </div>
       </div>
       <div key={slide.key} className={slide.className} style={{ ...styles.form, flex: 1, paddingTop: 12, paddingBottom: 100 }} {...swipeHandlers}>
+        {hasActiveFilters(filters) && <FiltersActiveBanner onOpen={onOpenFilters} onClear={onClearFilters} />}
         {loading ? (
           <div style={styles.emptyState}>
             <p style={styles.emptyTitle}>Cargando transacciones…</p>
           </div>
-        ) : monthTx.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <div style={styles.emptyState}>
-            <p style={styles.emptyTitle}>Nada registrado este mes</p>
-            <p style={{ ...styles.muted, padding: 0 }}>Tocá el "+" de abajo para anotar un ingreso, gasto o transferencia.</p>
+            <p style={styles.emptyTitle}>{monthTx.length === 0 ? "Nada registrado este mes" : "Nada coincide con el filtro"}</p>
+            <p style={{ ...styles.muted, padding: 0 }}>
+              {monthTx.length === 0 ? 'Tocá el "+" de abajo para anotar un ingreso, gasto o transferencia.' : "Probá cambiando los filtros."}
+            </p>
           </div>
         ) : (
           <TransactionDayGroups
-            transactions={monthTx}
+            transactions={filtered}
             settings={settings}
             accounts={accounts}
             categories={categories}

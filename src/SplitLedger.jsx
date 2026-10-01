@@ -11,7 +11,33 @@ import TransactionForm from "./screens/moneymanager/TransactionForm.jsx";
 import EstadisticasTab from "./screens/moneymanager/EstadisticasTab.jsx";
 import CategoryDrillDownScreen from "./screens/moneymanager/CategoryDrillDownScreen.jsx";
 import SearchScreen from "./screens/moneymanager/SearchScreen.jsx";
+import { FiltersPanel } from "./screens/moneymanager/FiltersPanel.jsx";
 import { useMoneyManager } from "./lib/moneyManagerData.js";
+import { EMPTY_FILTERS } from "./lib/filterHelpers.js";
+
+// Wrapper fino: FiltersPanel necesita un "draft" propio (para poder
+// Cancelar/Limpiar sin tocar el filtro ya aplicado hasta tocar Aplicar) —
+// ambos entrypoints (Transacciones y Estadísticas) comparten el mismo
+// filtro persistente de abajo, pero cada uno entra/sale a su propia pantalla.
+function DiarioFiltersScreen({ filters, setFilters, groups, accounts, categories, onBack }) {
+  const [draft, setDraft] = useState(filters);
+  const accountGroups = groups
+    .filter((g) => !g.deleted)
+    .map((g) => ({ label: g.name, items: accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })) }))
+    .filter((g) => g.items.length > 0);
+  return (
+    <FiltersPanel
+      draft={draft}
+      setDraft={setDraft}
+      filters={filters}
+      accountGroups={accountGroups}
+      categories={categories}
+      onBack={onBack}
+      onApply={() => { setFilters(draft); onBack(); }}
+      onClear={() => setDraft(EMPTY_FILTERS)}
+    />
+  );
+}
 
 /* =========================================================================
    AUTH — usuarios, sesión, invitaciones
@@ -534,7 +560,23 @@ function AppShell({ session, onLogout, refreshProfile }) {
   // Viven acá (no dentro de SearchScreen) para sobrevivir el viaje de ida y
   // vuelta a "editar transacción" — ese screen desmonta SearchScreen.
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchFilters, setSearchFilters] = useState({ accountIds: [], categoryIds: [], dateFrom: "", dateTo: "", amountMin: "", amountMax: "" });
+  const [searchFilters, setSearchFilters] = useState(EMPTY_FILTERS);
+  // Filtro persistente de Transacciones/Estadísticas (distinto del Buscador:
+  // este no busca texto, filtra lo que ya ves día a día) — en localStorage
+  // para que sobreviva a cerrar la app, a propósito simple (sin "filtros
+  // guardados" con nombre): es UN filtro estándar que dejás puesto, no
+  // varios que alternás.
+  const [diarioFilters, setDiarioFilters] = useState(() => {
+    try {
+      const saved = localStorage.getItem("evenly_diarioFilters");
+      return saved ? JSON.parse(saved) : EMPTY_FILTERS;
+    } catch {
+      return EMPTY_FILTERS;
+    }
+  });
+  useEffect(() => {
+    localStorage.setItem("evenly_diarioFilters", JSON.stringify(diarioFilters));
+  }, [diarioFilters]);
   const [changingPassword, setChangingPassword] = useState(false);
   const [viewingProfile, setViewingProfile] = useState(false);
   const [creatingRecurring, setCreatingRecurring] = useState(false);
@@ -746,6 +788,21 @@ function AppShell({ session, onLogout, refreshProfile }) {
           viewMonth={ledgerMonth}
           setViewMonth={setLedgerMonth}
           onDrillDown={(drill) => setStatsView({ screen: "drilldown", ...drill })}
+          filters={diarioFilters}
+          onOpenFilters={() => setStatsView({ screen: "filters" })}
+          onClearFilters={() => setDiarioFilters(EMPTY_FILTERS)}
+          onOpenSearch={() => { setActiveTab("ledger"); setLedgerView({ screen: "search" }); }}
+        />
+      )}
+
+      {activeTab === "stats" && statsView.screen === "filters" && (
+        <DiarioFiltersScreen
+          filters={diarioFilters}
+          setFilters={setDiarioFilters}
+          groups={moneyManager.groups}
+          accounts={moneyManager.accounts}
+          categories={moneyManager.categories}
+          onBack={() => setStatsView({ screen: "list" })}
         />
       )}
 
@@ -803,6 +860,20 @@ function AppShell({ session, onLogout, refreshProfile }) {
           onNewTransaction={(date) => setLedgerView({ screen: "newTransaction", date, returnTo: "list" })}
           onEditTransaction={(t) => setLedgerView({ screen: "editTransaction", transaction: t, returnTo: "list" })}
           onOpenSearch={() => setLedgerView({ screen: "search" })}
+          filters={diarioFilters}
+          onOpenFilters={() => setLedgerView({ screen: "filters" })}
+          onClearFilters={() => setDiarioFilters(EMPTY_FILTERS)}
+        />
+      )}
+
+      {activeTab === "ledger" && ledgerView.screen === "filters" && (
+        <DiarioFiltersScreen
+          filters={diarioFilters}
+          setFilters={setDiarioFilters}
+          groups={moneyManager.groups}
+          accounts={moneyManager.accounts}
+          categories={moneyManager.categories}
+          onBack={() => setLedgerView({ screen: "list" })}
         />
       )}
 

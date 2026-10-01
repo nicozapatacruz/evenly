@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { Search, SlidersHorizontal } from "lucide-react";
 import { styles } from "../../lib/styles.js";
-import { RootHeader, MonthNav, TodayButton, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
+import { RootHeader, MonthNav, TodayButton, FiltersActiveBanner, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
-import { useCategoryMonthTotals } from "../../lib/moneyManagerData.js";
+import { useStatsCategoryTotals } from "../../lib/moneyManagerData.js";
+import { hasActiveFilters } from "../../lib/filterHelpers.js";
 
 const MONTH_LABEL = (d) => d.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
 
@@ -32,9 +34,10 @@ function arcPath(cx, cy, r, startAngle, endAngle) {
   return `M ${cx} ${cy} L ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 0 ${end.x} ${end.y} Z`;
 }
 
-export default function EstadisticasTab({ userId, settings, categories, viewMonth, setViewMonth, onDrillDown }) {
+export default function EstadisticasTab({ userId, settings, categories, viewMonth, setViewMonth, onDrillDown, filters, onOpenFilters, onClearFilters, onOpenSearch }) {
   const [type, setType] = useState("expense");
   const [selectedKey, setSelectedKey] = useState(null);
+  const filtering = hasActiveFilters(filters);
 
   // Si cambiás de mes o de tipo, las porciones son otras — no tiene sentido
   // que quede resaltada una selección de un gráfico que ya no existe.
@@ -43,12 +46,7 @@ export default function EstadisticasTab({ userId, settings, categories, viewMont
   const swipeHandlers = useMonthSwipe(viewMonth, setViewMonth);
   const slide = useMonthSlide(viewMonth);
 
-  // Totales ya agregados por categoría del lado del servidor (vista
-  // mm_category_month_totals) — no traemos transacción por transacción.
-  // Se piden los dos tipos siempre (no solo el seleccionado), porque los
-  // botones Ingreso/Gastos muestran el total de cada uno todo el tiempo.
-  const { totals: incomeTotals, loading: incomeLoading } = useCategoryMonthTotals(userId, viewMonth, "income");
-  const { totals: expenseTotals, loading: expenseLoading } = useCategoryMonthTotals(userId, viewMonth, "expense");
+  const { incomeTotals, expenseTotals, incomeLoading, expenseLoading, monthTxCount } = useStatsCategoryTotals(userId, viewMonth, filters);
   const totals = type === "income" ? incomeTotals : expenseTotals;
   const loading = type === "income" ? incomeLoading : expenseLoading;
   const incomeSum = useMemo(() => incomeTotals.reduce((s, t) => s + t.total, 0), [incomeTotals]);
@@ -86,7 +84,20 @@ export default function EstadisticasTab({ userId, settings, categories, viewMont
   return (
     <div style={{ ...styles.screen, display: "flex", flexDirection: "column" }}>
       <div style={{ position: "sticky", top: 0, zIndex: 5 }}>
-        <RootHeader title="Estadísticas" right={<TodayButton viewMonth={viewMonth} setViewMonth={setViewMonth} />} />
+        <RootHeader
+          title="Estadísticas"
+          right={
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <button style={styles.iconBtnGhost} onClick={onOpenFilters} aria-label="Filtros">
+                <SlidersHorizontal size={19} />
+              </button>
+              <button style={styles.iconBtnGhost} onClick={onOpenSearch} aria-label="Buscar">
+                <Search size={19} />
+              </button>
+              <TodayButton viewMonth={viewMonth} setViewMonth={setViewMonth} />
+            </div>
+          }
+        />
         <div style={styles.subHeader} {...swipeHandlers}>
           <MonthNav viewMonth={viewMonth} setViewMonth={setViewMonth} />
           <div style={{ ...styles.tabRow, padding: 0 }}>
@@ -108,14 +119,17 @@ export default function EstadisticasTab({ userId, settings, categories, viewMont
         </div>
       </div>
       <div key={slide.key} className={slide.className} style={{ ...styles.form, flex: 1, paddingTop: 12 }} {...swipeHandlers}>
+        {filtering && <FiltersActiveBanner onOpen={onOpenFilters} onClear={onClearFilters} />}
         {loading ? (
           <div style={styles.emptyState}>
             <p style={styles.emptyTitle}>Cargando…</p>
           </div>
         ) : arcs.length === 0 ? (
           <div style={styles.emptyState}>
-            <p style={styles.emptyTitle}>Nada registrado este mes</p>
-            <p style={{ ...styles.muted, padding: 0 }}>{type === "income" ? "Ingresos" : "Gastos"} de {MONTH_LABEL(viewMonth)} van a aparecer acá.</p>
+            <p style={styles.emptyTitle}>{filtering && monthTxCount > 0 ? "Nada coincide con el filtro" : "Nada registrado este mes"}</p>
+            <p style={{ ...styles.muted, padding: 0 }}>
+              {filtering && monthTxCount > 0 ? "Probá cambiando los filtros." : `${type === "income" ? "Ingresos" : "Gastos"} de ${MONTH_LABEL(viewMonth)} van a aparecer acá.`}
+            </p>
           </div>
         ) : (
           <div onClick={() => setSelectedKey(null)}>

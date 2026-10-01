@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabaseClient.js";
 import { dateInputValueInZone, parseAmountInput } from "./helpers.jsx";
+import { hasActiveFilters, matchesFilters } from "./filterHelpers.js";
 
 // Todo lo de Money Manager vive en tablas con prefijo mm_, separadas de las
 // de Split Ledger a propósito (ver memoria "money-manager-categories-merge-pending":
@@ -259,7 +260,11 @@ export function useMoneyManager(userId) {
 // Transacciones del mes visible (Transacciones/Diario) — se pide acotado por
 // rango de fechas en vez de traer toda la tabla y filtrar en el navegador.
 // Se refetchea cuando cambia el mes.
-export function useMonthTransactions(userId, viewMonth) {
+// `enabled=false` (ej. Estadísticas cuando NO hay filtros activos, que usa
+// la vista agregada en vez de esto) evita pedir datos que no se van a usar —
+// tiene que seguir siendo un hook llamado siempre (reglas de hooks), solo que
+// no dispara la consulta real.
+export function useMonthTransactions(userId, viewMonth, enabled = true) {
   const year = viewMonth.getFullYear();
   const month = viewMonth.getMonth();
   const [transactions, setTransactions] = useState([]);
@@ -271,7 +276,7 @@ export function useMonthTransactions(userId, viewMonth) {
   useEffect(() => { setTransactions([]); }, [year, month]);
 
   const load = useCallback(async () => {
-    if (!userId) { setLoading(false); return; }
+    if (!userId || !enabled) { setLoading(false); return; }
     setLoading(true);
     // Rango ampliado ±1 día: a qué mes/día pertenece cada transacción se
     // decide más abajo por SU PROPIA zona horaria (columna timezone), no por
@@ -300,7 +305,7 @@ export function useMonthTransactions(userId, viewMonth) {
     const filtered = (data || []).filter((t) => dateInputValueInZone(new Date(t.date).getTime(), t.timezone).startsWith(monthKey));
     setTransactions(filtered);
     setLoading(false);
-  }, [userId, year, month]);
+  }, [userId, year, month, enabled]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -375,7 +380,11 @@ export function useAccountMonthTotals(userId, accountId) {
 // Totales por categoría del mes visible (Estadísticas) — agregados del lado
 // del servidor (vista mm_category_month_totals, ver .mm_views.sql), filtrados
 // por tipo (ingreso/gasto) + año/mes. Se refetchea al cambiar mes o tipo.
-export function useCategoryMonthTotals(userId, viewMonth, type) {
+// `enabled=false` (Estadísticas cuando SÍ hay filtros activos, que usa
+// useMonthTransactions + agregación en el cliente en vez de esta vista) evita
+// pedir datos que no se van a usar — ver la nota de enabled en
+// useMonthTransactions, mismo criterio.
+export function useCategoryMonthTotals(userId, viewMonth, type, enabled = true) {
   const year = viewMonth.getFullYear();
   const month = viewMonth.getMonth() + 1;
   const [totals, setTotals] = useState([]);
@@ -387,7 +396,7 @@ export function useCategoryMonthTotals(userId, viewMonth, type) {
   useEffect(() => { setTotals([]); }, [year, month, type]);
 
   const load = useCallback(async () => {
-    if (!userId) { setLoading(false); return; }
+    if (!userId || !enabled) { setLoading(false); return; }
     setLoading(true);
     const { data } = await supabase
       .from("mm_category_month_totals")
@@ -398,11 +407,48 @@ export function useCategoryMonthTotals(userId, viewMonth, type) {
       .eq("month", month);
     setTotals(data || []);
     setLoading(false);
-  }, [userId, year, month, type]);
+  }, [userId, year, month, type, enabled]);
 
   useEffect(() => { load(); }, [load]);
 
   return { totals, loading };
+}
+
+// Agrega transacciones ya traídas (crudo) por categoría — mismo shape
+// {category_id, total} que devuelve mm_category_month_totals, para que
+// quien consuma el resultado no tenga que saber de dónde vino el dato.
+function aggregateByCategory(transactions, type) {
+  const map = new Map();
+  for (const t of transactions) {
+    if (t.type !== type) continue;
+    const amount = t.amount_main ?? t.amount;
+    map.set(t.category_id, (map.get(t.category_id) || 0) + amount);
+  }
+  return [...map.entries()].map(([category_id, total]) => ({ category_id, total }));
+}
+
+// Totales por categoría para Estadísticas, con soporte de filtros (cuenta/
+// categoría/importe/fecha) que la vista agregada no contempla. Sin filtros:
+// usa mm_category_month_totals (rápido, no trae transacción por
+// transacción). Con filtros activos: trae el mes crudo (useMonthTransactions)
+// y agrega acá — cada camino deshabilita el que no usa, para no pedir datos
+// de más en ningún caso. `monthTxCount` se expone para distinguir "no hay
+// nada este mes" de "el filtro no dejó nada" en la UI.
+export function useStatsCategoryTotals(userId, viewMonth, filters) {
+  const filtering = hasActiveFilters(filters);
+  const { totals: incomeAgg, loading: incomeAggLoading } = useCategoryMonthTotals(userId, viewMonth, "income", !filtering);
+  const { totals: expenseAgg, loading: expenseAggLoading } = useCategoryMonthTotals(userId, viewMonth, "expense", !filtering);
+  const { transactions: monthTx, loading: monthTxLoading } = useMonthTransactions(userId, viewMonth, filtering);
+  const filteredTx = useMemo(() => (filtering ? monthTx.filter((t) => matchesFilters(t, filters)) : monthTx), [monthTx, filtering, filters]);
+
+  const incomeTotals = filtering ? aggregateByCategory(filteredTx, "income") : incomeAgg;
+  const expenseTotals = filtering ? aggregateByCategory(filteredTx, "expense") : expenseAgg;
+  // Separado por tipo (no combinado) — así el que mira "Gastos" no se queda
+  // esperando a que termine "Ingreso" si ese todavía no llegó, y viceversa.
+  const incomeLoading = filtering ? monthTxLoading : incomeAggLoading;
+  const expenseLoading = filtering ? monthTxLoading : expenseAggLoading;
+
+  return { incomeTotals, expenseTotals, incomeLoading, expenseLoading, monthTxCount: monthTx.length };
 }
 
 // Serie mensual de una sola categoría (drill-down de Estadísticas) — trae

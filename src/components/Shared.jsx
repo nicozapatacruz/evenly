@@ -207,6 +207,25 @@ export function useMonthSlide(viewMonth) {
 // Botón "Hoy" para el header (misma posición que el lápiz de Cuentas) — solo
 // aparece si te alejaste del mes actual, para volver de un salto sin tener
 // que contar flechitas.
+// Banner "Filtros activos" — a propósito un elemento pegado al contenido
+// (no un cambio de color/ícono en el header, fácil de no notar) para que no
+// se te olvide que estás viendo una versión filtrada de Transacciones o
+// Estadísticas. Tocar el cuerpo abre Filtros; la X (zona de toque propia,
+// separada) los limpia directo — sin confirmar, porque es barato de
+// deshacer (volvés a Filtros y los aplicás de nuevo, no se pierde nada).
+export function FiltersActiveBanner({ onOpen, onClear }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "7px 10px 7px 14px", borderRadius: 20, background: "#FBEDE7", border: "1px solid #EBC9BA", marginBottom: 10 }}>
+      <button type="button" onClick={onOpen} style={{ flex: 1, background: "none", border: "none", padding: 0, textAlign: "left", fontSize: 13, fontWeight: 600, fontFamily: "system-ui, sans-serif", color: "#C75D3B", cursor: "pointer" }}>
+        Filtros activos
+      </button>
+      <button type="button" onClick={onClear} aria-label="Quitar filtros" style={{ background: "none", border: "none", padding: 6, display: "flex", color: "#C75D3B", cursor: "pointer" }}>
+        <X size={15} />
+      </button>
+    </div>
+  );
+}
+
 export function TodayButton({ viewMonth, setViewMonth }) {
   const now = new Date();
   const isCurrentMonth = viewMonth.getFullYear() === now.getFullYear() && viewMonth.getMonth() === now.getMonth();

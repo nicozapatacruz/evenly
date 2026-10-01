@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Search as SearchIcon, SlidersHorizontal, Trash2 } from "lucide-react";
 import { styles } from "../../lib/styles.js";
-import { TopBar, Footer, Field, MultiPickerField } from "../../components/Shared.jsx";
+import { TopBar } from "../../components/Shared.jsx";
 import { money, dateInputValueInZone, measureTextWidth } from "../../lib/helpers.jsx";
 import { useRecentNoteTitles, searchTransactions } from "../../lib/moneyManagerData.js";
+import { EMPTY_FILTERS, hasActiveFilters } from "../../lib/filterHelpers.js";
+import { FiltersPanel } from "./FiltersPanel.jsx";
 
 const DATE_COL_FONT = "11.5px system-ui, sans-serif";
 
@@ -12,80 +14,6 @@ const DATE_COL_FONT = "11.5px system-ui, sans-serif";
 function ddmmyyyy(ms, tz) {
   const [y, m, d] = dateInputValueInZone(ms, tz).split("-");
   return `${d}/${m}/${y}`;
-}
-
-const EMPTY_FILTERS = { accountIds: [], categoryIds: [], dateFrom: "", dateTo: "", amountMin: "", amountMax: "" };
-
-function hasActiveFilters(f) {
-  return f.accountIds.length > 0 || f.categoryIds.length > 0 || f.dateFrom || f.dateTo || f.amountMin || f.amountMax;
-}
-
-// Ordena los arrays antes de comparar — togglear cuenta/categoría en otro
-// orden (ej. sacar una del medio) no debería contar como "cambio" si el
-// conjunto resultante es el mismo que el ya aplicado.
-function filtersEqual(a, b) {
-  return [...a.accountIds].sort().join(",") === [...b.accountIds].sort().join(",")
-    && [...a.categoryIds].sort().join(",") === [...b.categoryIds].sort().join(",")
-    && a.dateFrom === b.dateFrom && a.dateTo === b.dateTo
-    && a.amountMin === b.amountMin && a.amountMax === b.amountMax;
-}
-
-function FiltersPanel({ draft, setDraft, filters, accountGroups, categories, onBack, onApply, onClear }) {
-  const [categoryFilterType, setCategoryFilterType] = useState("expense");
-  const categoryItems = categories.filter((c) => c.type === categoryFilterType && !c.deleted).map((c) => ({ value: c.id, label: c.name, icon: c.icon }));
-  const unchanged = filtersEqual(draft, filters);
-  const empty = filtersEqual(draft, EMPTY_FILTERS);
-
-  return (
-    <div style={styles.screen}>
-      <TopBar title="Filtros" onBack={onBack} />
-      <div style={styles.form}>
-        <div style={{ display: "flex", gap: 10 }}>
-          <Field label="Importe mínimo" style={{ flex: 1 }}>
-            <input style={styles.input} value={draft.amountMin} onChange={(e) => setDraft((d) => ({ ...d, amountMin: e.target.value }))} placeholder="0.00" inputMode="decimal" />
-          </Field>
-          <Field label="Importe máximo" style={{ flex: 1 }}>
-            <input style={styles.input} value={draft.amountMax} onChange={(e) => setDraft((d) => ({ ...d, amountMax: e.target.value }))} placeholder="0.00" inputMode="decimal" />
-          </Field>
-        </div>
-
-        <div style={{ display: "flex", gap: 10 }}>
-          <Field label="Desde" style={{ flex: 1 }}>
-            <input style={styles.input} type="date" value={draft.dateFrom} onChange={(e) => setDraft((d) => ({ ...d, dateFrom: e.target.value }))} />
-          </Field>
-          <Field label="Hasta" style={{ flex: 1 }}>
-            <input style={styles.input} type="date" value={draft.dateTo} onChange={(e) => setDraft((d) => ({ ...d, dateTo: e.target.value }))} />
-          </Field>
-        </div>
-
-        <Field label="Cuenta">
-          <MultiPickerField
-            value={draft.accountIds}
-            onChange={(v) => setDraft((d) => ({ ...d, accountIds: v }))}
-            groups={accountGroups}
-            placeholder="Todas"
-          />
-        </Field>
-
-        <Field label="Categoría">
-          <div style={{ display: "flex", gap: 8, marginBottom: 2 }}>
-            <button type="button" style={categoryFilterType === "expense" ? styles.tabActive : styles.tab} onClick={() => setCategoryFilterType("expense")}>Gastos</button>
-            <button type="button" style={categoryFilterType === "income" ? styles.tabActive : styles.tab} onClick={() => setCategoryFilterType("income")}>Ingreso</button>
-          </div>
-          <MultiPickerField
-            value={draft.categoryIds}
-            onChange={(v) => setDraft((d) => ({ ...d, categoryIds: v }))}
-            groups={[{ label: null, items: categoryItems }]}
-            placeholder="Todas"
-          />
-        </Field>
-      </div>
-      <Footer>
-        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0, opacity: empty ? 0.5 : 1 }} onClick={onClear} disabled={empty}>Limpiar</button>
-        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: unchanged ? 0.5 : 1 }} onClick={onApply} disabled={unchanged}>Aplicar</button>
-      </Footer>
-    </div>
-  );
 }
 
 // Fila de resultado — a propósito NO reutiliza TransactionDayGroups (la

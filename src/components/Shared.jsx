@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Camera, ChevronLeft, ChevronRight, Info, Trash2, User, X } from "lucide-react";
+import { ArrowLeft, Camera, Check, ChevronLeft, ChevronRight, Info, Trash2, User, X } from "lucide-react";
 import { styles } from "../lib/styles.js";
 import { ICON_OPTIONS } from "../lib/moneyManagerData.js";
 
@@ -509,6 +509,94 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", o
                 {/* Celdas vacías al final de la última fila — mismo gris que
                     usa la app original en vez de dejarlas en blanco. Sin
                     pointer-events: son relleno, no una opción elegible. */}
+                {Array.from({ length: (3 - (g.items.length % 3)) % 3 }).map((_, i) => (
+                  <div key={`empty-${i}`} style={{ background: "#F5F1E8", pointerEvents: "none" }} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Misma base visual que PickerField (grilla agrupada de 3 columnas) pero de
+// selección múltiple — pensado para los filtros del Buscador (cuenta,
+// categoría). Diferencias clave: tocar un ítem lo prende/apaga sin cerrar el
+// desplegable (tenés que poder elegir varios seguidos), y el botón de arriba
+// resume cuántos hay elegidos en vez de mostrar un solo valor.
+let multiPickerInstanceCounter = 0;
+
+export function MultiPickerField({ value, onChange, groups, placeholder = "Elegir" }) {
+  const [open, setOpen] = useState(false);
+  const idRef = useRef(null);
+  if (idRef.current === null) idRef.current = ++multiPickerInstanceCounter;
+  const containerRef = useRef(null);
+  const selectedItems = groups.flatMap((g) => g.items).filter((it) => value.includes(it.value));
+
+  useEffect(() => {
+    if (open) window.dispatchEvent(new CustomEvent("mm-picker-open", { detail: `multi-${idRef.current}` }));
+  }, [open]);
+  useEffect(() => {
+    const onOtherOpen = (e) => { if (e.detail !== `multi-${idRef.current}`) setOpen(false); };
+    window.addEventListener("mm-picker-open", onOtherOpen);
+    return () => window.removeEventListener("mm-picker-open", onOtherOpen);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("click", onClickOutside);
+    return () => document.removeEventListener("click", onClickOutside);
+  }, [open]);
+
+  const toggle = (v) => onChange(value.includes(v) ? value.filter((x) => x !== v) : [...value, v]);
+
+  const summary = selectedItems.length === 0 ? placeholder
+    : selectedItems.length === 1 ? selectedItems[0].label
+      : `${selectedItems.length} seleccionadas`;
+
+  return (
+    <div ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        style={{ ...styles.input, width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", borderRadius: open ? "10px 10px 0 0" : 10 }}
+      >
+        <span style={selectedItems.length === 0 ? { color: "#A89A87", fontSize: 13 } : undefined}>{summary}</span>
+      </button>
+      {open && (
+        <div style={{ border: "1px solid #DDD2BE", borderTop: "none", borderRadius: "0 0 10px 10px", background: "#fff", overflow: "hidden" }}>
+          {groups.map((g) => (
+            <div key={g.label || "flat"}>
+              {g.label && (
+                <p style={{ margin: 0, padding: "6px 10px", fontSize: 11, fontWeight: 700, color: "#A8754A", textTransform: "uppercase", letterSpacing: "0.04em", background: "#FAF7F2", borderBottom: "1px solid #F0EBE2", pointerEvents: "none" }}>
+                  {g.label}
+                </p>
+              )}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1, background: "#F0EBE2" }}>
+                {g.items.map((it) => {
+                  const checked = value.includes(it.value);
+                  return (
+                    <button
+                      type="button"
+                      key={it.value}
+                      onClick={(e) => { e.stopPropagation(); toggle(it.value); }}
+                      onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); toggle(it.value); }}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 6, padding: "10px 8px", fontSize: 12.5, fontFamily: "system-ui, sans-serif",
+                        border: "none", background: checked ? "#FBEDE7" : "#fff", color: "#2B2620", textAlign: "left", cursor: "pointer", minWidth: 0,
+                      }}
+                    >
+                      {it.icon && <span style={{ flexShrink: 0 }}>{it.icon}</span>}
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{it.label}</span>
+                      {checked && <Check size={14} style={{ flexShrink: 0, color: "#C75D3B" }} />}
+                    </button>
+                  );
+                })}
                 {Array.from({ length: (3 - (g.items.length % 3)) % 3 }).map((_, i) => (
                   <div key={`empty-${i}`} style={{ background: "#F5F1E8", pointerEvents: "none" }} />
                 ))}

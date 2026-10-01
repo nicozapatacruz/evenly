@@ -10,6 +10,7 @@ import DiarioTab from "./screens/moneymanager/DiarioTab.jsx";
 import TransactionForm from "./screens/moneymanager/TransactionForm.jsx";
 import EstadisticasTab from "./screens/moneymanager/EstadisticasTab.jsx";
 import CategoryDrillDownScreen from "./screens/moneymanager/CategoryDrillDownScreen.jsx";
+import SearchScreen from "./screens/moneymanager/SearchScreen.jsx";
 import { useMoneyManager } from "./lib/moneyManagerData.js";
 
 /* =========================================================================
@@ -530,6 +531,10 @@ function AppShell({ session, onLogout, refreshProfile }) {
   const [ledgerView, setLedgerView] = useState({ screen: "list" });
   const [statsView, setStatsView] = useState({ screen: "list" });
   const [ledgerMonth, setLedgerMonth] = useState(() => new Date());
+  // Viven acá (no dentro de SearchScreen) para sobrevivir el viaje de ida y
+  // vuelta a "editar transacción" — ese screen desmonta SearchScreen.
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchFilters, setSearchFilters] = useState({ accountIds: [], categoryIds: [], dateFrom: "", dateTo: "", amountMin: "", amountMax: "" });
   const [changingPassword, setChangingPassword] = useState(false);
   const [viewingProfile, setViewingProfile] = useState(false);
   const [creatingRecurring, setCreatingRecurring] = useState(false);
@@ -795,8 +800,27 @@ function AppShell({ session, onLogout, refreshProfile }) {
           categories={moneyManager.categories}
           viewMonth={ledgerMonth}
           setViewMonth={setLedgerMonth}
-          onNewTransaction={(date) => setLedgerView({ screen: "newTransaction", date })}
-          onEditTransaction={(t) => setLedgerView({ screen: "editTransaction", transaction: t })}
+          onNewTransaction={(date) => setLedgerView({ screen: "newTransaction", date, returnTo: "list" })}
+          onEditTransaction={(t) => setLedgerView({ screen: "editTransaction", transaction: t, returnTo: "list" })}
+          onOpenSearch={() => setLedgerView({ screen: "search" })}
+        />
+      )}
+
+      {activeTab === "ledger" && ledgerView.screen === "search" && (
+        <SearchScreen
+          session={session}
+          settings={moneyManager.settings}
+          groups={moneyManager.groups}
+          accounts={moneyManager.accounts}
+          categories={moneyManager.categories}
+          query={searchQuery}
+          setQuery={setSearchQuery}
+          filters={searchFilters}
+          setFilters={setSearchFilters}
+          showError={showError}
+          onBack={() => setLedgerView({ screen: "list" })}
+          onNewTransaction={(date) => setLedgerView({ screen: "newTransaction", date, returnTo: "search" })}
+          onEditTransaction={(t) => setLedgerView({ screen: "editTransaction", transaction: t, returnTo: "search" })}
         />
       )}
 
@@ -812,14 +836,14 @@ function AppShell({ session, onLogout, refreshProfile }) {
           showInfo={showInfo}
           editingTransaction={ledgerView.transaction}
           defaultDate={ledgerView.date}
-          onCancel={() => setLedgerView({ screen: "list" })}
+          onCancel={() => setLedgerView({ screen: ledgerView.returnTo })}
           onSave={async (tx) => {
             const ok = await saveMoneyTransaction(tx);
-            if (ok) setLedgerView({ screen: "list" });
+            if (ok) setLedgerView({ screen: ledgerView.returnTo });
           }}
           onDelete={async (id) => {
             const ok = await deleteMoneyTransaction(id);
-            if (ok) setLedgerView({ screen: "list" });
+            if (ok) setLedgerView({ screen: ledgerView.returnTo });
           }}
         />
       )}

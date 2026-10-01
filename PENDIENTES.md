@@ -11,9 +11,8 @@ Lista viva de pendientes del proyecto. Reglas:
 ## A. Funcionales — features que faltan construir
 
 - [ ] Buscador de gastos: pantalla de búsqueda por texto/nota, con filtros de fecha, categoría y cuenta. Cubre también el caso de "¿cuántas veces fui a Mercadona?" buscando por nota, sin necesidad de una sub-vista nueva en Estadísticas (ver decisión G-6 más abajo).
-- [ ] Autocompletado de notas al escribir una transacción (ej. escribir "Mer" sugiere "Mercadona", basado en notas anteriores).
-- [ ] Persistencia de tab al cerrar la app: revisar si al cerrar y reabrir en el celular se conserva la pestaña donde estabas (y, dentro de Configuración, la sub-sección Money Manager / Split Ledger).
-- [ ] Campo "Comisión" (fee) en transferencias: existe en la base (`mm_transactions.fee_amount`) pero no está expuesto en el formulario.
+- [x] ~~Autocompletado de notas al escribir una transacción (ej. escribir "Mer" sugiere "Mercadona", basado en notas anteriores).~~ Resuelto 2026-10-01: `useRecentNoteTitles` trae las últimas 300 notas (deduplicadas, más reciente primero), se filtran por coincidencia y se muestran hasta 5 sugerencias bajo el campo "Nota" de `TransactionForm` — respeta el toggle "Autocompletar notas" que ya existía en Configuración. Solo en Money Manager, no en Split Ledger (ver E).
+- [x] ~~Persistencia de tab al cerrar la app: revisar si al cerrar y reabrir en el celular se conserva la pestaña donde estabas (y, dentro de Configuración, la sub-sección Money Manager / Split Ledger).~~ Resuelto 2026-10-01: `activeTab` (shell raíz) y `section` (`ConfigScreen`) se guardan en `localStorage` — sobreviven a un cierre real de la app, no solo a pasar a segundo plano. Convive con "Pantalla de inicio" (`startup_tab`): si está en "Sin preferencia", gana la última pestaña recordada; si tiene una fija, esa gana siempre. Confirmado funcionando por Nicolas.
 - [x] ~~Nota larga (`memo`) editable desde el formulario de transacción, a modo de "Descripción" — hoy `memo` solo se llena vía import masivo.~~ Resuelto 2026-09-30: campo "Descripción" (textarea) agregado bajo "Nota" en `TransactionForm`.
 - [x] ~~Drill-down en Estadísticas: click en una categoría (torta o lista) debería llevar al listado de sus transacciones. Hoy solo resalta (pie ↔ lista), no navega a nada.~~ Resuelto 2026-09-30: la porción de la torta sigue resaltando, la fila de la lista navega a `CategoryDrillDownScreen` (línea de tiempo por mes + listado filtrado). De paso se agregó también el extracto por cuenta (Diario/Mensual/Anual) en el tab Cuentas, no estaba pedido acá pero es la misma idea aplicada a cuentas.
 
@@ -40,6 +39,9 @@ No tocar salvo que Nicolas las traiga de vuelta explícitamente.
 
 - [ ] Subcategorías (jerarquía padre/hijo en Categorías). Sacado del backlog activo 2026-09-30 por no ser útil hoy.
 - [ ] Fotos adjuntas a transacciones. Sacado del backlog activo 2026-09-30 — sin señal de uso real, pero barato de agregar después.
+- [ ] Extender el autocompletado de notas (A) a Split Ledger — hoy solo vive en Money Manager. Decisión 2026-10-01: Nicolas pidió explícitamente no agregarlo ahora, pero dejarlo anotado como idea.
+- [ ] Campo "Comisión" (fee) en transferencias: existe en la base (`mm_transactions.fee_amount`) pero no está expuesto en el formulario. Sacado del backlog activo 2026-10-01 — dudas sin resolver sobre si afecta el saldo origen o destino, y si siempre es en la misma moneda que el monto transferido. Alternativa más simple que ya cubre el caso real: cargar la comisión como un gasto aparte (categorizado) en vez de un campo dentro de la transferencia — así sí aparece en Estadísticas por categoría. Queda como idea, estudiar primero qué tan útil sería de verdad antes de retomarla.
+- [ ] Intereses en tarjetas de crédito: modelar de alguna forma el interés que cobra una tarjeta sobre el saldo no pagado (hoy el sistema de pago automático/catch-up no contempla intereses, solo el monto adeudado).
 
 ## F. Descartados (se evaluaron y se decidió no construirlos)
 

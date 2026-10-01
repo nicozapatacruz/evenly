@@ -1,5 +1,5 @@
 import React from "react";
-import { Plus } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { styles } from "../../lib/styles.js";
 import { RootHeader, MonthNav, TodayButton, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
@@ -13,7 +13,7 @@ import { TransactionDayGroups } from "./TransactionDayGroups.jsx";
    Resumen que acá no replicamos.
    ========================================================================= */
 
-export default function DiarioTab({ userId, settings, groups, accounts, categories, viewMonth, setViewMonth, onNewTransaction, onEditTransaction }) {
+export default function DiarioTab({ userId, settings, groups, accounts, categories, viewMonth, setViewMonth, onNewTransaction, onEditTransaction, onOpenSearch }) {
   // Solo pedimos las transacciones del mes visible (no toda la tabla) — se
   // refetchea solo cuando cambiás de mes.
   const { transactions: monthTx, loading } = useMonthTransactions(userId, viewMonth);
@@ -26,7 +26,17 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
   return (
     <div style={{ ...styles.screen, display: "flex", flexDirection: "column" }}>
       <div style={{ position: "sticky", top: 0, zIndex: 5 }}>
-        <RootHeader title="Transacciones" right={<TodayButton viewMonth={viewMonth} setViewMonth={setViewMonth} />} />
+        <RootHeader
+          title="Transacciones"
+          right={
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <button style={styles.iconBtnGhost} onClick={onOpenSearch} aria-label="Buscar">
+                <Search size={19} />
+              </button>
+              <TodayButton viewMonth={viewMonth} setViewMonth={setViewMonth} />
+            </div>
+          }
+        />
         <div style={styles.subHeader} {...swipeHandlers}>
           <MonthNav viewMonth={viewMonth} setViewMonth={setViewMonth} />
           <div style={{ display: "flex", justifyContent: "space-between", textAlign: "center", padding: "0 4px" }}>

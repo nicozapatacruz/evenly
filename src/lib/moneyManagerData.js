@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "./supabaseClient.js";
-import { dateInputValueInZone } from "./helpers.jsx";
+import { dateInputValueInZone, parseAmountInput } from "./helpers.jsx";
 
 // Todo lo de Money Manager vive en tablas con prefijo mm_, separadas de las
 // de Split Ledger a propósito (ver memoria "money-manager-categories-merge-pending":
@@ -455,6 +455,44 @@ export function useRecentNoteTitles(userId) {
   }, [userId]);
 
   return titles;
+}
+
+// Buscador de gastos: filtros server-side (no se trae todo el historial al
+// cliente). Función imperativa, no un hook — se dispara a demanda (Enter /
+// tocar una sugerencia), no reactiva a cada tecla.
+// `filters`: { query, accountIds, categoryIds, dateFrom, dateTo, amountMin, amountMax }
+export async function searchTransactions(userId, filters) {
+  let query = supabase.from("mm_transactions").select("*").eq("user_id", userId).eq("deleted", false);
+
+  const text = filters.query?.trim();
+  if (text) {
+    // Entre comillas dobles (sintaxis de PostgREST para valores con
+    // comas/paréntesis adentro, que si no romperían el parseo de ".or()") —
+    // el "%" del patrón ilike no necesita escaparse, funciona igual adentro
+    // de las comillas.
+    const quoted = `"%${text.replace(/"/g, '\\"')}%"`;
+    query = query.or(`title.ilike.${quoted},memo.ilike.${quoted}`);
+  }
+  if (filters.accountIds?.length) {
+    const ids = filters.accountIds.join(",");
+    // Una transferencia matchea tanto si la cuenta elegida es el origen
+    // como el destino — "movimientos de esta cuenta", no solo "de donde sale".
+    query = query.or(`account_id.in.(${ids}),to_account_id.in.(${ids})`);
+  }
+  if (filters.categoryIds?.length) query = query.in("category_id", filters.categoryIds);
+  if (filters.dateFrom) query = query.gte("date", new Date(filters.dateFrom).toISOString());
+  if (filters.dateTo) {
+    const end = new Date(filters.dateTo);
+    end.setDate(end.getDate() + 1);
+    query = query.lt("date", end.toISOString());
+  }
+  if (filters.amountMin) query = query.gte("amount_main", parseAmountInput(filters.amountMin));
+  if (filters.amountMax) query = query.lte("amount_main", parseAmountInput(filters.amountMax));
+
+  query = query.order("date", { ascending: false }).order("created_at", { ascending: false }).limit(500);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
 }
 
 // Transacciones relevantes para calcular "saldo a pagar"/"restante" de las

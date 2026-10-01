@@ -32,10 +32,10 @@ export function FiltersPanel({ draft, setDraft, filters, accountGroups, categori
 
         <div style={{ display: "flex", gap: 10 }}>
           <Field label="Desde" style={{ flex: 1, minWidth: 0 }}>
-            <input style={{ ...styles.input, width: "100%", minHeight: 44, boxSizing: "border-box" }} type="date" value={draft.dateFrom} placeholder="Inicio" onChange={(e) => setDraft((d) => ({ ...d, dateFrom: e.target.value }))} />
+            <input style={{ ...styles.input, width: "100%", minHeight: 44, boxSizing: "border-box" }} type="date" value={draft.dateFrom} onChange={(e) => setDraft((d) => ({ ...d, dateFrom: e.target.value }))} />
           </Field>
           <Field label="Hasta" style={{ flex: 1, minWidth: 0 }}>
-            <input style={{ ...styles.input, width: "100%", minHeight: 44, boxSizing: "border-box" }} type="date" value={draft.dateTo} placeholder="Fin" onChange={(e) => setDraft((d) => ({ ...d, dateTo: e.target.value }))} />
+            <input style={{ ...styles.input, width: "100%", minHeight: 44, boxSizing: "border-box" }} type="date" value={draft.dateTo} onChange={(e) => setDraft((d) => ({ ...d, dateTo: e.target.value }))} />
           </Field>
         </div>
 

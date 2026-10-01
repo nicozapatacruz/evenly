@@ -465,7 +465,13 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", o
           {groups.map((g) => (
             <div key={g.label || "flat"}>
               {g.label && (
-                <p style={{ margin: 0, padding: "6px 10px", fontSize: 11, fontWeight: 700, color: "#A8754A", textTransform: "uppercase", letterSpacing: "0.04em", background: "#FAF7F2", borderBottom: "1px solid #F0EBE2" }}>
+                // stopPropagation (no seleccionar nada, no cerrar) — es un
+                // encabezado de grupo, no una opción elegible.
+                <p
+                  onClick={(e) => e.stopPropagation()}
+                  onPointerUp={(e) => e.stopPropagation()}
+                  style={{ margin: 0, padding: "6px 10px", fontSize: 11, fontWeight: 700, color: "#A8754A", textTransform: "uppercase", letterSpacing: "0.04em", background: "#FAF7F2", borderBottom: "1px solid #F0EBE2" }}
+                >
                   {g.label}
                 </p>
               )}
@@ -496,9 +502,15 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", o
                   </button>
                 ))}
                 {/* Celdas vacías al final de la última fila — mismo gris que
-                    usa la app original en vez de dejarlas en blanco. */}
+                    usa la app original en vez de dejarlas en blanco. Sin
+                    acción de click: son relleno, no una opción elegible. */}
                 {Array.from({ length: (3 - (g.items.length % 3)) % 3 }).map((_, i) => (
-                  <div key={`empty-${i}`} style={{ background: "#F5F1E8" }} />
+                  <div
+                    key={`empty-${i}`}
+                    onClick={(e) => e.stopPropagation()}
+                    onPointerUp={(e) => e.stopPropagation()}
+                    style={{ background: "#F5F1E8" }}
+                  />
                 ))}
               </div>
             </div>

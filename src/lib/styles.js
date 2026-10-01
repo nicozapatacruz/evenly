@@ -1,5 +1,5 @@
 export const globalCss = `
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; height: 100%; overflow-x: hidden; overscroll-behavior-y: none; -webkit-text-size-adjust: 100%; background: #F7F2E9; }
   #root { height: 100%; }
   /* box-shadow en vez de outline: Safari no sigue bien un border-radius

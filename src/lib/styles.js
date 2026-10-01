@@ -1,7 +1,13 @@
 export const globalCss = `
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; height: 100%; overflow-x: hidden; overscroll-behavior-y: none; -webkit-text-size-adjust: 100%; background: #F7F2E9; }
-  #root { height: 100%; }
+  /* height:100% no alcanza como "app agregada a pantalla de inicio" en iOS
+     (standalone): el viewport real visible ahí no siempre coincide con el
+     100% calculado, y deja franjas vacías arriba/abajo. 100dvh (viewport
+     dinámico) sí mide el alto visible real — 100vh queda antes como
+     respaldo para navegadores que no entienden dvh (lo ignoran y se quedan
+     con esa línea, en vez de romper el layout). */
+  html, body { margin: 0; height: 100vh; height: 100dvh; overflow-x: hidden; overscroll-behavior-y: none; -webkit-text-size-adjust: 100%; background: #F7F2E9; }
+  #root { height: 100vh; height: 100dvh; }
   /* box-shadow en vez de outline: Safari no sigue bien un border-radius
      asimétrico con outline (ej. un input con esquinas planas de un solo
      lado para fusionarse con algo pegado abajo) — se veía redondeado

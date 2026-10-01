@@ -89,7 +89,13 @@ export function InfoTooltip({ text }) {
 // se pasa un string no vacío — el llamador decide cuándo, típicamente en
 // blur o al intentar guardar) agrega el texto de ayuda en rojo debajo.
 export function Field({ label, info, required, error, style, children }) {
-  const Wrapper = info ? "div" : "label";
+  // Siempre "div", nunca <label>: un <label> reenvía el click a su primer
+  // control "labelable" interno aunque el click haya caído en un elemento
+  // con pointer-events:none (ej. el título de grupo o una celda vacía de
+  // PickerField) — eso cerraba el desplegable sin seleccionar nada, un bug
+  // real de reenvío nativo del navegador, no de bubbling (stopPropagation
+  // no lo frenaba).
+  const Wrapper = "div";
   // Envuelto en un solo <span> siempre (no un fragment) — el wrapper es
   // flex-column, así que label+asterisco sueltos como hijos directos
   // quedaban cada uno en su propia fila en vez de en la misma línea.
@@ -465,12 +471,11 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", o
           {groups.map((g) => (
             <div key={g.label || "flat"}>
               {g.label && (
-                // stopPropagation (no seleccionar nada, no cerrar) — es un
-                // encabezado de grupo, no una opción elegible.
+                // pointer-events: none (no solo stopPropagation, que no alcanzó
+                // en Safari/iOS) — es un encabezado de grupo, no una opción
+                // elegible, no debería poder recibir ningún toque.
                 <p
-                  onClick={(e) => e.stopPropagation()}
-                  onPointerUp={(e) => e.stopPropagation()}
-                  style={{ margin: 0, padding: "6px 10px", fontSize: 11, fontWeight: 700, color: "#A8754A", textTransform: "uppercase", letterSpacing: "0.04em", background: "#FAF7F2", borderBottom: "1px solid #F0EBE2" }}
+                  style={{ margin: 0, padding: "6px 10px", fontSize: 11, fontWeight: 700, color: "#A8754A", textTransform: "uppercase", letterSpacing: "0.04em", background: "#FAF7F2", borderBottom: "1px solid #F0EBE2", pointerEvents: "none" }}
                 >
                   {g.label}
                 </p>
@@ -503,14 +508,9 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", o
                 ))}
                 {/* Celdas vacías al final de la última fila — mismo gris que
                     usa la app original en vez de dejarlas en blanco. Sin
-                    acción de click: son relleno, no una opción elegible. */}
+                    pointer-events: son relleno, no una opción elegible. */}
                 {Array.from({ length: (3 - (g.items.length % 3)) % 3 }).map((_, i) => (
-                  <div
-                    key={`empty-${i}`}
-                    onClick={(e) => e.stopPropagation()}
-                    onPointerUp={(e) => e.stopPropagation()}
-                    style={{ background: "#F5F1E8" }}
-                  />
+                  <div key={`empty-${i}`} style={{ background: "#F5F1E8", pointerEvents: "none" }} />
                 ))}
               </div>
             </div>

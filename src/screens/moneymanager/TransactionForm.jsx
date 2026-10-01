@@ -212,7 +212,7 @@ export default function TransactionForm({
         </Field>
 
         <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-          <Field label="Importe" required error={touched.amount && !validAmount ? "Ingresá un importe válido." : ""} style={{ flex: 1 }}>
+          <Field label="Importe" required style={{ flex: 1 }}>
             <input style={styles.input} value={amount} onChange={(e) => setAmount(e.target.value)} onBlur={() => touch("amount")} placeholder="0.00" inputMode="decimal" />
           </Field>
           <select
@@ -223,6 +223,13 @@ export default function TransactionForm({
             {currencyOptions.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
+        {/* El error vive FUERA del Field (que solo tiene Importe) para que no
+            le sume altura a esa columna sola — si no, el select de moneda
+            (hermano en el flex de arriba, "flex-end") quedaba alineado con
+            el error de abajo en vez de con el input. */}
+        {touched.amount && !validAmount && (
+          <span style={{ fontSize: 12, fontWeight: 400, color: "#B0473A", marginTop: -8, fontFamily: "system-ui, sans-serif" }}>Ingresá un importe válido.</span>
+        )}
 
         {needsRate && (
           <Field label={`1 ${rateFlipped ? currency : settings.main_currency} equivale a`} required error={touched.exchangeRate && !validRate ? "Ingresá una tasa válida." : ""}>

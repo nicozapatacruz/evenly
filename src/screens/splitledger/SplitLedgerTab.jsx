@@ -1452,7 +1452,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
         </Field>
 
         <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-          <Field label="Monto" required error={touched.amount && !validAmount ? "Ingresá un importe válido." : ""} style={{ flex: 1 }}>
+          <Field label="Monto" required style={{ flex: 1 }}>
             <input style={styles.input} value={amount} onChange={(e) => setAmount(e.target.value)} onBlur={() => touch("amount")} placeholder="0.00" inputMode="decimal" />
           </Field>
           <select
@@ -1463,6 +1463,13 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
             {[baseCurrency, ...CURRENCY_LIST.filter((c) => c !== baseCurrency)].map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
+        {/* El error vive FUERA del Field (que solo tiene Monto) para que no le
+            sume altura a esa columna sola — si no, el select de moneda
+            (hermano en el flex de arriba, "flex-end") queda alineado con el
+            error de abajo en vez de con el input. */}
+        {touched.amount && !validAmount && (
+          <span style={{ fontSize: 12, fontWeight: 400, color: "#B0473A", marginTop: -8, fontFamily: "system-ui, sans-serif" }}>Ingresá un importe válido.</span>
+        )}
         {/* Fila: Fecha + Categoría + icono Foto + icono Nota — se pone después de dividido en */}
 
         <p style={styles.label}>¿Quién pagó?</p>

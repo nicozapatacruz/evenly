@@ -108,7 +108,7 @@ export function TransactionDayGroups({ transactions, settings, accounts, categor
                   {/* minHeight: 32 — una transacción sin nota (sin "título") solo
                       muestra 1 línea en vez de 2, y quedaba más baja que el
                       resto; con esto reserva el mismo alto igual. */}
-                  <div style={{ minWidth: 0, minHeight: 32 }}>
+                  <div style={{ minWidth: 0, minHeight: 32, display: "flex", flexDirection: "column", justifyContent: "center" }}>
                     {t.type === "transfer" ? (
                       <>
                         <p style={{ margin: 0, fontWeight: 600 }}>{t.title || "Transferencia"}</p>

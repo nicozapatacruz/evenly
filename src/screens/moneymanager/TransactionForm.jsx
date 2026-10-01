@@ -43,7 +43,13 @@ export default function TransactionForm({
   const [accountId, setAccountId] = useState(editingTransaction?.account_id || defaultAccountId || "");
   const [toAccountId, setToAccountId] = useState(editingTransaction?.to_account_id || "");
   const [note, setNote] = useState(editingTransaction?.title || "");
-  const [noteSuggestOpen, setNoteSuggestOpen] = useState(false);
+  // Separado en dos banderas a propósito: "noteFocused" sigue al foco real,
+  // "noteDismissed" se prende solo al elegir una sugerencia (para que se
+  // cierre aunque queden otras coincidencias, ej. "Mercadona" vs "Mercadona
+  // Mercado") y se apaga con CUALQUIER edición posterior — no con un
+  // refoco sin cambios, que no debería reabrir nada por sí solo.
+  const [noteFocused, setNoteFocused] = useState(false);
+  const [noteDismissed, setNoteDismissed] = useState(false);
   const recentNoteTitles = useRecentNoteTitles(session.userId);
   const noteSuggestions = settings.autocomplete_notes && note.trim()
     ? recentNoteTitles.filter((t) => t.toLowerCase().includes(note.trim().toLowerCase()) && t.toLowerCase() !== note.trim().toLowerCase()).slice(0, 5)
@@ -357,12 +363,12 @@ export default function TransactionForm({
             <input
               style={{ ...styles.input, width: "100%" }}
               value={note}
-              onChange={(e) => setNote(e.target.value)}
-              onFocus={() => setNoteSuggestOpen(true)}
-              onBlur={() => setNoteSuggestOpen(false)}
+              onChange={(e) => { setNote(e.target.value); setNoteDismissed(false); }}
+              onFocus={() => setNoteFocused(true)}
+              onBlur={() => setNoteFocused(false)}
               placeholder="Opcional"
             />
-            {noteSuggestOpen && noteSuggestions.length > 0 && (
+            {noteFocused && !noteDismissed && noteSuggestions.length > 0 && (
               <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, zIndex: 5, border: "1px solid #DDD2BE", borderRadius: 10, background: "#fff", overflow: "hidden", boxShadow: "0 4px 10px rgba(0,0,0,0.08)" }}>
                 {noteSuggestions.map((s) => (
                   <button
@@ -372,7 +378,7 @@ export default function TransactionForm({
                     // input nunca llegue a perder el foco (onBlur) antes de
                     // que se registre la selección — si no, el blur cierra el
                     // desplegable justo antes de que el click llegue al botón.
-                    onMouseDown={(e) => { e.preventDefault(); setNote(s); setNoteSuggestOpen(false); }}
+                    onMouseDown={(e) => { e.preventDefault(); setNote(s); setNoteDismissed(true); }}
                     style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 12px", fontSize: 13, fontFamily: "system-ui, sans-serif", border: "none", background: "#fff", color: "#2B2620", cursor: "pointer" }}
                   >
                     {s}

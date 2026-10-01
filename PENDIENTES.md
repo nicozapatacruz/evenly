@@ -8,53 +8,53 @@ Lista viva de pendientes del proyecto. Reglas:
 
 ---
 
-## A. Funcionales — features que faltan construir
-
-- [ ] Buscador de gastos: pantalla de búsqueda por texto/nota, con filtros de fecha, categoría y cuenta. Cubre también el caso de "¿cuántas veces fui a Mercadona?" buscando por nota, sin necesidad de una sub-vista nueva en Estadísticas (ver decisión G-6 más abajo).
-- [x] ~~Autocompletado de notas al escribir una transacción (ej. escribir "Mer" sugiere "Mercadona", basado en notas anteriores).~~ Resuelto 2026-10-01: `useRecentNoteTitles` trae las últimas 300 notas (deduplicadas, más reciente primero), se filtran por coincidencia y se muestran hasta 5 sugerencias bajo el campo "Nota" de `TransactionForm` — respeta el toggle "Autocompletar notas" que ya existía en Configuración. Solo en Money Manager, no en Split Ledger (ver E).
-- [x] ~~Persistencia de tab al cerrar la app: revisar si al cerrar y reabrir en el celular se conserva la pestaña donde estabas (y, dentro de Configuración, la sub-sección Money Manager / Split Ledger).~~ Resuelto 2026-10-01: `activeTab` (shell raíz) y `section` (`ConfigScreen`) se guardan en `localStorage` — sobreviven a un cierre real de la app, no solo a pasar a segundo plano. Convive con "Pantalla de inicio" (`startup_tab`): si está en "Sin preferencia", gana la última pestaña recordada; si tiene una fija, esa gana siempre. Confirmado funcionando por Nicolas.
-- [x] ~~Nota larga (`memo`) editable desde el formulario de transacción, a modo de "Descripción" — hoy `memo` solo se llena vía import masivo.~~ Resuelto 2026-09-30: campo "Descripción" (textarea) agregado bajo "Nota" en `TransactionForm`.
-- [x] ~~Drill-down en Estadísticas: click en una categoría (torta o lista) debería llevar al listado de sus transacciones. Hoy solo resalta (pie ↔ lista), no navega a nada.~~ Resuelto 2026-09-30: la porción de la torta sigue resaltando, la fila de la lista navega a `CategoryDrillDownScreen` (línea de tiempo por mes + listado filtrado). De paso se agregó también el extracto por cuenta (Diario/Mensual/Anual) en el tab Cuentas, no estaba pedido acá pero es la misma idea aplicada a cuentas.
-
-## B. Decisiones diferidas a propósito
-
-No tocar salvo que Nicolas las traiga de vuelta explícitamente.
-
-- [ ] Unificar categorías de Money Manager con las de Split Ledger (hoy son sistemas totalmente separados).
-- [ ] Cambiar la moneda principal en Ajustes rompe el historial viejo (`amount_main` no se recalcula). Idea de Nicolas para resolverlo: que cada cuenta tenga su propia moneda fija (no editable), la "moneda principal" pasaría a ser solo el default sugerido al crear una cuenta nueva, y los balances mostrarían un total por cada moneda presente en vez de sumar todo convertido. Cambio de arquitectura grande, explícitamente pospuesto.
-
-## C. Bugs / cosméticos menores
+## A. Bugs / cosméticos menores
 
 - [ ] Drag-and-drop de reordenar con un solo ítem no debería mostrar el ícono de arrastrar (categorías, cuentas, grupos, "otras monedas") — no hay con qué reordenar si hay uno solo.
 - [x] ~~El contorno de foco naranja del `ConfirmInline` no respeta las esquinas achatadas cuando está pegado a un input arriba (visto en Configuración → Split Ledger → "Nombre visible"). Puramente visual.~~ Resuelto 2026-09-30: los botones ya no llevan anillo de foco, y los inputs pasaron de `outline` a `box-shadow` (ver `DESIGN_NOTES.md`), que sí respeta bordes asimétricos.
 
-## D. Cambios de diseño (no son "menos funciones", son decisiones distintas a propósito)
+## B. Cambios de diseño (no son "menos funciones", son decisiones distintas a propósito)
 
 - [ ] Transferencias modeladas como una sola fila (`account_id` + `to_account_id`) en vez de las 2 filas espejo que usa internamente la app original.
 - [ ] Esquema relacional (Postgres/UUIDs) en vez del modelo Core Data/SQLite original.
 - [ ] Colores del toggle Ingreso/Gasto/Transferencia adaptados a la paleta de Evenly, no los colores literales originales.
 - [ ] Torta de Estadísticas con la paleta categórica validada (máx. 8 colores + gris para "el resto"), no los colores literales de la original.
 
-## E. Posibles mejoras a futuro (sin compromiso de construirlas — ideas, no backlog)
+## C. Decisiones diferidas a propósito
+
+No tocar salvo que Nicolas las traiga de vuelta explícitamente.
+
+- [ ] Unificar categorías de Money Manager con las de Split Ledger (hoy son sistemas totalmente separados).
+- [ ] Cambiar la moneda principal en Ajustes rompe el historial viejo (`amount_main` no se recalcula). Idea de Nicolas para resolverlo: que cada cuenta tenga su propia moneda fija (no editable), la "moneda principal" pasaría a ser solo el default sugerido al crear una cuenta nueva, y los balances mostrarían un total por cada moneda presente en vez de sumar todo convertido. Cambio de arquitectura grande, explícitamente pospuesto.
+
+## D. Posibles mejoras a futuro (sin compromiso de construirlas — ideas, no backlog)
 
 - [ ] Subcategorías (jerarquía padre/hijo en Categorías). Sacado del backlog activo 2026-09-30 por no ser útil hoy.
 - [ ] Fotos adjuntas a transacciones. Sacado del backlog activo 2026-09-30 — sin señal de uso real, pero barato de agregar después.
-- [ ] Extender el autocompletado de notas (A) a Split Ledger — hoy solo vive en Money Manager. Decisión 2026-10-01: Nicolas pidió explícitamente no agregarlo ahora, pero dejarlo anotado como idea.
+- [ ] Extender el autocompletado de notas (F) a Split Ledger — hoy solo vive en Money Manager. Decisión 2026-10-01: Nicolas pidió explícitamente no agregarlo ahora, pero dejarlo anotado como idea.
 - [ ] Campo "Comisión" (fee) en transferencias: existe en la base (`mm_transactions.fee_amount`) pero no está expuesto en el formulario. Sacado del backlog activo 2026-10-01 — dudas sin resolver sobre si afecta el saldo origen o destino, y si siempre es en la misma moneda que el monto transferido. Alternativa más simple que ya cubre el caso real: cargar la comisión como un gasto aparte (categorizado) en vez de un campo dentro de la transferencia — así sí aparece en Estadísticas por categoría. Queda como idea, estudiar primero qué tan útil sería de verdad antes de retomarla.
 - [ ] Intereses en tarjetas de crédito: modelar de alguna forma el interés que cobra una tarjeta sobre el saldo no pagado (hoy el sistema de pago automático/catch-up no contempla intereses, solo el monto adeudado).
 
-## F. Descartados (se evaluaron y se decidió no construirlos)
+## E. Descartados (se evaluaron y se decidió no construirlos)
 
 - [ ] Sub-vistas Calendario/Mensual/Resumen/Descripción en el tab Transacciones (solo queda "Diario"). Descartado 2026-09-30.
 - [ ] Presupuestos (Budgets) y Tags. Descartado 2026-09-30 — la data real de Nicolas casi no los usaba.
-- [ ] Sub-tabs "Presupuesto" y "Nota" en Estadísticas. Descartado 2026-09-30 — el caso de uso real lo cubre el Buscador de gastos (A).
+- [ ] Sub-tabs "Presupuesto" y "Nota" en Estadísticas. Descartado 2026-09-30 — el caso de uso real lo cubre el Buscador de gastos (F).
+
+## F. Funcionales — features que faltan construir
+
+- [x] ~~Buscador de gastos: pantalla de búsqueda por texto/nota, con filtros de fecha, categoría y cuenta. Cubre también el caso de "¿cuántas veces fui a Mercadona?" buscando por nota, sin necesidad de una sub-vista nueva en Estadísticas (ver decisión G-6 más abajo).~~ Resuelto 2026-10-01: ícono de lupa en el header de Transacciones abre `SearchScreen` — busca en título+memo sobre todo el historial (filtros server-side, `searchTransactions` en `moneyManagerData.js`), con autocompletado de notas reutilizado, filtros de importe/fecha/cuenta/categoría (`MultiPickerField`, nuevo componente de selección múltiple), totales + contador de resultados, y una fila propia por transacción (fecha dd/mm/yyyy + categoría a la izquierda, nota/cuenta al centro, monto a la derecha) en vez de reusar el agrupado-por-día de Diario, que no tiene sentido cuando los resultados cruzan meses distintos.
+- [x] ~~Autocompletado de notas al escribir una transacción (ej. escribir "Mer" sugiere "Mercadona", basado en notas anteriores).~~ Resuelto 2026-10-01: `useRecentNoteTitles` trae las últimas 300 notas (deduplicadas, más reciente primero), se filtran por coincidencia y se muestran hasta 5 sugerencias bajo el campo "Nota" de `TransactionForm` — respeta el toggle "Autocompletar notas" que ya existía en Configuración. Solo en Money Manager, no en Split Ledger (ver D).
+- [x] ~~Persistencia de tab al cerrar la app: revisar si al cerrar y reabrir en el celular se conserva la pestaña donde estabas (y, dentro de Configuración, la sub-sección Money Manager / Split Ledger).~~ Resuelto 2026-10-01: `activeTab` (shell raíz) y `section` (`ConfigScreen`) se guardan en `localStorage` — sobreviven a un cierre real de la app, no solo a pasar a segundo plano. Convive con "Pantalla de inicio" (`startup_tab`): si está en "Sin preferencia", gana la última pestaña recordada; si tiene una fija, esa gana siempre. Confirmado funcionando por Nicolas.
+- [x] ~~Nota larga (`memo`) editable desde el formulario de transacción, a modo de "Descripción" — hoy `memo` solo se llena vía import masivo.~~ Resuelto 2026-09-30: campo "Descripción" (textarea) agregado bajo "Nota" en `TransactionForm`.
+- [x] ~~Drill-down en Estadísticas: click en una categoría (torta o lista) debería llevar al listado de sus transacciones. Hoy solo resalta (pie ↔ lista), no navega a nada.~~ Resuelto 2026-09-30: la porción de la torta sigue resaltando, la fila de la lista navega a `CategoryDrillDownScreen` (línea de tiempo por mes + listado filtrado). De paso se agregó también el extracto por cuenta (Diario/Mensual/Anual) en el tab Cuentas, no estaba pedido acá pero es la misma idea aplicada a cuentas.
 
 ## G. Simplificaciones MVP vs. la app original (Realbyte Money Manager) — ya revisadas con Nicolas
 
 - [x] ~~Cuentas: sin tratamiento especial de tarjetas de crédito (la original separa "Saldo a pagar" / "Saldo restante"); acá todas las cuentas se muestran igual.~~ Resuelto 2026-09-30: split pasado/actual, cuenta de pago, ciclo de facturación y pago automático con catch-up.
-- [x] ~~Categorías: lista plana, sin jerarquía padre/subcategoría (la original sí soporta subcategorías).~~ Decidido 2026-09-30: no es útil por ahora — pasa a "posibles mejoras a futuro" (sección E).
-- [x] ~~Transacciones: un solo campo "Nota" corto. No se replicó "Descripción" con foto adjunta, ni la nota larga (`memo`) editable desde el formulario.~~ Decidido 2026-09-30: el `memo` como "Descripción" sí es útil — pasa a construir (sección A). La foto adjunta queda aparte, ver G-5.
-- [x] ~~Tab Transacciones: solo existe la sub-vista "Diario". No se construyeron Calendario/Mensual/Resumen/Descripción.~~ Decidido 2026-09-30: descartado, no es útil — sección F.
-- [x] ~~Sin presupuestos (Budgets) ni Tags.~~ Decidido 2026-09-30: descartado — sección F.
-- [x] ~~Sin fotos adjuntas a transacciones (la data real solo tenía 1 foto en total).~~ Decidido 2026-09-30: pasa a "posibles mejoras a futuro" (sección E) — la infraestructura ya existe (mismo `PhotoPicker`/`useImageUpload` de Split Ledger), barata de agregar si cambia el uso real, pero sin señal de que haga falta hoy.
-- [x] ~~Estadísticas: solo 2 sub-tabs (Ingreso/Gastos) — la original también tiene "Presupuesto" y "Nota" ahí.~~ Decidido 2026-09-30: descartado — sección F. El caso de uso real ("¿cuántas veces fui a X?") lo cubre el Buscador de gastos (A), no hace falta una sub-vista de Estadísticas para eso.
+- [x] ~~Categorías: lista plana, sin jerarquía padre/subcategoría (la original sí soporta subcategorías).~~ Decidido 2026-09-30: no es útil por ahora — pasa a "posibles mejoras a futuro" (sección D).
+- [x] ~~Transacciones: un solo campo "Nota" corto. No se replicó "Descripción" con foto adjunta, ni la nota larga (`memo`) editable desde el formulario.~~ Decidido 2026-09-30: el `memo` como "Descripción" sí es útil — pasa a construir (sección F). La foto adjunta queda aparte, ver G-5.
+- [x] ~~Tab Transacciones: solo existe la sub-vista "Diario". No se construyeron Calendario/Mensual/Resumen/Descripción.~~ Decidido 2026-09-30: descartado, no es útil — sección E.
+- [x] ~~Sin presupuestos (Budgets) ni Tags.~~ Decidido 2026-09-30: descartado — sección E.
+- [x] ~~Sin fotos adjuntas a transacciones (la data real solo tenía 1 foto en total).~~ Decidido 2026-09-30: pasa a "posibles mejoras a futuro" (sección D) — la infraestructura ya existe (mismo `PhotoPicker`/`useImageUpload` de Split Ledger), barata de agregar si cambia el uso real, pero sin señal de que haga falta hoy.
+- [x] ~~Estadísticas: solo 2 sub-tabs (Ingreso/Gastos) — la original también tiene "Presupuesto" y "Nota" ahí.~~ Decidido 2026-09-30: descartado — sección E. El caso de uso real ("¿cuántas veces fui a X?") lo cubre el Buscador de gastos (F), no hace falta una sub-vista de Estadísticas para eso.

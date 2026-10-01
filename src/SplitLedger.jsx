@@ -819,7 +819,6 @@ function AppShell({ session, onLogout, refreshProfile }) {
           setFilters={setSearchFilters}
           showError={showError}
           onBack={() => setLedgerView({ screen: "list" })}
-          onNewTransaction={(date) => setLedgerView({ screen: "newTransaction", date, returnTo: "search" })}
           onEditTransaction={(t) => setLedgerView({ screen: "editTransaction", transaction: t, returnTo: "search" })}
         />
       )}

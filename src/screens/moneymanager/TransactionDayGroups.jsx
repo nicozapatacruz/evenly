@@ -23,12 +23,14 @@ const DAY_LABEL = (d) => d.toLocaleDateString("es-ES", { weekday: "short" }).rep
 // perspectiveAccountId.
 export function TransactionDayGroups({ transactions, settings, accounts, categories, onNewTransaction, onEditTransaction, perspectiveAccountId, runningBalances }) {
   const accountName = (id) => accounts.find((a) => a.id === id)?.name || "—";
+  const accountIcon = (id) => accounts.find((a) => a.id === id)?.icon;
   const accountDeleted = (id) => !!accounts.find((a) => a.id === id)?.deleted;
   const categoryIcon = (id) => categories.find((c) => c.id === id)?.icon;
   const categoryDeleted = (id) => !!categories.find((c) => c.id === id)?.deleted;
 
   const accountLabel = (id) => (
-    <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: 4, ...(accountDeleted(id) ? { textDecoration: "line-through", color: "#B0473A" } : null) }}>
+    <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: 3, ...(accountDeleted(id) ? { textDecoration: "line-through", color: "#B0473A" } : null) }}>
+      {accountIcon(id) && <span style={{ fontSize: 11 }}>{accountIcon(id)}</span>}
       {accountName(id)}
       {accountDeleted(id) && <Trash2 size={11} style={{ flexShrink: 0 }} />}
     </span>

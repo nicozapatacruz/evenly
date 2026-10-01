@@ -439,7 +439,7 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", o
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          style={{ ...styles.input, width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", borderRadius: open ? "10px 10px 0 0" : 10, paddingRight: clearable ? 34 : undefined }}
+          style={{ ...styles.input, width: "100%", height: 44, boxSizing: "border-box", textAlign: "left", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", borderRadius: open ? "10px 10px 0 0" : 10, paddingRight: clearable ? 34 : undefined }}
         >
           {selected ? (
             <>
@@ -564,7 +564,7 @@ export function MultiPickerField({ value, onChange, groups, placeholder = "Elegi
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        style={{ ...styles.input, width: "100%", textAlign: "left", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", borderRadius: open ? "10px 10px 0 0" : 10 }}
+        style={{ ...styles.input, width: "100%", height: 44, boxSizing: "border-box", textAlign: "left", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", borderRadius: open ? "10px 10px 0 0" : 10 }}
       >
         <span style={selectedItems.length === 0 ? { color: "#A89A87", fontSize: 13 } : undefined}>{summary}</span>
       </button>
@@ -584,7 +584,11 @@ export function MultiPickerField({ value, onChange, groups, placeholder = "Elegi
                     <button
                       type="button"
                       key={it.value}
-                      onClick={(e) => { e.stopPropagation(); toggle(it.value); }}
+                      // Solo onPointerUp (no también onClick, como en
+                      // PickerField): ahí onChange+setOpen(false) son
+                      // idempotentes y da igual que se disparen dos veces,
+                      // pero toggle() invierte el valor — disparar los dos
+                      // eventos prendía y apagaba en el mismo click.
                       onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); toggle(it.value); }}
                       style={{
                         display: "flex", alignItems: "center", gap: 6, padding: "10px 8px", fontSize: 12.5, fontFamily: "system-ui, sans-serif",

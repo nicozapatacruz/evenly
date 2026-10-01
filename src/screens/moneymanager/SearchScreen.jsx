@@ -1,10 +1,18 @@
-import React, { useEffect, useState } from "react";
-import { Search as SearchIcon, SlidersHorizontal } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Search as SearchIcon, SlidersHorizontal, Trash2 } from "lucide-react";
 import { styles } from "../../lib/styles.js";
 import { TopBar, Footer, Field, MultiPickerField } from "../../components/Shared.jsx";
-import { money } from "../../lib/helpers.jsx";
+import { money, dateInputValueInZone, measureTextWidth } from "../../lib/helpers.jsx";
 import { useRecentNoteTitles, searchTransactions } from "../../lib/moneyManagerData.js";
-import { TransactionDayGroups } from "./TransactionDayGroups.jsx";
+
+const DATE_COL_FONT = "11.5px system-ui, sans-serif";
+
+// dd/mm/yyyy en la zona propia de la transacción (no la del navegador) —
+// mismo criterio que el resto de la app para decidir "a qué día pertenece".
+function ddmmyyyy(ms, tz) {
+  const [y, m, d] = dateInputValueInZone(ms, tz).split("-");
+  return `${d}/${m}/${y}`;
+}
 
 const EMPTY_FILTERS = { accountIds: [], categoryIds: [], dateFrom: "", dateTo: "", amountMin: "", amountMax: "" };
 
@@ -12,9 +20,21 @@ function hasActiveFilters(f) {
   return f.accountIds.length > 0 || f.categoryIds.length > 0 || f.dateFrom || f.dateTo || f.amountMin || f.amountMax;
 }
 
-function FiltersPanel({ draft, setDraft, accountGroups, categories, onBack, onApply, onClear }) {
+// Ordena los arrays antes de comparar — togglear cuenta/categoría en otro
+// orden (ej. sacar una del medio) no debería contar como "cambio" si el
+// conjunto resultante es el mismo que el ya aplicado.
+function filtersEqual(a, b) {
+  return [...a.accountIds].sort().join(",") === [...b.accountIds].sort().join(",")
+    && [...a.categoryIds].sort().join(",") === [...b.categoryIds].sort().join(",")
+    && a.dateFrom === b.dateFrom && a.dateTo === b.dateTo
+    && a.amountMin === b.amountMin && a.amountMax === b.amountMax;
+}
+
+function FiltersPanel({ draft, setDraft, filters, accountGroups, categories, onBack, onApply, onClear }) {
   const [categoryFilterType, setCategoryFilterType] = useState("expense");
   const categoryItems = categories.filter((c) => c.type === categoryFilterType && !c.deleted).map((c) => ({ value: c.id, label: c.name, icon: c.icon }));
+  const unchanged = filtersEqual(draft, filters);
+  const empty = filtersEqual(draft, EMPTY_FILTERS);
 
   return (
     <div style={styles.screen}>
@@ -61,20 +81,90 @@ function FiltersPanel({ draft, setDraft, accountGroups, categories, onBack, onAp
         </Field>
       </div>
       <Footer>
-        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onClear}>Limpiar</button>
-        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0 }} onClick={onApply}>Aplicar</button>
+        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0, opacity: empty ? 0.5 : 1 }} onClick={onClear} disabled={empty}>Limpiar</button>
+        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: unchanged ? 0.5 : 1 }} onClick={onApply} disabled={unchanged}>Aplicar</button>
       </Footer>
     </div>
   );
 }
 
-function SearchResults({ results, settings, accounts, categories, onNewTransaction, onEditTransaction }) {
+// Fila de resultado — a propósito NO reutiliza TransactionDayGroups (la
+// lista de Transacciones/drill-downs, agrupada por día sin mes/año): acá los
+// resultados pueden venir de meses o años distintos mezclados, así que cada
+// fila necesita su PROPIA fecha completa en vez de vivir agrupada bajo un
+// encabezado de "día" ambiguo. También muestra categoría (ícono + nombre) en
+// vez de solo el ícono — sin el contexto de "estás parado en Mercado" que sí
+// tiene Estadísticas, un emoji solo no alcanza para identificarla.
+function SearchResultRow({ t, accounts, categories, settings, dateColWidth, onEdit }) {
+  const account = accounts.find((a) => a.id === t.account_id);
+  const toAccount = accounts.find((a) => a.id === t.to_account_id);
+  const category = categories.find((c) => c.id === t.category_id);
+
+  const accountLabel = (a) => a && (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 3, ...(a.deleted ? { textDecoration: "line-through", color: "#B0473A" } : null) }}>
+      {a.icon && <span style={{ fontSize: 11 }}>{a.icon}</span>}
+      {a.name}
+      {a.deleted && <Trash2 size={10} style={{ flexShrink: 0 }} />}
+    </span>
+  );
+
+  return (
+    <div onClick={() => onEdit(t)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14, cursor: "pointer" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
+        {/* Bloque fecha+categoría — reemplaza el ícono solo de TransactionDayGroups:
+            acá hace falta la fecha (sin encabezado de día que agrupe) Y el
+            nombre de categoría (sin el contexto de "en qué pantalla estoy",
+            un emoji solo no alcanza para identificarla). */}
+        <div style={{ flexShrink: 0, width: dateColWidth, minHeight: 32, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <p style={{ margin: 0, fontSize: 11.5, color: "#A8754A" }}>{ddmmyyyy(new Date(t.date).getTime(), t.timezone)}</p>
+          {t.type !== "transfer" && (
+            <p style={{ margin: 0, fontSize: 11.5, color: "#6B6355", display: "flex", alignItems: "center", gap: 3, overflow: "hidden" }}>
+              {category?.icon && <span style={{ fontSize: 11, flexShrink: 0 }}>{category.icon}</span>}
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{category ? category.name : "Sin categoría"}</span>
+            </p>
+          )}
+        </div>
+        {/* Bloque nota+cuenta — igual que TransactionDayGroups: si no hay
+            nota, la cuenta sola queda centrada a la misma altura. */}
+        <div style={{ minWidth: 0, minHeight: 32, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          {t.type === "transfer" ? (
+            <>
+              <p style={{ margin: 0, fontWeight: 600 }}>{t.title || "Transferencia"}</p>
+              <p style={{ margin: 0, fontSize: 12, color: "#6B6355", display: "flex", alignItems: "center", gap: 4 }}>
+                {accountLabel(account)} → {accountLabel(toAccount)}
+              </p>
+            </>
+          ) : t.title ? (
+            <>
+              <p style={{ margin: 0, fontWeight: 600 }}>{t.title}</p>
+              <p style={{ margin: 0, fontSize: 12, color: "#6B6355" }}>{accountLabel(account)}</p>
+            </>
+          ) : (
+            <p style={{ margin: 0, fontSize: 12, color: "#6B6355" }}>{accountLabel(account)}</p>
+          )}
+        </div>
+      </div>
+      <span style={{ flexShrink: 0, fontWeight: 600, color: t.type === "income" ? "#3B6E62" : t.type === "expense" ? "#B0473A" : "#4A6FA5" }}>
+        {money(t.amount, t.currency)}
+      </span>
+    </div>
+  );
+}
+
+function SearchResults({ results, settings, accounts, categories, onEditTransaction }) {
   const income = results.filter((t) => t.type === "income").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
   const expense = results.filter((t) => t.type === "expense").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
   const transfer = results.filter((t) => t.type === "transfer").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+  // Ancho fijo = el de la fecha (siempre "dd/mm/yyyy", mismo ancho) — la
+  // categoría se achica con elipsis si no entra, nunca empuja la columna.
+  const dateColWidth = useMemo(() => Math.ceil(measureTextWidth("00/00/0000", DATE_COL_FONT)), []);
 
   return (
-    <>
+    // Un solo div envolviendo todo (no un Fragment con 2 raíces sueltas):
+    // así el espacio entre "N resultados" y la primera fila se controla acá
+    // adentro (marginTop) en vez de heredar el gap:14 del form padre —
+    // tiene que medir lo mismo que el padding-top de ese form (12px), no 14.
+    <div>
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", textAlign: "center", padding: "0 4px" }}>
           <div style={{ flex: 1 }}>
@@ -92,15 +182,12 @@ function SearchResults({ results, settings, accounts, categories, onNewTransacti
         </div>
         <p style={{ ...styles.muted, padding: 0, textAlign: "center", marginTop: 6 }}>{results.length} resultado{results.length === 1 ? "" : "s"}</p>
       </div>
-      <TransactionDayGroups
-        transactions={results}
-        settings={settings}
-        accounts={accounts}
-        categories={categories}
-        onNewTransaction={onNewTransaction}
-        onEditTransaction={onEditTransaction}
-      />
-    </>
+      <div style={{ marginTop: 12, borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
+        {results.map((t) => (
+          <SearchResultRow key={t.id} t={t} accounts={accounts} categories={categories} settings={settings} dateColWidth={dateColWidth} onEdit={onEditTransaction} />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -117,7 +204,7 @@ function SearchResults({ results, settings, accounts, categories, onNewTransacti
 
 export default function SearchScreen({
   session, settings, groups, accounts, categories, query, setQuery, filters, setFilters,
-  onBack, onNewTransaction, onEditTransaction, showError,
+  onBack, onEditTransaction, showError,
 }) {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -136,7 +223,15 @@ export default function SearchScreen({
   // los casos donde se dispara en el mismo gesto que los cambia (elegir una
   // sugerencia, aplicar filtros) — el state recién se actualiza en el
   // próximo render, así que leerlo ahí mismo traería el valor viejo.
+  // El guard de "sin texto y sin filtros no busca nada" vive acá adentro
+  // (no repetido en cada botón que puede disparar una búsqueda) — cubre
+  // tanto Enter con la barra vacía como "Limpiar" + "Aplicar" en Filtros.
   const runSearch = async (searchQuery = query, searchFilters = filters) => {
+    if (!searchQuery.trim() && !hasActiveFilters(searchFilters)) {
+      setResults([]);
+      setHasSearched(false);
+      return;
+    }
     setLoading(true);
     setHasSearched(true);
     setNoteDismissed(true);
@@ -153,7 +248,7 @@ export default function SearchScreen({
   // Si volvés de editar una transacción con una búsqueda ya activa, se
   // vuelve a correr sola (no queda "pegada" al resultado viejo).
   useEffect(() => {
-    if (query.trim() || hasActiveFilters(filters)) void runSearch();
+    void runSearch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -171,6 +266,7 @@ export default function SearchScreen({
       <FiltersPanel
         draft={draft}
         setDraft={setDraft}
+        filters={filters}
         accountGroups={accountGroups}
         categories={categories}
         onBack={() => setFiltersOpen(false)}
@@ -186,7 +282,7 @@ export default function SearchScreen({
         title="Buscar"
         onBack={onBack}
         right={
-          <button style={styles.iconBtnGhost} onClick={openFilters} aria-label="Filtros">
+          <button style={{ ...styles.iconBtnGhost, position: "relative" }} onClick={openFilters} aria-label="Filtros">
             <SlidersHorizontal size={19} />
             {hasActiveFilters(filters) && <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: "#C75D3B" }} />}
           </button>
@@ -243,7 +339,6 @@ export default function SearchScreen({
             settings={settings}
             accounts={accounts}
             categories={categories}
-            onNewTransaction={onNewTransaction}
             onEditTransaction={onEditTransaction}
           />
         )}

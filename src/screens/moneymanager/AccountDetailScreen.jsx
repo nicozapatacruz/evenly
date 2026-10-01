@@ -209,6 +209,11 @@ export default function AccountDetailScreen({ session, account = null, groups, a
                 </select>
               </Field>
             </div>
+            {(statementDay >= 29 || paymentDay >= 29) && (
+              <p style={{ ...styles.muted, padding: 0, marginTop: -8, color: "#A8754A" }}>
+                Si el día elegido no existe en algún mes (ej. 30 o 31 en febrero), se va a usar el último día real de ese mes.
+              </p>
+            )}
             <ToggleField
               label="Pago automático"
               description="Transfiere automáticamente el saldo a pagar en la fecha de pago."

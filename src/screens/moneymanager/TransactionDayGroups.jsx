@@ -90,9 +90,14 @@ export function TransactionDayGroups({ transactions, settings, accounts, categor
                 style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14, cursor: "pointer" }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
-                  {t.type !== "transfer" && categoryIcon(t.category_id) && (
-                    <span style={{ position: "relative", flexShrink: 0, display: "inline-flex" }}>
-                      <span style={{ fontSize: 18, lineHeight: 1, opacity: categoryDeleted(t.category_id) ? 0.5 : 1 }}>{categoryIcon(t.category_id)}</span>
+                  {t.type !== "transfer" && (
+                    // Alto fijo siempre (haya ícono o no) — si no, una fila sin
+                    // categoría queda más baja que una con categoría, porque el
+                    // emoji del ícono es lo que más alto mide de toda la fila.
+                    <span style={{ position: "relative", flexShrink: 0, display: "inline-flex", width: 18, height: 18, alignItems: "center", justifyContent: "center" }}>
+                      {categoryIcon(t.category_id) && (
+                        <span style={{ fontSize: 18, lineHeight: 1, opacity: categoryDeleted(t.category_id) ? 0.5 : 1 }}>{categoryIcon(t.category_id)}</span>
+                      )}
                       {categoryDeleted(t.category_id) && (
                         <span style={{ position: "absolute", bottom: -3, right: -5, background: "#fff", borderRadius: "50%", padding: 1, display: "flex" }}>
                           <Trash2 size={10} color="#B0473A" />
@@ -100,7 +105,10 @@ export function TransactionDayGroups({ transactions, settings, accounts, categor
                       )}
                     </span>
                   )}
-                  <div style={{ minWidth: 0 }}>
+                  {/* minHeight: 32 — una transacción sin nota (sin "título") solo
+                      muestra 1 línea en vez de 2, y quedaba más baja que el
+                      resto; con esto reserva el mismo alto igual. */}
+                  <div style={{ minWidth: 0, minHeight: 32 }}>
                     {t.type === "transfer" ? (
                       <>
                         <p style={{ margin: 0, fontWeight: 600 }}>{t.title || "Transferencia"}</p>

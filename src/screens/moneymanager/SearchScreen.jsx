@@ -192,6 +192,7 @@ export default function SearchScreen({
   if (filtersOpen) {
     return (
       <FiltersPanel
+        title="Filtros de búsqueda"
         draft={draft}
         setDraft={setDraft}
         filters={filters}

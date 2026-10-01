@@ -6,7 +6,7 @@ import { EMPTY_FILTERS, filtersEqual } from "../../lib/filterHelpers.js";
 // Compartido entre el Buscador y el filtro persistente de Transacciones/
 // Estadísticas — misma UI de filtros en los dos casos, solo cambia qué hace
 // "Aplicar" con el resultado (correr una búsqueda vs. filtrar en el cliente).
-export function FiltersPanel({ draft, setDraft, filters, accountGroups, categories, onBack, onApply, onClear }) {
+export function FiltersPanel({ draft, setDraft, filters, accountGroups, categories, onBack, onApply, onClear, title = "Filtros" }) {
   const [categoryFilterType, setCategoryFilterType] = useState("expense");
   const categoryItems = categories.filter((c) => c.type === categoryFilterType && !c.deleted).map((c) => ({ value: c.id, label: c.name, icon: c.icon }));
   const unchanged = filtersEqual(draft, filters);
@@ -14,7 +14,7 @@ export function FiltersPanel({ draft, setDraft, filters, accountGroups, categori
 
   return (
     <div style={styles.screen}>
-      <TopBar title="Filtros" onBack={onBack} />
+      <TopBar title={title} onBack={onBack} />
       <div style={styles.form}>
         <div style={{ display: "flex", gap: 10 }}>
           <Field label="Importe mínimo" style={{ flex: 1 }}>

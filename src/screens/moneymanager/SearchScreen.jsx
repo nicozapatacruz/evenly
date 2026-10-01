@@ -96,7 +96,7 @@ function SearchResults({ results, settings, accounts, categories, onEditTransact
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", textAlign: "center", padding: "0 4px" }}>
           <div style={{ flex: 1 }}>
-            <p style={{ ...styles.muted, padding: 0, margin: 0, fontSize: 12 }}>Ingreso</p>
+            <p style={{ ...styles.muted, padding: 0, margin: 0, fontSize: 12 }}>Ingresos</p>
             <p style={{ margin: "2px 0 0", fontWeight: 700, color: "#3B6E62" }}>{money(income, settings.main_currency)}</p>
           </div>
           <div style={{ flex: 1 }}>
@@ -104,7 +104,7 @@ function SearchResults({ results, settings, accounts, categories, onEditTransact
             <p style={{ margin: "2px 0 0", fontWeight: 700, color: "#B0473A" }}>{money(expense, settings.main_currency)}</p>
           </div>
           <div style={{ flex: 1 }}>
-            <p style={{ ...styles.muted, padding: 0, margin: 0, fontSize: 12 }}>Transferencia</p>
+            <p style={{ ...styles.muted, padding: 0, margin: 0, fontSize: 12 }}>Transferencias</p>
             <p style={{ margin: "2px 0 0", fontWeight: 700 }}>{money(transfer, settings.main_currency)}</p>
           </div>
         </div>

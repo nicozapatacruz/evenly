@@ -47,7 +47,7 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
           <MonthNav viewMonth={viewMonth} setViewMonth={setViewMonth} />
           <div style={{ display: "flex", justifyContent: "space-between", textAlign: "center", padding: "0 4px" }}>
             <div style={{ flex: 1 }}>
-              <p style={{ ...styles.muted, padding: 0, margin: 0, fontSize: 12 }}>Ingreso</p>
+              <p style={{ ...styles.muted, padding: 0, margin: 0, fontSize: 12 }}>Ingresos</p>
               <p style={{ margin: "2px 0 0", fontWeight: 700, color: "#3B6E62" }}>{money(monthIncome, settings.main_currency)}</p>
             </div>
             <div style={{ flex: 1 }}>
@@ -63,12 +63,13 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
       </div>
       <div key={slide.key} className={slide.className} style={{ ...styles.form, flex: 1, paddingTop: 12, paddingBottom: 100 }} {...swipeHandlers}>
         {/* Un solo div envolviendo banner+contenido (no 2 hijos sueltos del
-            form de arriba): así el espacio de abajo del banner se controla
-            acá (marginBottom) en vez de heredar también el gap:14 del form
-            padre — tiene que medir lo mismo que el padding-top de ese form
-            (12px), no 12+14. */}
-        <div>
-          {hasActiveFilters(filters) && <div style={{ marginBottom: 12 }}><FiltersActiveBanner onOpen={onOpenFilters} onClear={onClearFilters} /></div>}
+            form de arriba, que tiene gap:14 — un valor distinto al que usan
+            Cuentas/Tus grupos) — gap:8 acá adentro iguala el espacio entre
+            tarjetas de día al resto de la app. El banner es la excepción:
+            necesita 12px (no 8) hacia el contenido, así que se le suma un
+            marginBottom extra de 4 (8 del gap + 4 = 12). */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {hasActiveFilters(filters) && <div style={{ marginBottom: 4 }}><FiltersActiveBanner onOpen={onOpenFilters} onClear={onClearFilters} /></div>}
           {loading ? (
             <div style={styles.emptyState}>
               <p style={styles.emptyTitle}>Cargando transacciones…</p>

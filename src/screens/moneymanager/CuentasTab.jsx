@@ -123,7 +123,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
           </div>
         }
       />
-      <div style={{ ...styles.form, paddingTop: 12 }}>
+      <div style={{ ...styles.form, paddingTop: 12, gap: 8 }}>
         <div style={{ display: "flex", justifyContent: "space-between", textAlign: "center", padding: "0 4px 8px" }}>
           <div style={{ flex: 1 }}>
             <p style={{ ...styles.muted, padding: 0, fontSize: 12 }}>Capital</p>

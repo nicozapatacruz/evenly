@@ -106,7 +106,7 @@ export default function EstadisticasTab({ userId, settings, categories, viewMont
               style={{ ...(type === "income" ? { ...styles.tabActive, background: "#3B6E62", borderColor: "#3B6E62" } : styles.tab), display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "7px 0" }}
               onClick={() => setType("income")}
             >
-              <span>Ingreso</span>
+              <span>Ingresos</span>
               <span style={{ color: type === "income" ? "#fff" : "#3B6E62" }}>{money(incomeSum, settings.main_currency)}</span>
             </button>
             <button

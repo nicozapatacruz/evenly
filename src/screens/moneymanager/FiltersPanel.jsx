@@ -59,7 +59,7 @@ export function FiltersPanel({ draft, setDraft, filters, accountGroups, categori
         <Field label="Categoría">
           <div style={{ display: "flex", gap: 8, marginBottom: 2 }}>
             <button type="button" style={{ ...(categoryFilterType === "expense" ? styles.tabActive : styles.tab), position: "relative" }} onClick={() => setCategoryFilterType("expense")}>
-              Gastos
+              Gasto
               {expenseCount > 0 && (
                 <span style={{ position: "absolute", top: -8, right: -8, minWidth: 20, height: 20, padding: "0 4px", borderRadius: 10, background: "#C75D3B", color: "#fff", fontSize: 11.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff" }}>
                   {expenseCount}

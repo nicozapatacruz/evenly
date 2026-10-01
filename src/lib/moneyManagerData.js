@@ -429,6 +429,34 @@ export function useCategoryTimeline(userId, type, categoryId) {
   return { totals, loading };
 }
 
+// Títulos (campo "Nota") de transacciones recientes, para el autocompletado
+// del formulario — una sola consulta al abrir el formulario, no una por
+// tecla. Se trae un lote acotado (las últimas 300 con nota) en vez de toda la
+// tabla, y se dedupe en el cliente preservando el orden (más reciente primero).
+export function useRecentNoteTitles(userId) {
+  const [titles, setTitles] = useState([]);
+
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("mm_transactions")
+        .select("title")
+        .eq("user_id", userId)
+        .eq("deleted", false)
+        .not("title", "is", null)
+        .order("date", { ascending: false })
+        .limit(300);
+      if (cancelled) return;
+      setTitles([...new Set((data || []).map((t) => t.title).filter(Boolean))]);
+    })();
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  return titles;
+}
+
 // Transacciones relevantes para calcular "saldo a pagar"/"restante" de las
 // tarjetas de crédito — una sola consulta acotada a las cuentas que son
 // tarjeta (no toda la tabla), sin límite de fecha (el balde "pasado" no

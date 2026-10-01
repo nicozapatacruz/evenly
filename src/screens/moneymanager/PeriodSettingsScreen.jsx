@@ -14,8 +14,8 @@ const STARTUP_TAB_OPTIONS = [
 
 /* =========================================================================
    DETALLES DEL PERÍODO — día de inicio del mes/semana, autocompletar notas
-   (el toggle vive acá; la función en sí de sugerir notas anteriores todavía
-   no está construida — ver memoria de simplificaciones) y la tab de inicio.
+   (el toggle vive acá; la sugerencia en sí se arma en TransactionForm, con
+   useRecentNoteTitles) y la tab de inicio.
    ========================================================================= */
 
 export default function PeriodSettingsScreen({ session, settings, reload, showError, showInfo, onBack }) {

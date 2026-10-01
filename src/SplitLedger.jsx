@@ -513,7 +513,18 @@ const TABS = [
 function AppShell({ session, onLogout, refreshProfile }) {
   const { groups, loading, reloadGroup, deleteGroup, reload: reloadGroups } = useGroups(session.userId);
   const moneyManager = useMoneyManager(session.userId);
-  const [activeTab, setActiveTab] = useState(() => (session.splitLedgerEnabled ? "splitledger" : "config"));
+  // Se guarda en localStorage para que sobreviva a cerrar y reabrir la app
+  // (no solo pasar a segundo plano) — un recarga de página en frío siempre
+  // vuelve a correr este useState desde cero, perdiendo cualquier estado en
+  // memoria.
+  const [activeTab, setActiveTab] = useState(() => {
+    const saved = localStorage.getItem("evenly_activeTab");
+    if (saved && TABS.some((t) => t.key === saved)) return saved;
+    return session.splitLedgerEnabled ? "splitledger" : "config";
+  });
+  useEffect(() => {
+    localStorage.setItem("evenly_activeTab", activeTab);
+  }, [activeTab]);
   const [splitLedgerView, setSplitLedgerView] = useState({ screen: "home" });
   const [accountsView, setAccountsView] = useState({ screen: "list" });
   const [ledgerView, setLedgerView] = useState({ screen: "list" });

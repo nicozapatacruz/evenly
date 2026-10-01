@@ -26,7 +26,15 @@ export default function ConfigScreen({
   moneyManager, onSaveMoneyTransaction, creatingRecurring, setCreatingRecurring,
   moneyManagerScreen, setMoneyManagerScreen,
 }) {
-  const [section, setSection] = useState("moneymanager"); // "moneymanager" | "splitledger"
+  // Igual que activeTab en SplitLedger.jsx: en localStorage para que
+  // sobreviva a cerrar y reabrir la app, no solo a pasar a segundo plano.
+  const [section, setSection] = useState(() => {
+    const saved = localStorage.getItem("evenly_configSection");
+    return saved === "moneymanager" || saved === "splitledger" ? saved : "moneymanager";
+  });
+  useEffect(() => {
+    localStorage.setItem("evenly_configSection", section);
+  }, [section]);
 
   if (creatingRecurring) {
     return (

@@ -7,12 +7,12 @@ import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, Footer, ConfirmInline, IconInput, PickerField, Field } from "../../components/Shared.jsx";
 import { parseAmountInput, todayInputValue, dateInputValueInZone, money } from "../../lib/helpers.jsx";
-import { RECURRING_FREQUENCIES, nextOccurrence, computeAmountMain } from "../../lib/moneyManagerData.js";
+import { RECURRING_FREQUENCIES, nextOccurrence, computeAmountMain, useRecentNoteTitles } from "../../lib/moneyManagerData.js";
 
 const TYPE_INFO = {
-  income: { label: "Ingreso", color: "#3B6E62" },
-  expense: { label: "Gasto", color: "#C75D3B" },
-  transfer: { label: "Transferencia", color: "#4A6FA5" },
+  income: { label: "Ingreso", newLabel: "Nuevo ingreso", color: "#3B6E62" },
+  expense: { label: "Gasto", newLabel: "Nuevo gasto", color: "#C75D3B" },
+  transfer: { label: "Transferencia", newLabel: "Nueva transferencia", color: "#4A6FA5" },
 };
 
 /* =========================================================================
@@ -43,6 +43,11 @@ export default function TransactionForm({
   const [accountId, setAccountId] = useState(editingTransaction?.account_id || defaultAccountId || "");
   const [toAccountId, setToAccountId] = useState(editingTransaction?.to_account_id || "");
   const [note, setNote] = useState(editingTransaction?.title || "");
+  const [noteSuggestOpen, setNoteSuggestOpen] = useState(false);
+  const recentNoteTitles = useRecentNoteTitles(session.userId);
+  const noteSuggestions = settings.autocomplete_notes && note.trim()
+    ? recentNoteTitles.filter((t) => t.toLowerCase().includes(note.trim().toLowerCase()) && t.toLowerCase() !== note.trim().toLowerCase()).slice(0, 5)
+    : [];
   const [description, setDescription] = useState(editingTransaction?.memo || "");
   const [saving, setSaving] = useState(false);
   const [touched, setTouched] = useState({});
@@ -170,7 +175,7 @@ export default function TransactionForm({
   return (
     <div style={styles.screen}>
       <TopBar
-        title={editingTransaction ? `Editar ${TYPE_INFO[type].label}` : TYPE_INFO[type].label}
+        title={editingTransaction ? `Editar ${TYPE_INFO[type].label}` : TYPE_INFO[type].newLabel}
         onBack={onCancel}
         right={editingTransaction && (
           <button style={styles.iconBtnGhost} onClick={() => setConfirmDelete(true)} aria-label="Eliminar">
@@ -348,7 +353,34 @@ export default function TransactionForm({
         )}
 
         <Field label="Nota">
-          <input style={styles.input} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Opcional" />
+          <div style={{ position: "relative" }}>
+            <input
+              style={{ ...styles.input, width: "100%" }}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              onFocus={() => setNoteSuggestOpen(true)}
+              onBlur={() => setNoteSuggestOpen(false)}
+              placeholder="Opcional"
+            />
+            {noteSuggestOpen && noteSuggestions.length > 0 && (
+              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, zIndex: 5, border: "1px solid #DDD2BE", borderRadius: 10, background: "#fff", overflow: "hidden", boxShadow: "0 4px 10px rgba(0,0,0,0.08)" }}>
+                {noteSuggestions.map((s) => (
+                  <button
+                    type="button"
+                    key={s}
+                    // onMouseDown con preventDefault (no onClick) para que el
+                    // input nunca llegue a perder el foco (onBlur) antes de
+                    // que se registre la selección — si no, el blur cierra el
+                    // desplegable justo antes de que el click llegue al botón.
+                    onMouseDown={(e) => { e.preventDefault(); setNote(s); setNoteSuggestOpen(false); }}
+                    style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 12px", fontSize: 13, fontFamily: "system-ui, sans-serif", border: "none", background: "#fff", color: "#2B2620", cursor: "pointer" }}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </Field>
 
         <Field label="Descripción">

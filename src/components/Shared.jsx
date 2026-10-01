@@ -478,6 +478,7 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", o
                     type="button"
                     key={it.value}
                     onClick={(e) => { e.stopPropagation(); onChange(it.value); setOpen(false); }}
+                    onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); onChange(it.value); setOpen(false); }}
                     style={{
                       display: "flex", alignItems: "center", gap: 6, padding: "10px 8px", fontSize: 12.5, fontFamily: "system-ui, sans-serif",
                       border: "none", background: it.value === value ? "#FBEDE7" : "#fff", color: "#2B2620", textAlign: "left", cursor: "pointer", minWidth: 0,

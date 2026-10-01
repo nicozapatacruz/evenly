@@ -12,6 +12,14 @@ export function FiltersPanel({ draft, setDraft, filters, accountGroups, categori
   const unchanged = filtersEqual(draft, filters);
   const empty = filtersEqual(draft, EMPTY_FILTERS);
 
+  // Cuántas categorías elegidas hay de cada tipo — para avisar en la
+  // pestaña que no estás mirando que ahí también quedó algo seleccionado
+  // (categoryIds es un solo array para los dos tipos, así que cambiar de
+  // pestaña no se "ve" si no hay algo que lo marque).
+  const countByType = (t) => draft.categoryIds.filter((id) => categories.find((c) => c.id === id)?.type === t).length;
+  const expenseCount = countByType("expense");
+  const incomeCount = countByType("income");
+
   return (
     <div style={styles.screen}>
       <TopBar title={title} onBack={onBack} />
@@ -50,8 +58,22 @@ export function FiltersPanel({ draft, setDraft, filters, accountGroups, categori
 
         <Field label="Categoría">
           <div style={{ display: "flex", gap: 8, marginBottom: 2 }}>
-            <button type="button" style={categoryFilterType === "expense" ? styles.tabActive : styles.tab} onClick={() => setCategoryFilterType("expense")}>Gastos</button>
-            <button type="button" style={categoryFilterType === "income" ? styles.tabActive : styles.tab} onClick={() => setCategoryFilterType("income")}>Ingreso</button>
+            <button type="button" style={{ ...(categoryFilterType === "expense" ? styles.tabActive : styles.tab), position: "relative" }} onClick={() => setCategoryFilterType("expense")}>
+              Gastos
+              {expenseCount > 0 && (
+                <span style={{ position: "absolute", top: -8, right: -8, minWidth: 20, height: 20, padding: "0 4px", borderRadius: 10, background: "#C75D3B", color: "#fff", fontSize: 11.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff" }}>
+                  {expenseCount}
+                </span>
+              )}
+            </button>
+            <button type="button" style={{ ...(categoryFilterType === "income" ? styles.tabActive : styles.tab), position: "relative" }} onClick={() => setCategoryFilterType("income")}>
+              Ingreso
+              {incomeCount > 0 && (
+                <span style={{ position: "absolute", top: -8, right: -8, minWidth: 20, height: 20, padding: "0 4px", borderRadius: 10, background: "#C75D3B", color: "#fff", fontSize: 11.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff" }}>
+                  {incomeCount}
+                </span>
+              )}
+            </button>
           </div>
           <MultiPickerField
             value={draft.categoryIds}

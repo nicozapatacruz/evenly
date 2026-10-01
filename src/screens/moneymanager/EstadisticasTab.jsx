@@ -88,13 +88,14 @@ export default function EstadisticasTab({ userId, settings, categories, viewMont
           title="Estadísticas"
           right={
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <button style={styles.iconBtnGhost} onClick={onOpenFilters} aria-label="Filtros">
+              <TodayButton viewMonth={viewMonth} setViewMonth={setViewMonth} />
+              <button style={{ ...styles.iconBtnGhost, position: "relative" }} onClick={onOpenFilters} aria-label="Filtros">
                 <SlidersHorizontal size={19} />
+                {filtering && <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: "#C75D3B" }} />}
               </button>
               <button style={styles.iconBtnGhost} onClick={onOpenSearch} aria-label="Buscar">
                 <Search size={19} />
               </button>
-              <TodayButton viewMonth={viewMonth} setViewMonth={setViewMonth} />
             </div>
           }
         />
@@ -119,7 +120,12 @@ export default function EstadisticasTab({ userId, settings, categories, viewMont
         </div>
       </div>
       <div key={slide.key} className={slide.className} style={{ ...styles.form, flex: 1, paddingTop: 12 }} {...swipeHandlers}>
-        {filtering && <FiltersActiveBanner onOpen={onOpenFilters} onClear={onClearFilters} />}
+        {/* Un solo div envolviendo banner+contenido — mismo motivo que en
+            DiarioTab: así el espacio de abajo del banner se controla acá
+            (marginBottom) en vez de heredar también el gap:14 del form
+            padre, y mide lo mismo que el padding-top de arriba (12px). */}
+        <div>
+        {filtering && <div style={{ marginBottom: 12 }}><FiltersActiveBanner onOpen={onOpenFilters} onClear={onClearFilters} /></div>}
         {loading ? (
           <div style={styles.emptyState}>
             <p style={styles.emptyTitle}>Cargando…</p>
@@ -187,6 +193,7 @@ export default function EstadisticasTab({ userId, settings, categories, viewMont
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );

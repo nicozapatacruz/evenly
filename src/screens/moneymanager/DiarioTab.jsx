@@ -32,13 +32,14 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
           title="Transacciones"
           right={
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <button style={styles.iconBtnGhost} onClick={onOpenFilters} aria-label="Filtros">
+              <TodayButton viewMonth={viewMonth} setViewMonth={setViewMonth} />
+              <button style={{ ...styles.iconBtnGhost, position: "relative" }} onClick={onOpenFilters} aria-label="Filtros">
                 <SlidersHorizontal size={19} />
+                {hasActiveFilters(filters) && <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: "#C75D3B" }} />}
               </button>
               <button style={styles.iconBtnGhost} onClick={onOpenSearch} aria-label="Buscar">
                 <Search size={19} />
               </button>
-              <TodayButton viewMonth={viewMonth} setViewMonth={setViewMonth} />
             </div>
           }
         />
@@ -61,28 +62,35 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
         </div>
       </div>
       <div key={slide.key} className={slide.className} style={{ ...styles.form, flex: 1, paddingTop: 12, paddingBottom: 100 }} {...swipeHandlers}>
-        {hasActiveFilters(filters) && <FiltersActiveBanner onOpen={onOpenFilters} onClear={onClearFilters} />}
-        {loading ? (
-          <div style={styles.emptyState}>
-            <p style={styles.emptyTitle}>Cargando transacciones…</p>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div style={styles.emptyState}>
-            <p style={styles.emptyTitle}>{monthTx.length === 0 ? "Nada registrado este mes" : "Nada coincide con el filtro"}</p>
-            <p style={{ ...styles.muted, padding: 0 }}>
-              {monthTx.length === 0 ? 'Tocá el "+" de abajo para anotar un ingreso, gasto o transferencia.' : "Probá cambiando los filtros."}
-            </p>
-          </div>
-        ) : (
-          <TransactionDayGroups
-            transactions={filtered}
-            settings={settings}
-            accounts={accounts}
-            categories={categories}
-            onNewTransaction={onNewTransaction}
-            onEditTransaction={onEditTransaction}
-          />
-        )}
+        {/* Un solo div envolviendo banner+contenido (no 2 hijos sueltos del
+            form de arriba): así el espacio de abajo del banner se controla
+            acá (marginBottom) en vez de heredar también el gap:14 del form
+            padre — tiene que medir lo mismo que el padding-top de ese form
+            (12px), no 12+14. */}
+        <div>
+          {hasActiveFilters(filters) && <div style={{ marginBottom: 12 }}><FiltersActiveBanner onOpen={onOpenFilters} onClear={onClearFilters} /></div>}
+          {loading ? (
+            <div style={styles.emptyState}>
+              <p style={styles.emptyTitle}>Cargando transacciones…</p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div style={styles.emptyState}>
+              <p style={styles.emptyTitle}>{monthTx.length === 0 ? "Nada registrado este mes" : "Nada coincide con el filtro"}</p>
+              <p style={{ ...styles.muted, padding: 0 }}>
+                {monthTx.length === 0 ? 'Tocá el "+" de abajo para anotar un ingreso, gasto o transferencia.' : "Probá cambiando los filtros."}
+              </p>
+            </div>
+          ) : (
+            <TransactionDayGroups
+              transactions={filtered}
+              settings={settings}
+              accounts={accounts}
+              categories={categories}
+              onNewTransaction={onNewTransaction}
+              onEditTransaction={onEditTransaction}
+            />
+          )}
+        </div>
       </div>
 
       <button style={{ ...styles.fab, bottom: "calc(78px + env(safe-area-inset-bottom))" }} onClick={() => onNewTransaction()} aria-label="Nueva transacción">

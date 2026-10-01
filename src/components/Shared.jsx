@@ -215,7 +215,7 @@ export function useMonthSlide(viewMonth) {
 // deshacer (volvés a Filtros y los aplicás de nuevo, no se pierde nada).
 export function FiltersActiveBanner({ onOpen, onClear }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "7px 10px 7px 14px", borderRadius: 20, background: "#FBEDE7", border: "1px solid #EBC9BA", marginBottom: 10 }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "7px 10px 7px 14px", borderRadius: 20, background: "#FBEDE7", border: "1px solid #EBC9BA" }}>
       <button type="button" onClick={onOpen} style={{ flex: 1, background: "none", border: "none", padding: 0, textAlign: "left", fontSize: 13, fontWeight: 600, fontFamily: "system-ui, sans-serif", color: "#C75D3B", cursor: "pointer" }}>
         Filtros activos
       </button>

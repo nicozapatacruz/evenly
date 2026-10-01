@@ -16,21 +16,26 @@ export function FiltersPanel({ draft, setDraft, filters, accountGroups, categori
     <div style={styles.screen}>
       <TopBar title={title} onBack={onBack} />
       <div style={styles.form}>
+        {/* minWidth:0 en los dos Field de cada fila — por default un hijo de
+            flex no se achica más allá del tamaño de SU contenido ("min-width:
+            auto"), y un <input type="date"> vacío en iOS renderiza bastante
+            más ancho que la mitad de la pantalla. Sin esto, empuja el layout
+            entero más ancho que el viewport en vez de achicarse al 50%. */}
         <div style={{ display: "flex", gap: 10 }}>
-          <Field label="Importe mínimo" style={{ flex: 1 }}>
-            <input style={styles.input} value={draft.amountMin} onChange={(e) => setDraft((d) => ({ ...d, amountMin: e.target.value }))} placeholder="0.00" inputMode="decimal" />
+          <Field label="Importe mínimo" style={{ flex: 1, minWidth: 0 }}>
+            <input style={{ ...styles.input, width: "100%" }} value={draft.amountMin} onChange={(e) => setDraft((d) => ({ ...d, amountMin: e.target.value }))} placeholder="0.00" inputMode="decimal" />
           </Field>
-          <Field label="Importe máximo" style={{ flex: 1 }}>
-            <input style={styles.input} value={draft.amountMax} onChange={(e) => setDraft((d) => ({ ...d, amountMax: e.target.value }))} placeholder="0.00" inputMode="decimal" />
+          <Field label="Importe máximo" style={{ flex: 1, minWidth: 0 }}>
+            <input style={{ ...styles.input, width: "100%" }} value={draft.amountMax} onChange={(e) => setDraft((d) => ({ ...d, amountMax: e.target.value }))} placeholder="0.00" inputMode="decimal" />
           </Field>
         </div>
 
         <div style={{ display: "flex", gap: 10 }}>
-          <Field label="Desde" style={{ flex: 1 }}>
-            <input style={styles.input} type="date" value={draft.dateFrom} onChange={(e) => setDraft((d) => ({ ...d, dateFrom: e.target.value }))} />
+          <Field label="Desde" style={{ flex: 1, minWidth: 0 }}>
+            <input style={{ ...styles.input, width: "100%" }} type="date" value={draft.dateFrom} onChange={(e) => setDraft((d) => ({ ...d, dateFrom: e.target.value }))} />
           </Field>
-          <Field label="Hasta" style={{ flex: 1 }}>
-            <input style={styles.input} type="date" value={draft.dateTo} onChange={(e) => setDraft((d) => ({ ...d, dateTo: e.target.value }))} />
+          <Field label="Hasta" style={{ flex: 1, minWidth: 0 }}>
+            <input style={{ ...styles.input, width: "100%" }} type="date" value={draft.dateTo} onChange={(e) => setDraft((d) => ({ ...d, dateTo: e.target.value }))} />
           </Field>
         </div>
 

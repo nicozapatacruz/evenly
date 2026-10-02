@@ -18,7 +18,7 @@ import TransactionForm from "./TransactionForm.jsx";
    manageGroups / manageAccounts: pantallas de edición (TopBar).
    ========================================================================= */
 
-export default function CuentasTab({ session, settings, groups, accounts, accountTotals, categories, reload, reloadCategories, showError, showInfo, view, setView, onSaveMoneyTransaction, onDeleteMoneyTransaction }) {
+export default function CuentasTab({ session, settings, groups, accounts, accountTotals, categories, slLinks, onOpenSplitLedgerGroup, reload, reloadCategories, showError, showInfo, view, setView, onSaveMoneyTransaction, onDeleteMoneyTransaction }) {
   const balanceColor = (n) => (n > 0.004 ? "#3B6E62" : n < -0.004 ? "#B0473A" : "#6B6355");
   const [deletedOpen, setDeletedOpen] = useState(false);
 
@@ -36,6 +36,8 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
         accounts={accounts}
         accountTotals={accountTotals}
         settings={settings}
+        slLinks={slLinks}
+        onOpenSplitLedgerGroup={onOpenSplitLedgerGroup}
         reload={reload}
         showError={showError}
         showInfo={showInfo}
@@ -151,8 +153,14 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
           if (groupAccounts.length === 0) return null;
           const visibleAccounts = groupAccounts.filter((a) => !a.hidden);
           const gBalance = groupBalance(g.id, accounts, accountTotals);
+          // Línea divisoria (mismo borde que el header) antes del grupo
+          // "Split Ledger" — para que se note que no es un grupo común, es
+          // el reflejo de tus grupos compartidos vinculados.
+          const isSystemGroup = g.system_key === "split_ledger";
           return (
-            <div key={g.id} style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
+            <React.Fragment key={g.id}>
+              {isSystemGroup && <div style={{ borderTop: "1px solid #ECE3D3" }} />}
+              <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
               <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "#FAF7F2", borderBottom: visibleAccounts.length ? "1px solid #F0EBE2" : "none" }}>
                 <span style={{ fontWeight: 700, fontSize: 13.5, fontFamily: "system-ui, sans-serif" }}>{g.name}</span>
                 <span style={{ fontWeight: 700, fontSize: 13.5, fontFamily: "system-ui, sans-serif", color: balanceColor(gBalance) }}>{money(gBalance, settings.main_currency)}</span>
@@ -180,7 +188,8 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
                   </div>
                 );
               })}
-            </div>
+              </div>
+            </React.Fragment>
           );
         })}
 
@@ -346,7 +355,7 @@ function SortableGroupRow({ group, onOpen, draggable }) {
 // (Footer Cancelar/Guardar, igual que AccountDetailScreen) se administra acá
 // la lista de cuentas hijas — eso sigue siendo inmediato, como el resto de
 // los drag-and-drop de la app.
-export function ManageAccounts({ session, group = null, groups, accounts, accountTotals, settings, reload, showError, showInfo, justCreated, onBack, onCreated, onDeleted }) {
+export function ManageAccounts({ session, group = null, groups, accounts, accountTotals, settings, slLinks, onOpenSplitLedgerGroup, reload, showError, showInfo, justCreated, onBack, onCreated, onDeleted }) {
   // Solo el primer render de esta pantalla (llegando recién de "Nuevo
   // grupo") — no se recalcula después, así que un re-render por cualquier
   // otro motivo no lo hace reaparecer.
@@ -359,9 +368,14 @@ export function ManageAccounts({ session, group = null, groups, accounts, accoun
   const [viewingAccountId, setViewingAccountId] = useState(null);
   const [nameTouched, setNameTouched] = useState(false);
 
+  // El grupo "Split Ledger" (auto-creado al vincular un grupo compartido) no
+  // se renombra/borra a mano acá — se desvincula desde Split Ledger. Si no,
+  // un cambio acá rompe la referencia que guarda el vínculo sin que se note.
+  const isSystemGroup = group?.system_key === "split_ledger";
+
   // Al crear siempre es "dirty" (no hay un original con qué comparar).
   const isDirty = !group || name.trim() !== group.name;
-  const canSave = isDirty && !!name.trim();
+  const canSave = isDirty && !!name.trim() && !isSystemGroup;
 
   const handleSave = async () => {
     if (saving) return;
@@ -455,7 +469,7 @@ export function ManageAccounts({ session, group = null, groups, accounts, accoun
       <TopBar
         title={group ? "Editar grupo" : "Nuevo grupo"}
         onBack={onBack}
-        right={group && (
+        right={group && !isSystemGroup && (
           <button style={styles.iconBtnGhost} onClick={() => setConfirmDelete(true)} aria-label="Eliminar">
             <Trash2 size={18} />
           </button>
@@ -473,8 +487,13 @@ export function ManageAccounts({ session, group = null, groups, accounts, accoun
       )}
       <div style={{ ...styles.form, paddingBottom: 100 }}>
         <Field label="Nombre" required error={nameTouched && !name.trim() ? "Este campo es obligatorio." : ""}>
-          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} onBlur={() => setNameTouched(true)} placeholder={group ? undefined : "Nombre (ej: Santander, Efectivo)"} />
+          <input style={styles.input} value={name} disabled={isSystemGroup} onChange={(e) => setName(e.target.value)} onBlur={() => setNameTouched(true)} placeholder={group ? undefined : "Nombre (ej: Santander, Efectivo)"} />
         </Field>
+        {isSystemGroup && (
+          <p style={{ ...styles.muted, padding: 0, marginTop: -8 }}>
+            Se crea solo al vincular un grupo de Split Ledger — se desvincula desde ahí, no se edita acá.
+          </p>
+        )}
         {group && showCreatedHint && (
           <p style={{ margin: "4px 0 -8px", fontSize: 13, fontFamily: "system-ui, sans-serif", color: "#3B6E62" }}>
             <strong>Grupo creado.</strong><br />Ahora agregá las cuentas de este grupo.
@@ -482,10 +501,18 @@ export function ManageAccounts({ session, group = null, groups, accounts, accoun
         )}
         {group && (
           <>
-            <AccountGroupEditor group={group} accounts={accounts} reload={reload} showError={showError} onOpenAccount={setViewingAccountId} />
-            <button style={styles.btnDashed} onClick={() => setCreating(true)}>
-              <Plus size={16} /> Nueva cuenta
-            </button>
+            <AccountGroupEditor
+              group={group}
+              accounts={accounts}
+              reload={reload}
+              showError={showError}
+              onOpenAccount={(id) => openAccountOrSplitLedgerGroup(group, id, slLinks, onOpenSplitLedgerGroup, setViewingAccountId)}
+            />
+            {!isSystemGroup && (
+              <button style={styles.btnDashed} onClick={() => setCreating(true)}>
+                <Plus size={16} /> Nueva cuenta
+              </button>
+            )}
           </>
         )}
       </div>
@@ -504,7 +531,7 @@ export function ManageAccounts({ session, group = null, groups, accounts, accoun
 // "Grupos de cuentas"). Cada grupo es solo un encabezado de sección — para
 // renombrar/reordenar/crear GRUPOS está la pantalla separada "Grupos de
 // cuentas", reachable únicamente desde Configuración.
-export function ManageAllAccounts({ session, groups, accounts, accountTotals, settings, reload, showError, showInfo, onBack }) {
+export function ManageAllAccounts({ session, groups, accounts, accountTotals, settings, slLinks, onOpenSplitLedgerGroup, reload, showError, showInfo, onBack }) {
   const [creating, setCreating] = useState(false);
   const [viewingAccountId, setViewingAccountId] = useState(null);
 
@@ -558,12 +585,34 @@ export function ManageAllAccounts({ session, groups, accounts, accountTotals, se
         {groups.filter((g) => !g.deleted && accounts.some((a) => a.group_id === g.id && !a.deleted)).map((g) => (
           <div key={g.id}>
             <p style={styles.label}>{g.name}</p>
-            <AccountGroupEditor group={g} accounts={accounts} reload={reload} showError={showError} onOpenAccount={setViewingAccountId} />
+            <AccountGroupEditor
+              group={g}
+              accounts={accounts}
+              reload={reload}
+              showError={showError}
+              onOpenAccount={(id) => openAccountOrSplitLedgerGroup(g, id, slLinks, onOpenSplitLedgerGroup, setViewingAccountId)}
+            />
           </div>
         ))}
       </div>
     </div>
   );
+}
+
+// La cuenta pseudo de un grupo vinculado de Split Ledger no es una cuenta de
+// verdad — editarla no tiene sentido acá. Si el grupo es el sistema "Split
+// Ledger", la flecha lleva al "Editar grupo" de Split Ledger en vez de abrir
+// AccountDetailScreen (se busca el vínculo más reciente, activo o no, para
+// no dejar la flecha muerta en una cuenta ya desvinculada).
+function openAccountOrSplitLedgerGroup(group, accountId, slLinks, onOpenSplitLedgerGroup, onOpenAccount) {
+  if (group?.system_key === "split_ledger") {
+    const link = (slLinks || [])
+      .filter((l) => l.pseudo_account_id === accountId)
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+    if (link && onOpenSplitLedgerGroup) onOpenSplitLedgerGroup(link.group_id);
+    return;
+  }
+  onOpenAccount(accountId);
 }
 
 // Todas las cuentas de un grupo (arrastrar, renombrar, ocultar, borrar, crear

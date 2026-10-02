@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabaseClient.js";
 import { dateInputValueInZone, parseAmountInput } from "./helpers.jsx";
 import { hasActiveFilters, matchesFilters } from "./filterHelpers.js";
+import { reconcileSplitLedger } from "./splitLedgerSync.js";
 
 // Todo lo de Money Manager vive en tablas con prefijo mm_, separadas de las
 // de Split Ledger a propósito (ver memoria "money-manager-categories-merge-pending":
@@ -174,11 +175,19 @@ export function computeCreditCardBalance(accountId, transactions, statementDay, 
   let pasado = 0;
   let actual = 0;
   for (const t of transactions) {
-    const isPayment = t.type === "transfer" && t.to_account_id === accountId;
+    // Una transferencia de préstamo de Split Ledger (Presté/Me prestaron)
+    // que llega a esta tarjeta NO es un pago real de la tarjeta — es solo la
+    // otra mitad de un gasto que ya se contó acá mismo este ciclo (el gasto
+    // "compartido" + el préstamo se cancelan entre sí). Si se tratara como
+    // pago, se descontaría de "pasado" sin importar el ciclo, descuadrando
+    // el saldo apenas alguien paga por vos con tu tarjeta vinculada.
+    const isSlTransfer = !!t.sl_link_id;
+    const isPayment = t.type === "transfer" && t.to_account_id === accountId && !isSlTransfer;
     let contribution;
     if (t.type === "income" && t.account_id === accountId) contribution = t.amount_main;
     else if ((t.type === "expense" || t.type === "transfer") && t.account_id === accountId) contribution = -t.amount_main;
     else if (isPayment) contribution = t.amount_main;
+    else if (t.type === "transfer" && t.to_account_id === accountId && isSlTransfer) contribution = t.amount_main;
     else continue;
 
     if (isPayment) {
@@ -203,17 +212,21 @@ export function useMoneyManager(userId) {
   const [categories, setCategories] = useState([]);
   const [accountTotals, setAccountTotals] = useState([]);
   const [recurring, setRecurring] = useState([]);
+  const [slLinks, setSlLinks] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     if (!userId) { setLoading(false); return; }
     await generateDueRecurring(userId);
+    // Antes del auto-pago: puede haber transferencias de préstamo (Split
+    // Ledger) que recién se crean acá y afectan el saldo de una tarjeta.
+    await reconcileSplitLedger(userId);
     await runCreditCardAutoPay(userId);
     // Los balances se agregan del lado del servidor (vista mm_account_totals,
     // ver .mm_views.sql) en vez de traer cada transacción y sumar acá — así
     // esta consulta siempre trae unas pocas filas (una por cuenta×moneda),
     // sin importar si tenés 2 mil o 20 mil transacciones.
-    const [s, g, a, c, at, r] = await Promise.all([
+    const [s, g, a, c, at, r, sl] = await Promise.all([
       supabase.from("mm_settings").select("*").eq("user_id", userId).maybeSingle(),
       // Ninguna de las 3 (grupos/cuentas/categorías) filtra deleted acá a
       // propósito: un elemento eliminado tiene que seguir disponible en el
@@ -227,10 +240,15 @@ export function useMoneyManager(userId) {
       supabase.from("mm_categories").select("*").eq("user_id", userId).order("sort_order"),
       supabase.from("mm_account_totals").select("*").eq("user_id", userId),
       supabase.from("mm_recurring").select("*").eq("user_id", userId).order("next_date"),
+      // Activos e inactivos — un vínculo desvinculado sigue haciendo falta
+      // para resolver el nombre de cuentas pseudo viejas y para reutilizar
+      // la misma cuenta pseudo si se vuelve a vincular el mismo grupo.
+      supabase.from("sl_mm_links").select("*").eq("user_id", userId),
     ]);
     setSettings(s.data || DEFAULT_SETTINGS);
     setAccountTotals(at.data || []);
     setRecurring(r.data || []);
+    setSlLinks(sl.data || []);
 
     // Cuenta recién creada, nunca usada — la sembramos con lo que trae la
     // app original de fábrica, en vez de dejarla completamente vacía.
@@ -254,7 +272,7 @@ export function useMoneyManager(userId) {
 
   useEffect(() => { load(); }, [load]);
 
-  return { settings, groups, accounts, categories, accountTotals, recurring, loading, reload: load };
+  return { settings, groups, accounts, categories, accountTotals, recurring, slLinks, loading, reload: load };
 }
 
 // Transacciones del mes visible (Transacciones/Diario) — se pide acotado por
@@ -293,6 +311,10 @@ export function useMonthTransactions(userId, viewMonth, enabled = true) {
       .select("*")
       .eq("user_id", userId)
       .eq("deleted", false)
+      // Las transferencias de préstamo de Split Ledger (Presté/Me prestaron)
+      // nunca aparecen acá — sí en el extracto de cuenta (useAccountMonthTransactions,
+      // sin este filtro a propósito).
+      .eq("sl_hidden", false)
       .gte("date", start.toISOString())
       .lt("date", end.toISOString())
       // Dentro de un mismo día, "date" solo no alcanza para ordenar (todas
@@ -508,7 +530,7 @@ export function useRecentNoteTitles(userId) {
 // tocar una sugerencia), no reactiva a cada tecla.
 // `filters`: { query, accountIds, categoryIds, dateFrom, dateTo, amountMin, amountMax }
 export async function searchTransactions(userId, filters) {
-  let query = supabase.from("mm_transactions").select("*").eq("user_id", userId).eq("deleted", false);
+  let query = supabase.from("mm_transactions").select("*").eq("user_id", userId).eq("deleted", false).eq("sl_hidden", false);
 
   const text = filters.query?.trim();
   if (text) {

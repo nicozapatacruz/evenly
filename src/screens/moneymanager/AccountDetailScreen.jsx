@@ -54,7 +54,10 @@ export default function AccountDetailScreen({ session, account = null, groups, a
   // prendido — ahí sí es obligatoria, porque el job no tiene de dónde sacar
   // la plata sin ella.
   const paymentAccountRequired = isCreditCard && autoPay && !paymentAccountId;
-  const canSave = isDirty && !nameRequired && !!groupId && !paymentAccountRequired;
+  // Cuenta pseudo de un grupo vinculado de Split Ledger — se desvincula
+  // desde ahí, no se edita/borra acá (rompería la referencia del vínculo).
+  const isSystemAccount = !!account && groups.find((g) => g.id === account.group_id)?.system_key === "split_ledger";
+  const canSave = isDirty && !nameRequired && !!groupId && !paymentAccountRequired && !isSystemAccount;
 
   // Mismo criterio que el selector de cuentas de TransactionForm: agrupado
   // por grupo de cuentas, sin ocultas/eliminadas (salvo que sea la ya
@@ -140,7 +143,7 @@ export default function AccountDetailScreen({ session, account = null, groups, a
       <TopBar
         title={account ? "Editar cuenta" : "Nueva cuenta"}
         onBack={onBack}
-        right={account && (
+        right={account && !isSystemAccount && (
           <button style={styles.iconBtnGhost} onClick={() => setConfirmDelete(true)} aria-label="Eliminar">
             <Trash2 size={18} />
           </button>
@@ -169,9 +172,14 @@ export default function AccountDetailScreen({ session, account = null, groups, a
         <Field label="Nombre" required error={touched.name && nameRequired ? "Este campo es obligatorio." : ""}>
           <div style={{ display: "flex", gap: 8 }}>
             <IconInput value={icon} onChange={setIcon} />
-            <input style={{ ...styles.input, flex: 1 }} value={name} onChange={(e) => setName(e.target.value)} onBlur={() => touch("name")} placeholder="Nombre (ej: Saldo, Ahorros)" />
+            <input style={{ ...styles.input, flex: 1 }} value={name} disabled={isSystemAccount} onChange={(e) => setName(e.target.value)} onBlur={() => touch("name")} placeholder="Nombre (ej: Saldo, Ahorros)" />
           </div>
         </Field>
+        {isSystemAccount && (
+          <p style={{ ...styles.muted, padding: 0, marginTop: -8 }}>
+            Representa un grupo vinculado de Split Ledger — se desvincula desde ahí, no se edita acá.
+          </p>
+        )}
 
         <ToggleField
           label="Tarjeta de crédito"

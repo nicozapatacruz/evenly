@@ -403,7 +403,7 @@ export function Footer({ children }) {
 // una lista plana sin encabezados (ej. categorías, que no se agrupan).
 let pickerInstanceCounter = 0;
 
-export function PickerField({ value, onChange, groups, placeholder = "Elegir", onClear, onBlur }) {
+export function PickerField({ value, onChange, groups, placeholder = "Elegir", onClear, onBlur, disabled = false }) {
   const [open, setOpen] = useState(false);
   const idRef = useRef(null);
   if (idRef.current === null) idRef.current = ++pickerInstanceCounter;
@@ -457,8 +457,9 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", o
       <div style={{ position: "relative" }}>
         <button
           type="button"
-          onClick={() => setOpen((o) => !o)}
-          style={{ ...styles.input, width: "100%", height: 44, boxSizing: "border-box", textAlign: "left", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", borderRadius: open ? "10px 10px 0 0" : 10, paddingRight: clearable ? 34 : undefined }}
+          onClick={() => !disabled && setOpen((o) => !o)}
+          disabled={disabled}
+          style={{ ...styles.input, width: "100%", height: 44, boxSizing: "border-box", textAlign: "left", display: "flex", alignItems: "center", gap: 8, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.6 : 1, borderRadius: open ? "10px 10px 0 0" : 10, paddingRight: clearable ? 34 : undefined }}
         >
           {selected ? (
             <>
@@ -474,7 +475,7 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", o
             <span style={{ color: "#A89A87", fontSize: 13 }}>{placeholder}</span>
           )}
         </button>
-        {clearable && (
+        {clearable && !disabled && (
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); setOpen(false); onClear(); }}

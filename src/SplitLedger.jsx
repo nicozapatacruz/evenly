@@ -682,6 +682,13 @@ function AppShell({ session, onLogout, refreshProfile }) {
     } catch (e) { showError(`No se pudo aceptar la invitación: ${e?.message || e}`); }
   }, [session.userId, session.displayName, reloadGroup, loadInvites]);
 
+  // Usado por la cuenta pseudo "Split Ledger" en Cuentas/Config — su flecha
+  // no edita una cuenta real, lleva derecho a "Editar grupo" en Split Ledger.
+  const openSplitLedgerGroup = useCallback((groupId) => {
+    setActiveTab("splitledger");
+    setSplitLedgerView({ screen: "editGroup", groupId });
+  }, []);
+
   const handleRejectInvite = useCallback(async (invite) => {
     let rejected = false;
     try {
@@ -758,6 +765,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           showError={showError}
           showSuccess={showSuccess}
           showInfo={showInfo}
+          moneyManager={moneyManager}
         />
       )}
 
@@ -769,6 +777,8 @@ function AppShell({ session, onLogout, refreshProfile }) {
           accounts={moneyManager.accounts}
           accountTotals={moneyManager.accountTotals}
           categories={moneyManager.categories}
+          slLinks={moneyManager.slLinks}
+          onOpenSplitLedgerGroup={openSplitLedgerGroup}
           reload={moneyManager.reload}
           reloadCategories={moneyManager.reload}
           showError={showError}
@@ -943,6 +953,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           setCreatingRecurring={setCreatingRecurring}
           moneyManagerScreen={moneyManagerScreen}
           setMoneyManagerScreen={setMoneyManagerScreen}
+          onOpenSplitLedgerGroup={openSplitLedgerGroup}
         />
       )}
 

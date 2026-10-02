@@ -9,7 +9,8 @@ import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCen
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { styles } from "../../lib/styles.js";
-import { TopBar, RootHeader, ConfirmInline, Modal, Footer, PhotoPicker, Field } from "../../components/Shared.jsx";
+import { TopBar, RootHeader, ConfirmInline, Modal, Footer, PhotoPicker, Field, ToggleField, PickerField } from "../../components/Shared.jsx";
+import { linkGroupToAccount, updateLinkDefaults, unlinkGroup } from "../../lib/splitLedgerLink.js";
 import {
   uid, CURRENCIES, CURRENCY_LIST, money, parseAmountInput, ICON_KEYS, IconComp,
   DEFAULT_CATEGORIES, groupCategories, catInfo, colorFor, initials, shortName, nameOf,
@@ -29,6 +30,7 @@ import {
 export default function SplitLedgerTab({
   session, groups, loading, reloadGroup, deleteGroup,
   view, setView, showError, showSuccess, showInfo,
+  moneyManager,
 }) {
   const [groupInvites, setGroupInvites] = useState([]); // invitaciones pendientes del grupo que estoy editando
 
@@ -110,6 +112,7 @@ export default function SplitLedgerTab({
               const { error } = await supabase.from("expenses").update({ deleted: true }).eq("id", expenseId);
               if (error) throw error;
               await reloadGroup(activeGroup.id);
+              await moneyManager?.reload();
               showInfo("Gasto eliminado.");
             } catch (e) { showError(`No se pudo borrar el gasto: ${e?.message || e}`); }
           }}
@@ -163,6 +166,7 @@ export default function SplitLedgerTab({
                 if (error) throw error;
               }
               await reloadGroup(groupId);
+              await moneyManager?.reload();
               setView(
                 exists
                   ? { screen: "expenseDetail", groupId, expenseId: expense.id }
@@ -175,6 +179,7 @@ export default function SplitLedgerTab({
               const { error } = await supabase.from("expenses").delete().eq("id", expenseId);
               if (error) throw error;
               await reloadGroup(activeGroup.id);
+              await moneyManager?.reload();
               setView({ screen: "group", groupId: activeGroup.id });
               showInfo("Gasto eliminado.");
             } catch (e) { showError(`No se pudo borrar el gasto: ${e?.message || e}`); }
@@ -200,6 +205,7 @@ export default function SplitLedgerTab({
               });
               if (error) throw error;
               await reloadGroup(activeGroup.id);
+              await moneyManager?.reload();
               setView({ screen: "group", groupId: activeGroup.id });
             } catch (e) { showError(`No se pudo registrar el pago: ${e?.message || e}`); }
           }}
@@ -211,6 +217,7 @@ export default function SplitLedgerTab({
           key={`${JSON.stringify(groupInvites)}-${activeGroup.members.length}`}
           group={activeGroup}
           session={session}
+          moneyManager={moneyManager}
           onCancel={() => setView({ screen: "group", groupId: activeGroup.id })}
           onSave={async ({ name, baseCurrency, photoUrl, membersToAdd, memberIdsToRemove, categoriesToAdd, categoriesToUpdate, categoryIdsToRemove }) => {
             try {
@@ -413,7 +420,7 @@ function Home({ groups, loading, session, onOpen, onNewExpense }) {
 // con id/invitación/balance pendiente; sin categorías vs. reordenar con
 // drag-and-drop; sin borrar vs. modal de "escribí Confirmar") — se dejan
 // como secciones propias de cada modo, no forzadas a parecerse.
-function GroupForm({ group = null, session, onCancel, onCreate, onSave, onDeleteGroup, onInvite, groupInvites = [], showError }) {
+function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, onSave, onDeleteGroup, onInvite, groupInvites = [], showError }) {
   const isEditing = !!group;
   const [name, setName] = useState(group?.name || "");
   const [baseCurrency, setBaseCurrency] = useState(group?.baseCurrency || "EUR");
@@ -477,7 +484,29 @@ function GroupForm({ group = null, session, onCancel, onCreate, onSave, onDelete
     return false;
   }, [name, baseCurrency, pendingFile, removed, members, categories, group]);
   const hasEmptyCategory = categories.some((c) => !c.label.trim());
-  const canSaveEdit = name.trim() && members.length >= 2 && !hasEmptyCategory;
+
+  // --- Vínculo con Money Manager: personal (no lo ven otros miembros), pero
+  // se guarda con el mismo botón "Guardar" de este formulario — no amerita
+  // un botón propio aparte. Desvincular es la excepción: queda inmediato,
+  // con su propia confirmación, en SplitLedgerMoneyLink más abajo.
+  const myMemberId = group?.members.find((m) => m.linkedUserId === session.userId)?.id;
+  const activeMmLink = isEditing && myMemberId
+    ? moneyManager?.slLinks?.find((l) => l.active && l.group_id === group.id && l.user_id === session.userId)
+    : null;
+  const [mmLinked, setMmLinked] = useState(!!activeMmLink);
+  const [mmOwnAccountId, setMmOwnAccountId] = useState(activeMmLink?.default_own_account_id || "");
+  const [mmOtherAccountId, setMmOtherAccountId] = useState(activeMmLink?.default_other_account_id || "");
+  useEffect(() => {
+    setMmLinked(!!activeMmLink);
+    setMmOwnAccountId(activeMmLink?.default_own_account_id || "");
+    setMmOtherAccountId(activeMmLink?.default_other_account_id || "");
+  }, [activeMmLink?.id, activeMmLink?.default_own_account_id, activeMmLink?.default_other_account_id]);
+  const mmNeedsAccounts = mmLinked && (!mmOwnAccountId || !mmOtherAccountId);
+  const mmDirty = !!myMemberId && (activeMmLink
+    ? (mmOwnAccountId !== activeMmLink.default_own_account_id || mmOtherAccountId !== activeMmLink.default_other_account_id)
+    : (mmLinked && !!mmOwnAccountId && !!mmOtherAccountId));
+
+  const canSaveEdit = name.trim() && members.length >= 2 && !hasEmptyCategory && !mmNeedsAccounts;
 
   const addMember = () => {
     const n = newMemberName.trim();
@@ -502,8 +531,8 @@ function GroupForm({ group = null, session, onCancel, onCreate, onSave, onDelete
 
   const handleSave = async () => {
     if (saving) return;
-    if (!isDirty || !canSaveEdit) {
-      setTouched({ name: true, members: true, categories: true });
+    if ((!isDirty && !mmDirty) || !canSaveEdit) {
+      setTouched({ name: true, members: true, categories: true, mmOwnAccountId: true, mmOtherAccountId: true });
       if (hasEmptyCategory) setCatsOpen(true);
       return;
     }
@@ -527,6 +556,22 @@ function GroupForm({ group = null, session, onCancel, onCreate, onSave, onDelete
         return orig && (orig.label !== c.label || orig.iconKey !== c.iconKey || orig.sortOrder !== c.sortOrder);
       });
       const categoryIdsToRemove = groupCategories(group).filter((c) => !currentCategoryIds.has(c.id)).map((c) => c.id);
+
+      if (mmDirty) {
+        if (activeMmLink) {
+          await updateLinkDefaults(activeMmLink.id, { defaultOwnAccountId: mmOwnAccountId, defaultOtherAccountId: mmOtherAccountId });
+        } else {
+          await linkGroupToAccount({
+            userId: session.userId,
+            groupId: group.id,
+            memberId: myMemberId,
+            groupName: group.name,
+            defaultOwnAccountId: mmOwnAccountId,
+            defaultOtherAccountId: mmOtherAccountId,
+          });
+        }
+        await moneyManager.reload();
+      }
 
       await onSave({
         name: name.trim(), baseCurrency, photoUrl: resolvedPhotoUrl,
@@ -740,6 +785,28 @@ function GroupForm({ group = null, session, onCancel, onCreate, onSave, onDelete
             )}
           </>
         )}
+
+        {/* Vincular a Money Manager — personal, no grupal, pero se guarda
+            con el mismo botón "Guardar" de arriba (el vínculo en sí no
+            amerita su propio botón). Desvincular es la excepción, queda
+            inmediato. */}
+        {isEditing && moneyManager && (
+          <SplitLedgerMoneyLink
+            group={group}
+            session={session}
+            moneyManager={moneyManager}
+            showError={showError}
+            linked={mmLinked}
+            onToggle={setMmLinked}
+            ownAccountId={mmOwnAccountId}
+            onOwnAccountChange={setMmOwnAccountId}
+            otherAccountId={mmOtherAccountId}
+            onOtherAccountChange={setMmOtherAccountId}
+            touched={touched}
+            touch={touch}
+            disabled={saving}
+          />
+        )}
       </div>
 
       {isEditing && editingCatId && (() => {
@@ -770,7 +837,7 @@ function GroupForm({ group = null, session, onCancel, onCreate, onSave, onDelete
       <Footer>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
         {isEditing ? (
-          <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !isDirty || !canSaveEdit) ? 0.5 : 1 }} onClick={handleSave} disabled={saving}>
+          <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || (!isDirty && !mmDirty) || !canSaveEdit) ? 0.5 : 1 }} onClick={handleSave} disabled={saving}>
             {saving ? "Guardando…" : "Guardar"}
           </button>
         ) : (
@@ -801,6 +868,112 @@ function GroupForm({ group = null, session, onCancel, onCreate, onSave, onDelete
             </button>
           </div>
         </Modal>
+      )}
+    </div>
+  );
+}
+
+// Sección "Mi Money Manager" dentro de Editar grupo — vincular este grupo a
+// 2 cuentas default (propios/ajenos). Controlado desde GroupForm: el toggle
+// y los 2 selectores son borrador suyo, se guardan con su mismo botón
+// "Guardar" (no amerita uno propio). Desvincular es la excepción — queda acá
+// adentro como acción inmediata con su propia confirmación, porque es más
+// parecida a borrar algo que a editar un campo del formulario.
+function SplitLedgerMoneyLink({
+  group, session, moneyManager, showError,
+  linked, onToggle, ownAccountId, onOwnAccountChange, otherAccountId, onOtherAccountChange,
+  touched, touch, disabled,
+}) {
+  const [unlinking, setUnlinking] = useState(false);
+  const [confirmingUnlink, setConfirmingUnlink] = useState(false);
+
+  const myMemberId = group.members.find((m) => m.linkedUserId === session.userId)?.id;
+  const activeLink = moneyManager.slLinks.find((l) => l.active && l.group_id === group.id && l.user_id === session.userId);
+
+  // Cuentas elegibles: ninguna cuenta eliminada, ninguna del propio grupo
+  // "Split Ledger" (no tiene sentido vincular un grupo a su propia cuenta
+  // pseudo, ni a la de otro grupo vinculado). Tarjetas de crédito sí se
+  // permiten — un gasto del grupo puede perfectamente haberse pagado con una.
+  const accountGroups = moneyManager.groups
+    .filter((g) => !g.deleted && g.system_key !== "split_ledger")
+    .map((g) => ({
+      label: g.name,
+      items: moneyManager.accounts
+        .filter((a) => a.group_id === g.id && !a.hidden && !a.deleted)
+        .map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
+    }))
+    .filter((g) => g.items.length > 0);
+
+  const handleToggle = (on) => {
+    if (on || !activeLink) { onToggle(on); return; }
+    setConfirmingUnlink(true); // ya hay un vínculo guardado — apagar pide confirmación
+  };
+
+  const handleUnlink = async () => {
+    setUnlinking(true);
+    try {
+      await unlinkGroup(activeLink.id);
+      await moneyManager.reload();
+    } catch (e) {
+      showError(`No se pudo desvincular: ${e?.message || e}`);
+    } finally {
+      setUnlinking(false);
+      setConfirmingUnlink(false);
+    }
+  };
+
+  if (!myMemberId) return null; // no soy miembro vinculado de este grupo — no aplica
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <ToggleField
+        label="Vincular grupo a Money Manager"
+        description="Tus gastos del grupo se reflejan en tus cuentas."
+        checked={linked}
+        disabled={disabled || unlinking}
+        onChange={handleToggle}
+      />
+      {confirmingUnlink && (
+        <ConfirmInline
+          message="¿Desvincular este grupo de tu Money Manager? Las transacciones ya sincronizadas no se borran, pero vas a dejar de ver las nuevas."
+          confirmLabel={unlinking ? "Desvinculando…" : "Desvincular"}
+          confirmDisabled={unlinking}
+          onCancel={() => setConfirmingUnlink(false)}
+          onConfirm={handleUnlink}
+          style={{ borderRadius: 12, borderTop: "1px solid #EBC9BA" }}
+        />
+      )}
+      {linked && !confirmingUnlink && (
+        <>
+          <Field
+            label="Cuenta por defecto en gastos propios"
+            info="La cuenta que se usa cuando el gasto del grupo lo cargás vos."
+            required
+            error={touched.mmOwnAccountId && !ownAccountId ? "Este campo es obligatorio." : ""}
+          >
+            <PickerField
+              value={ownAccountId}
+              onChange={onOwnAccountChange}
+              onBlur={() => touch("mmOwnAccountId")}
+              groups={accountGroups}
+              placeholder="Elegí una cuenta"
+            />
+          </Field>
+          <Field
+            label="Cuenta por defecto en gastos ajenos"
+            info="La cuenta que se usa cuando el gasto del grupo lo carga otro miembro."
+            required
+            error={touched.mmOtherAccountId && !otherAccountId ? "Este campo es obligatorio." : ""}
+          >
+            <PickerField
+              value={otherAccountId}
+              onChange={onOtherAccountChange}
+              onBlur={() => touch("mmOtherAccountId")}
+              groups={accountGroups}
+              placeholder="Elegí una cuenta"
+            />
+          </Field>
+        </>
       )}
     </div>
   );

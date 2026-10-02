@@ -30,6 +30,12 @@ export default function TransactionForm({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // Viene de Split Ledger — la reconciliación controla para siempre monto,
+  // cuenta, fecha y tipo (se recalculan solos la próxima vez que corra); acá
+  // quedan bloqueados para no pelear contra eso. Categoría y nota quedan
+  // libres — esos nunca los toca la reconciliación.
+  const isSynced = !!editingTransaction?.sl_link_id;
+
   const [type, setType] = useState(editingTransaction?.type || "expense");
   const [date, setDate] = useState(editingTransaction ? dateInputValueInZone(new Date(editingTransaction.date).getTime(), editingTransaction.timezone) : (defaultDate || todayInputValue()));
   const [amount, setAmount] = useState(editingTransaction ? String(editingTransaction.amount) : "");
@@ -183,7 +189,7 @@ export default function TransactionForm({
       <TopBar
         title={editingTransaction ? `Editar ${TYPE_INFO[type].label}` : TYPE_INFO[type].newLabel}
         onBack={onCancel}
-        right={editingTransaction && (
+        right={editingTransaction && !isSynced && (
           <button style={styles.iconBtnGhost} onClick={() => setConfirmDelete(true)} aria-label="Eliminar">
             <Trash2 size={17} />
           </button>
@@ -204,14 +210,20 @@ export default function TransactionForm({
         />
       )}
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        <div style={{ ...styles.tabRow, padding: 0 }}>
+        {isSynced && (
+          <p style={{ ...styles.muted, padding: 0 }}>
+            Viene de Split Ledger — el monto, la cuenta, la fecha y el tipo se actualizan solos. Podés cambiarle la categoría o la nota.
+          </p>
+        )}
+        <div style={{ ...styles.tabRow, padding: 0, opacity: isSynced ? 0.6 : 1 }}>
           {Object.keys(TYPE_INFO).map((t) => (
             <button
               key={t}
               style={type === t
                 ? { flex: 1, padding: "9px 0", borderRadius: 9, border: `1px solid ${TYPE_INFO[t].color}`, background: TYPE_INFO[t].color, color: "#fff", fontSize: 12.5, fontWeight: 600, fontFamily: "system-ui, sans-serif" }
                 : styles.tab}
-              onClick={() => setType(t)}
+              onClick={() => !isSynced && setType(t)}
+              disabled={isSynced}
             >
               {TYPE_INFO[t].label}
             </button>
@@ -219,17 +231,18 @@ export default function TransactionForm({
         </div>
 
         <Field label="Fecha">
-          <input style={styles.input} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <input style={{ ...styles.input, opacity: isSynced ? 0.6 : 1 }} type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={isSynced} />
         </Field>
 
         <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
           <Field label="Importe" required style={{ flex: 1 }}>
-            <input style={styles.input} value={amount} onChange={(e) => setAmount(e.target.value)} onBlur={() => touch("amount")} placeholder="0.00" inputMode="decimal" />
+            <input style={{ ...styles.input, opacity: isSynced ? 0.6 : 1 }} value={amount} onChange={(e) => setAmount(e.target.value)} onBlur={() => touch("amount")} placeholder="0.00" inputMode="decimal" disabled={isSynced} />
           </Field>
           <select
-            style={{ ...styles.input, width: 80, flexShrink: 0, padding: "11px 6px", textAlign: "center", fontWeight: 600, color: "#544A3C" }}
+            style={{ ...styles.input, width: 80, flexShrink: 0, padding: "11px 6px", textAlign: "center", fontWeight: 600, color: "#544A3C", opacity: isSynced ? 0.6 : 1 }}
             value={currency}
             onChange={(e) => { setCurrency(e.target.value); setRateFlipped(false); }}
+            disabled={isSynced}
           >
             {currencyOptions.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
@@ -246,14 +259,15 @@ export default function TransactionForm({
           <Field label={`1 ${rateFlipped ? currency : settings.main_currency} equivale a`} required error={touched.exchangeRate && !validRate ? "Ingresá una tasa válida." : ""}>
             <div style={{ display: "flex", gap: 8 }}>
               <div style={{ position: "relative", flex: 1 }}>
-                <input style={{ ...styles.input, width: "100%", paddingRight: 50 }} value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} onBlur={() => touch("exchangeRate")} placeholder="1.00" inputMode="decimal" />
+                <input style={{ ...styles.input, width: "100%", paddingRight: 50, opacity: isSynced ? 0.6 : 1 }} value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} onBlur={() => touch("exchangeRate")} placeholder="1.00" inputMode="decimal" disabled={isSynced} />
                 <span style={{ position: "absolute", top: "50%", right: 13, transform: "translateY(-50%)", fontFamily: "system-ui, sans-serif", fontSize: 14, fontWeight: 600, color: "#544A3C", pointerEvents: "none" }}>
                   {rateFlipped ? settings.main_currency : currency}
                 </span>
               </div>
               <button
                 type="button"
-                style={styles.btnSecondarySmall}
+                style={{ ...styles.btnSecondarySmall, opacity: isSynced ? 0.6 : 1 }}
+                disabled={isSynced}
                 onClick={() => {
                   setRateFlipped((f) => !f);
                   setExchangeRate((prev) => {
@@ -309,8 +323,15 @@ export default function TransactionForm({
             onClear={() => setAccountId("")}
             onBlur={() => touch("accountId")}
             placeholder="Elegí una cuenta"
+            disabled={isSynced}
             groups={groups
-              .filter((g) => !g.deleted)
+              // El grupo "Split Ledger" (auto-creado al vincular un grupo
+              // compartido) no se elige a mano acá — lo maneja solo la
+              // sincronización. Si esta transacción YA es una sincronizada,
+              // se deja ver igual (si no, el picker no encuentra el value
+              // en ninguna opción y muestra el placeholder en vez del
+              // nombre real de la cuenta pseudo).
+              .filter((g) => !g.deleted && (g.system_key !== "split_ledger" || isSynced))
               .map((g) => ({
                 label: g.name,
                 // Ocultas o eliminadas no se muestran acá — salvo que sea la
@@ -342,8 +363,9 @@ export default function TransactionForm({
               onClear={() => setToAccountId("")}
               onBlur={() => touch("toAccountId")}
               placeholder="Elegí una cuenta"
+              disabled={isSynced}
               groups={groups
-                .filter((g) => !g.deleted)
+                .filter((g) => !g.deleted && (g.system_key !== "split_ledger" || isSynced))
                 .map((g) => ({
                   label: g.name,
                   items: accounts.filter((a) => a.group_id === g.id && a.id !== accountId && ((!a.hidden && !a.deleted) || a.id === toAccountId)).map((a) => ({ value: a.id, label: a.name, icon: a.icon, deleted: a.deleted })),
@@ -393,13 +415,13 @@ export default function TransactionForm({
           <textarea rows={4} style={{ ...styles.input, resize: "none", fontFamily: "system-ui, sans-serif" }} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Opcional" />
         </Field>
 
-        {!recurringOpen && !forceRecurringOpen && (
+        {!isSynced && !recurringOpen && !forceRecurringOpen && (
           <button style={styles.btnDashed} onClick={() => setRecurringOpen(true)}>
             Hacer {type === "transfer" ? "esta" : "este"} {TYPE_INFO[type].label.toLowerCase()} recurrente
           </button>
         )}
 
-        {recurringOpen && (
+        {!isSynced && recurringOpen && (
           <RecurringFields
             type={type}
             date={date}

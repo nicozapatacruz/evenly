@@ -24,7 +24,7 @@ export default function ConfigScreen({
   groups, reloadGroups, onCreateGroup, onOpenGroup, showError, showSuccess, showInfo,
   changingPassword, setChangingPassword, viewingProfile, setViewingProfile,
   moneyManager, onSaveMoneyTransaction, creatingRecurring, setCreatingRecurring,
-  moneyManagerScreen, setMoneyManagerScreen,
+  moneyManagerScreen, setMoneyManagerScreen, onOpenSplitLedgerGroup,
 }) {
   // Igual que activeTab en SplitLedger.jsx: en localStorage para que
   // sobreviva a cerrar y reabrir la app, no solo a pasar a segundo plano.
@@ -122,6 +122,8 @@ export default function ConfigScreen({
         accounts={moneyManager.accounts}
         accountTotals={moneyManager.accountTotals}
         settings={moneyManager.settings}
+        slLinks={moneyManager.slLinks}
+        onOpenSplitLedgerGroup={onOpenSplitLedgerGroup}
         reload={moneyManager.reload}
         showError={showError}
         showInfo={showInfo}
@@ -138,6 +140,8 @@ export default function ConfigScreen({
         accounts={moneyManager.accounts}
         accountTotals={moneyManager.accountTotals}
         settings={moneyManager.settings}
+        slLinks={moneyManager.slLinks}
+        onOpenSplitLedgerGroup={onOpenSplitLedgerGroup}
         reload={moneyManager.reload}
         showError={showError}
         showInfo={showInfo}
@@ -275,7 +279,7 @@ function MenuRow({ label, onClick, badge, last }) {
    para el botón de "editar" propio; acá alcanza con un estado local).
    ========================================================================= */
 
-function AccountsSettingsScreen({ session, groups, accounts, accountTotals, settings, reload, showError, showInfo, onBack }) {
+function AccountsSettingsScreen({ session, groups, accounts, accountTotals, settings, slLinks, onOpenSplitLedgerGroup, reload, showError, showInfo, onBack }) {
   const [view, setView] = useState({ screen: "groups" });
 
   if (view.screen === "accounts") {
@@ -289,6 +293,8 @@ function AccountsSettingsScreen({ session, groups, accounts, accountTotals, sett
         accounts={accounts}
         accountTotals={accountTotals}
         settings={settings}
+        slLinks={slLinks}
+        onOpenSplitLedgerGroup={onOpenSplitLedgerGroup}
         reload={reload}
         showError={showError}
         showInfo={showInfo}

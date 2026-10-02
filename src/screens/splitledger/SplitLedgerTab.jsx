@@ -134,6 +134,8 @@ export default function SplitLedgerTab({
           groups={groups}
           defaultGroupId={session.defaultGroupId}
           expenseId={view.expenseId}
+          session={session}
+          moneyManager={moneyManager}
           onCancel={() => setView(
             view.groupId
               ? (view.expenseId
@@ -158,12 +160,14 @@ export default function SplitLedgerTab({
               shares: expense.shares,
             };
             try {
+              let savedId = expense.id;
               if (exists) {
                 const { error } = await supabase.from("expenses").update(payload).eq("id", expense.id);
                 if (error) throw error;
               } else {
-                const { error } = await supabase.from("expenses").insert(payload);
+                const { data, error } = await supabase.from("expenses").insert(payload).select("id").single();
                 if (error) throw error;
+                savedId = data.id;
               }
               await reloadGroup(groupId);
               await moneyManager?.reload();
@@ -172,6 +176,7 @@ export default function SplitLedgerTab({
                   ? { screen: "expenseDetail", groupId, expenseId: expense.id }
                   : { screen: "group", groupId }
               );
+              return savedId;
             } catch (e) { showError(`No se pudo guardar el gasto: ${e?.message || e}`); }
           }}
           onDelete={async (expenseId) => {
@@ -1480,7 +1485,7 @@ function ExpenseDetail({ group, expenseId, onBack, onEdit }) {
 // El wrapper `NewExpense` (al final del archivo) decide si ese grupo viene
 // dado (abierto desde dentro de un grupo) o hay que elegirlo primero (abierto
 // desde el FAB del listado principal, sin grupo en contexto).
-function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onDelete }) {
+function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onDelete, session, moneyManager }) {
   const { members, baseCurrency } = group;
   const existing = expenseId ? group.expenses.find((e) => e.id === expenseId) : null;
 
@@ -1526,6 +1531,34 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
   const [saving, setSaving] = useState(false);
   const [touched, setTouched] = useState({});
   const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
+
+  // Mi Money Manager — solo si YO tengo este grupo vinculado. El selector se
+  // muestra siempre que abro este gasto (lo haya cargado yo o no), precargado
+  // con lo que ya elegí antes para ESTE gasto puntual (si lo reabro), o con
+  // mi default "propio" si es la primera vez que lo toco.
+  const myMemberId = group.members.find((m) => m.linkedUserId === session?.userId)?.id;
+  const activeLink = moneyManager?.slLinks?.find((l) => l.active && l.group_id === group.id && l.user_id === session?.userId);
+  const [mmAccountId, setMmAccountId] = useState("");
+  const [mmCategoryId, setMmCategoryId] = useState("");
+  useEffect(() => {
+    if (!activeLink) return;
+    let cancelled = false;
+    (async () => {
+      let choice = null;
+      if (existing) {
+        const { data } = await supabase
+          .from("sl_mm_expense_choices")
+          .select("account_id, category_id")
+          .eq("link_id", activeLink.id).eq("source_kind", "expense").eq("source_id", existing.id)
+          .maybeSingle();
+        choice = data;
+      }
+      if (cancelled) return;
+      setMmAccountId(choice?.account_id || activeLink.default_own_account_id);
+      setMmCategoryId(choice?.category_id || "");
+    })();
+    return () => { cancelled = true; };
+  }, [activeLink?.id, existing?.id]);
 
   const numericAmount = parseAmountInput(amount || "");
   const validAmount = !isNaN(numericAmount) && numericAmount > 0;
@@ -1586,6 +1619,13 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
     return computeShares({ splitMode: "shares", amount: numericAmount, participantIds, shareUnits: units });
   };
 
+  // ¿Tengo yo alguna parte en este gasto (lo pagué, me toca una parte, o
+  // ambas)? Solo entonces hace falta una cuenta de Money Manager — si no
+  // tengo nada que ver con este gasto, el selector no aplica.
+  const mmShares = buildShares();
+  const mmPayers = buildPayers();
+  const mmInvolved = !!(activeLink && myMemberId && ((mmShares[myMemberId] || 0) > 0.005 || (mmPayers[myMemberId] || 0) > 0.005));
+
   // Ya no devuelve mensajes: el botón de Guardar se deshabilita con esta misma condición,
   // así que para cuando handleSave llega a ejecutarse esto siempre es true — es solo un
   // respaldo silencioso, no hace falta mostrar ningún error acá.
@@ -1596,17 +1636,18 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
     participantIds.length > 0 &&
     (splitMode !== "exact" || Math.abs(exactTotal - numericAmount) < 0.01) &&
     (splitMode !== "percent" || Math.abs(percentTotal - 100) < 0.5) &&
-    (splitMode !== "shares" || participantIds.reduce((s, id) => s + (parseFloat(shareUnits[id] || "0") || 0), 0) > 0);
+    (splitMode !== "shares" || participantIds.reduce((s, id) => s + (parseFloat(shareUnits[id] || "0") || 0), 0) > 0) &&
+    (!mmInvolved || !!mmAccountId);
 
   const handleSave = async () => {
     if (saving) return;
-    if (!canSave) { setTouched({ description: true, amount: true }); return; }
+    if (!canSave) { setTouched({ description: true, amount: true, mmAccountId: true }); return; }
     const dateMs = new Date(date + "T12:00:00").getTime();
     const payers = buildPayers();
     setSaving(true);
     try {
       const resolvedImageUrl = await resolvePhotoUrl({ pendingFile, removed, currentUrl: existing?.imageUrl });
-      await onSave({
+      const savedId = await onSave({
         id: existing?.id,
         groupId: group.id,
         description: description.trim(),
@@ -1620,6 +1661,19 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
         shares: buildShares(),
         imageUrl: resolvedImageUrl,
       });
+      // Se fija la cuenta/categoría elegidas para ESTE gasto puntual — la
+      // reconciliación nunca las vuelve a recalcular sola (ver splitLedgerSync.js).
+      // Upsert con overwrite (no ignoreDuplicates): tu elección de ahora
+      // siempre gana, nunca importa si la reconciliación ya había sembrado
+      // un default antes de que llegaras acá.
+      if (mmInvolved && savedId) {
+        const finalId = existing?.id || savedId;
+        await supabase.from("sl_mm_expense_choices").upsert(
+          { link_id: activeLink.id, source_kind: "expense", source_id: finalId, account_id: mmAccountId, category_id: mmCategoryId || null },
+          { onConflict: "link_id,source_kind,source_id" }
+        );
+        await moneyManager.reload();
+      }
     } catch (e) {
       setErr(`No se pudo guardar: ${e?.message || e}`);
     } finally {
@@ -1889,6 +1943,39 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
           <textarea style={{ ...styles.input, minHeight: 60, resize: "vertical", fontFamily: "system-ui, sans-serif" }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas adicionales…" />
         )}
 
+        {mmInvolved && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <p style={{ ...styles.label, display: "block", margin: 0 }}>Mi Money Manager</p>
+            <Field label="Cuenta" required error={touched.mmAccountId && !mmAccountId ? "Este campo es obligatorio." : ""}>
+              <PickerField
+                value={mmAccountId}
+                onChange={setMmAccountId}
+                onBlur={() => touch("mmAccountId")}
+                placeholder="Elegí una cuenta"
+                groups={moneyManager.groups
+                  .filter((g) => !g.deleted && g.system_key !== "split_ledger")
+                  .map((g) => ({
+                    label: g.name,
+                    items: moneyManager.accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
+                  }))
+                  .filter((g) => g.items.length > 0)}
+              />
+            </Field>
+            <Field label="Categoría">
+              <PickerField
+                value={mmCategoryId}
+                onChange={setMmCategoryId}
+                onClear={() => setMmCategoryId("")}
+                placeholder="Sin categoría"
+                groups={[{
+                  label: null,
+                  items: moneyManager.categories.filter((c) => c.type === "expense" && !c.deleted).map((c) => ({ value: c.id, label: c.name, icon: c.icon })),
+                }]}
+              />
+            </Field>
+          </div>
+        )}
+
         {err && <p style={styles.errText}>{err}</p>}
       </div>
 
@@ -1911,7 +1998,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
 // Si no (abierto desde el FAB del listado principal), muestra un selector de
 // grupo arriba del formulario; ExpenseForm recién se monta cuando hay un
 // grupo elegido, con key={group.id} para arrancar limpio si lo cambian.
-function NewExpense({ group, groups, defaultGroupId, expenseId, onCancel, onSave, onDelete }) {
+function NewExpense({ group, groups, defaultGroupId, expenseId, onCancel, onSave, onDelete, session, moneyManager }) {
   const [pickedGroupId, setPickedGroupId] = useState(group?.id ?? defaultGroupId ?? "");
 
   if (group) {
@@ -1922,6 +2009,8 @@ function NewExpense({ group, groups, defaultGroupId, expenseId, onCancel, onSave
         onCancel={onCancel}
         onSave={onSave}
         onDelete={onDelete}
+        session={session}
+        moneyManager={moneyManager}
       />
     );
   }
@@ -1953,6 +2042,8 @@ function NewExpense({ group, groups, defaultGroupId, expenseId, onCancel, onSave
       extraHeaderField={groupPicker}
       onCancel={onCancel}
       onSave={onSave}
+      session={session}
+      moneyManager={moneyManager}
     />
   );
 }

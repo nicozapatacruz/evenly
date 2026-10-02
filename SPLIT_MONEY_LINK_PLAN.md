@@ -290,7 +290,18 @@ simplemente no hace nada la segunda vez.
    la cuenta del grupo se mueve; borrarlo y confirmar que ambas transacciones
    desaparecen solas.
 3. - [ ] **Marcado visual** (ícono + nombre + fondo celeste).
-4. - [ ] **Selector de categoría inline** al cargar un gasto.
+4. - [x] **Selector de cuenta + categoría inline** al cargar un gasto.
+   Implementado 2026-10-02, antes de lo planeado: una prueba en vivo del M2
+   mostró que sin esto "gastos propios" nunca se usa (la reconciliación no
+   tiene forma de saber quién cargó el gasto, siempre caía en "ajenos"). En
+   `ExpenseForm` (Split Ledger): si el usuario actual tiene el grupo
+   vinculado y tiene parte en este gasto (pagó algo o le toca una parte), se
+   muestra "Mi Money Manager" con selector de cuenta (precargado con el
+   default "propios", o con lo ya elegido antes si reabrís el mismo gasto) +
+   categoría. Al guardar, se hace upsert con OVERWRITE (no
+   `ignoreDuplicates`) en `sl_mm_expense_choices` — tu elección de ahora
+   siempre gana, sin importar si la reconciliación ya había sembrado un
+   default antes. Falta probar en vivo.
 5. - [ ] **Multi-moneda** (tasa de cambio por vínculo).
 6. - [ ] Pulido: saldo previo a vincular (aviso), autocompletado de notas que
    ignora lo sincronizado, etc.

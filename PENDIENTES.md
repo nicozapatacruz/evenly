@@ -26,6 +26,7 @@ No tocar salvo que Nicolas las traiga de vuelta explícitamente.
 
 - [ ] Unificar categorías de Money Manager con las de Split Ledger (hoy son sistemas totalmente separados).
 - [ ] Cambiar la moneda principal en Ajustes rompe el historial viejo (`amount_main` no se recalcula). Idea de Nicolas para resolverlo: que cada cuenta tenga su propia moneda fija (no editable), la "moneda principal" pasaría a ser solo el default sugerido al crear una cuenta nueva, y los balances mostrarían un total por cada moneda presente en vez de sumar todo convertido. Cambio de arquitectura grande, explícitamente pospuesto.
+- [ ] Permitir transacciones con importe 0, para usarlas como nota/recordatorio de algo que falta cargar (ej. "falta anotar el gasto de X") sin que sea un movimiento de dinero real. Nicolas lo usaba así en la app anterior, a principio de mes, para marcar pendientes. Duda sin resolver: ensucia los listados/conteo de transacciones si se modela como una transacción de verdad — capaz lo correcto es una funcionalidad de notas/recordatorios separada, no relajar la validación de monto. Sin urgencia, revisar si se repite el caso de uso.
 
 ## D. Posibles mejoras a futuro (sin compromiso de construirlas — ideas, no backlog)
 

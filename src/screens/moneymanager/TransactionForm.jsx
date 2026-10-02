@@ -442,6 +442,10 @@ function RecurringFields({ type, date, freqValue, setFreqValue, freqInterval, se
   const customInterval = parseInt(freqInterval, 10);
   const intervalInvalid = freq?.interval === null && !(customInterval >= 2);
   const txDate = date ? new Date(date + "T12:00:00") : null;
+  // "Fecha de arriba" podía interpretarse mal (¿arriba de qué?) — referirse
+  // directo a qué es esa fecha (la del gasto/ingreso/transferencia) no deja
+  // dudas, sin importar cómo quede acomodado el formulario.
+  const typeNoun = type === "income" ? "del ingreso" : type === "transfer" ? "de la transferencia" : "del gasto";
   const dayOfMonth = txDate?.getDate();
   const monthIndex = txDate?.getMonth(); // 0 = enero, 1 = febrero...
   const monthName = txDate?.toLocaleDateString("es-ES", { month: "long" });
@@ -452,12 +456,12 @@ function RecurringFields({ type, date, freqValue, setFreqValue, freqInterval, se
   let explanation = "";
   if (freq?.unit === "week" && weekdayName) {
     const cadence = interval === 1 ? "cada semana" : `cada ${interval} semanas`;
-    explanation = `Se repetirá ${cadence}, siempre los días ${weekdayName} (el mismo día de la semana que la Fecha de arriba).`;
+    explanation = `Se repetirá ${cadence}, siempre los días ${weekdayName} (el mismo día de la semana que la fecha ${typeNoun}).`;
   } else if (freq?.unit === "month" && dayOfMonth) {
     const cadence = interval === 1 ? "de cada mes" : `de cada ${interval} meses`;
-    explanation = `Se repetirá el día ${dayOfMonth} ${cadence} (el mismo día que la Fecha de arriba).`;
+    explanation = `Se repetirá el día ${dayOfMonth} ${cadence} (el mismo día que la fecha ${typeNoun}).`;
   } else if (freq?.unit === "year" && dayOfMonth) {
-    explanation = `Se repetirá cada año el ${dayOfMonth} de ${monthName} (la misma fecha de arriba).`;
+    explanation = `Se repetirá cada año el ${dayOfMonth} de ${monthName} (la misma fecha ${typeNoun}).`;
   }
 
   // Advertencia — solo aparece cuando el ajuste de fin de mes de verdad puede
@@ -486,7 +490,11 @@ function RecurringFields({ type, date, freqValue, setFreqValue, freqInterval, se
       )}
 
       <Field label="Fecha de fin (opcional)">
-        <input style={styles.input} type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+        {/* minHeight:44 — un <input type="date"> vacío (acá arranca "" por
+            defecto, a diferencia de los otros campos de fecha de la app que
+            siempre precargan hoy) renderiza más bajo que uno con valor;
+            mismo bug ya visto y arreglado en Filtros. */}
+        <input style={{ ...styles.input, minHeight: 44, boxSizing: "border-box" }} type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
       </Field>
 
       {(explanation || warning) && (

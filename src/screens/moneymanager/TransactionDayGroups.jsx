@@ -60,6 +60,18 @@ export function TransactionDayGroups({ transactions, settings, accounts, categor
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(t);
     }
+    // Dentro de cada día, más reciente CARGADO primero (created_at), no por
+    // la hora exacta de "date" — las cargadas a mano siempre anclan a
+    // mediodía, así que ordenar por "date" las mezclaba con la hora real que
+    // sí trae la data importada. "date" solo desempata created_at empatados
+    // (pasa únicamente entre filas del mismo lote de importación — crear dos
+    // transacciones a mano con el mismo created_at exacto no es posible).
+    for (const txs of map.values()) {
+      txs.sort((a, b) => {
+        const createdDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        return createdDiff !== 0 ? createdDiff : new Date(b.date).getTime() - new Date(a.date).getTime();
+      });
+    }
     return [...map.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1));
   }, [transactions]);
 

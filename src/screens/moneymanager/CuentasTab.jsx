@@ -289,7 +289,7 @@ export function ManageGroups({ session, groups: allGroups, accounts, reload, sho
                 if (!g) return null;
                 return (
                   <div key={id}>
-                    <SortableGroupRow group={g} onOpen={() => onOpenGroup(id)} />
+                    <SortableGroupRow group={g} onOpen={() => onOpenGroup(id)} draggable={order.length > 1} />
                   </div>
                 );
               })}
@@ -301,24 +301,34 @@ export function ManageGroups({ session, groups: allGroups, accounts, reload, sho
   );
 }
 
-function SortableGroupRow({ group, onOpen }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: group.id });
+function SortableGroupRow({ group, onOpen, draggable }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: group.id, disabled: !draggable });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   return (
-    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 6, padding: "6px 8px 6px 4px", borderRadius: 10 }}>
-      <span {...attributes} {...listeners} style={{ display: "flex", alignItems: "center", justifyContent: "center", alignSelf: "stretch", width: 28, color: "#C9BBA0", cursor: "grab", touchAction: "none" }}>
-        <Menu size={18} />
-      </span>
-      <button
-        type="button"
-        onClick={onOpen}
-        style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, minWidth: 0, background: "none", border: "none", padding: "7px 10px", textAlign: "left", cursor: "pointer" }}
-      >
-        <span style={{ fontSize: 14, fontFamily: "system-ui, sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{group.name}</span>
-      </button>
-      <button style={styles.iconBtnGhost} onClick={onOpen} aria-label={`Editar ${group.name}`}>
-        <ChevronRight size={18} color="#A89A87" />
-      </button>
+    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 4, padding: "10px 14px", borderRadius: 10 }}>
+      {/* Sin ícono de arrastrar si hay un solo ítem — no hay con qué reordenar. */}
+      {draggable ? (
+        <span {...attributes} {...listeners} style={{ display: "flex", alignItems: "center", justifyContent: "center", alignSelf: "stretch", width: 28, color: "#C9BBA0", cursor: "grab", touchAction: "none" }}>
+          <Menu size={18} />
+        </span>
+      ) : (
+        <span style={{ width: 28, flexShrink: 0 }} />
+      )}
+      {/* gap:0 acá adentro — los dos botones ya tienen su propio padding,
+          no hace falta espacio extra entre ellos. Solo el handle necesita
+          los 4px del gap de la fila. */}
+      <div style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 0 }}>
+        <button
+          type="button"
+          onClick={onOpen}
+          style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, minWidth: 0, background: "none", border: "none", padding: "7px 10px", textAlign: "left", cursor: "pointer" }}
+        >
+          <span style={{ fontSize: 14, fontFamily: "system-ui, sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{group.name}</span>
+        </button>
+        <button style={styles.iconBtnGhost} onClick={onOpen} aria-label={`Editar ${group.name}`}>
+          <ChevronRight size={18} color="#A89A87" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -614,6 +624,7 @@ function AccountGroupEditor({ group, accounts, reload, showError, onOpenAccount 
                     paymentAccountDeleted={a.is_credit_card && !!a.payment_account_id && !!accounts.find((x) => x.id === a.payment_account_id)?.deleted}
                     onOpen={() => onOpenAccount(id)}
                     onToggleHidden={() => toggleHidden(id)}
+                    draggable={order.length > 1}
                   />
                 </div>
               );
@@ -625,37 +636,47 @@ function AccountGroupEditor({ group, accounts, reload, showError, onOpenAccount 
   );
 }
 
-function SortableAccountRow({ id, name, icon, hidden, isCreditCard, paymentAccountDeleted, onOpen, onToggleHidden }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+function SortableAccountRow({ id, name, icon, hidden, isCreditCard, paymentAccountDeleted, onOpen, onToggleHidden, draggable }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !draggable });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   return (
-    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 6, padding: "6px 8px 6px 4px", borderRadius: 10 }}>
-      <span {...attributes} {...listeners} style={{ display: "flex", alignItems: "center", justifyContent: "center", alignSelf: "stretch", width: 28, color: "#C9BBA0", cursor: "grab", touchAction: "none" }}>
-        <Menu size={18} />
-      </span>
-      <button
-        type="button"
-        onClick={onOpen}
-        style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, minWidth: 0, background: "none", border: "none", padding: "7px 10px", textAlign: "left", cursor: "pointer", opacity: hidden ? 0.5 : 1 }}
-      >
-        {icon && <span style={{ fontSize: 16, lineHeight: 1, flexShrink: 0 }}>{icon}</span>}
-        <span style={{ fontSize: 14, fontFamily: "system-ui, sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
-      </button>
-      {paymentAccountDeleted ? (
-        <span style={{ display: "flex" }} title="Su cuenta de pago fue eliminada">
-          <AlertTriangle size={16} color="#B0473A" />
+    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 4, padding: "10px 14px", borderRadius: 10 }}>
+      {/* Sin ícono de arrastrar si hay un solo ítem — no hay con qué reordenar. */}
+      {draggable ? (
+        <span {...attributes} {...listeners} style={{ display: "flex", alignItems: "center", justifyContent: "center", alignSelf: "stretch", width: 28, color: "#C9BBA0", cursor: "grab", touchAction: "none" }}>
+          <Menu size={18} />
         </span>
-      ) : isCreditCard && (
-        <span style={{ display: "flex" }} title="Tarjeta de crédito">
-          <CreditCard size={16} color="#A89A87" />
-        </span>
+      ) : (
+        <span style={{ width: 28, flexShrink: 0 }} />
       )}
-      <button style={styles.iconBtnGhost} onClick={onToggleHidden} aria-label={hidden ? `Mostrar ${name}` : `Ocultar ${name}`}>
-        {hidden ? <EyeOff size={16} /> : <Eye size={16} />}
-      </button>
-      <button style={styles.iconBtnGhost} onClick={onOpen} aria-label={`Editar ${name}`}>
-        <ChevronRight size={18} color="#A89A87" />
-      </button>
+      {/* gap:0 acá adentro — ojo y flecha ya tienen su propio padding, no
+          hace falta espacio extra. Solo el handle necesita los 4px del gap
+          de la fila. */}
+      <div style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 0 }}>
+        <button
+          type="button"
+          onClick={onOpen}
+          style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, minWidth: 0, background: "none", border: "none", padding: "7px 10px", textAlign: "left", cursor: "pointer", opacity: hidden ? 0.5 : 1 }}
+        >
+          {icon && <span style={{ fontSize: 16, lineHeight: 1, flexShrink: 0 }}>{icon}</span>}
+          <span style={{ fontSize: 14, fontFamily: "system-ui, sans-serif", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
+        </button>
+        {paymentAccountDeleted ? (
+          <span style={{ display: "flex", marginRight: 4 }} title="Su cuenta de pago fue eliminada">
+            <AlertTriangle size={16} color="#B0473A" />
+          </span>
+        ) : isCreditCard && (
+          <span style={{ display: "flex", marginRight: 4 }} title="Tarjeta de crédito">
+            <CreditCard size={16} color="#A89A87" />
+          </span>
+        )}
+        <button style={styles.iconBtnGhost} onClick={onToggleHidden} aria-label={hidden ? `Mostrar ${name}` : `Ocultar ${name}`}>
+          {hidden ? <EyeOff size={16} /> : <Eye size={16} />}
+        </button>
+        <button style={styles.iconBtnGhost} onClick={onOpen} aria-label={`Editar ${name}`}>
+          <ChevronRight size={18} color="#A89A87" />
+        </button>
+      </div>
     </div>
   );
 }

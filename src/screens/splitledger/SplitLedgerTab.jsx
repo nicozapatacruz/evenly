@@ -605,7 +605,14 @@ function GroupForm({ group = null, session, onCancel, onCreate, onSave, onDelete
 
         {isEditing ? (
           <>
-            <p style={styles.label}>Personas <span style={{ color: "#B0473A" }}>*</span></p>
+            {/* Envueltos juntos (gap:8, no el gap:14 del form de afuera) —
+                label y lista son una sola unidad, el form entero no debería
+                separarlos como si fueran 2 secciones distintas. display:
+                "block" en el <p> — styles.label trae flexDirection:"column"
+                (pensado para un Field con label+input apilados), que acá
+                partía "Personas" y el "*" en 2 líneas en vez de una. */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <p style={{ ...styles.label, display: "block", margin: 0 }}>Personas <span style={{ color: "#B0473A" }}>*</span></p>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {members.map((m) => (
                 <div key={m.id} style={{ display: "flex", flexDirection: "column", gap: 0 }}>
@@ -641,6 +648,7 @@ function GroupForm({ group = null, session, onCancel, onCreate, onSave, onDelete
                 </div>
               ))}
             </div>
+            </div>
             <div style={{ display: "flex", gap: 8 }}>
               <input style={{ ...styles.input, flex: 1 }} value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} onBlur={() => touch("members")} placeholder="Nombre de la nueva persona" onKeyDown={(e) => e.key === "Enter" && newMemberName.trim() && addMember()} />
               <button style={{ ...styles.btnSecondarySmall, opacity: newMemberName.trim() ? 1 : 0.5 }} onClick={addMember} disabled={!newMemberName.trim()}><UserPlus size={16} /></button>
@@ -657,6 +665,9 @@ function GroupForm({ group = null, session, onCancel, onCreate, onSave, onDelete
             )}
 
             {/* ── Categorías colapsables ── */}
+            {/* Header+contenido envueltos juntos (gap:8, no el gap:14 del
+                form de afuera) — mismo motivo que "Personas"/"Integrantes". */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <button
               style={styles.collapsibleHeader}
               onClick={() => setCatsOpen(v => !v)}
@@ -678,6 +689,7 @@ function GroupForm({ group = null, session, onCancel, onCreate, onSave, onDelete
                           onEditIcon={() => setEditingCatId(cat.id)}
                           onChangeLabel={(label) => updateCategory(cat.id, { label })}
                           onRemove={() => removeCategory(cat.id)}
+                          draggable={categories.length > 1}
                         />
                       ))}
                     </div>
@@ -689,31 +701,38 @@ function GroupForm({ group = null, session, onCancel, onCreate, onSave, onDelete
                 )}
               </>
             )}
+            </div>
           </>
         ) : (
           <>
-            <p style={styles.label}>Integrantes <span style={{ color: "#B0473A" }}>*</span></p>
-
-            {/* Tú — fijo, no se puede quitar */}
-            <div style={{ ...styles.shareRow, background: "#F3EFE5", borderColor: "#DDD2BE" }}>
-              <span style={{ ...styles.avatar, background: colorFor(session.userId) }}>{initials(session.displayName)}</span>
-              <span style={{ flex: 1, fontWeight: 600 }}>{session.displayName}</span>
-              <span style={{ fontSize: 11, color: "#A8754A", fontFamily: "system-ui, sans-serif" }}>Tú</span>
-            </div>
-
-            {/* Otros miembros */}
+            {/* Mismo motivo que "Personas" (modo editar) — label+contenido
+                envueltos juntos (gap:8) para no heredar el gap:14 del form,
+                y display:"block" para que "Integrantes" y el "*" no se
+                partan en 2 líneas (styles.label trae flexDirection:column). */}
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {blankMembers.map((m, i) => (
-                <div key={i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <span style={{ ...styles.avatar, background: m.trim() ? colorFor(m + i) : "#D9CFC1" }}>
-                    {m.trim() ? initials(m) : i + 1}
-                  </span>
-                  <input style={{ ...styles.input, flex: 1 }} value={m} onChange={(e) => updateMember(i, e.target.value)} onBlur={() => touch("members")} placeholder={`Persona ${i + 1}`} />
-                  {blankMembers.length > 1 && (
-                    <button style={styles.iconBtnGhost} onClick={() => removeMemberField(i)} aria-label="Quitar persona"><X size={16} /></button>
-                  )}
-                </div>
-              ))}
+              <p style={{ ...styles.label, display: "block", margin: 0 }}>Integrantes <span style={{ color: "#B0473A" }}>*</span></p>
+
+              {/* Tú — fijo, no se puede quitar */}
+              <div style={{ ...styles.shareRow, background: "#F3EFE5", borderColor: "#DDD2BE" }}>
+                <span style={{ ...styles.avatar, background: colorFor(session.userId) }}>{initials(session.displayName)}</span>
+                <span style={{ flex: 1, fontWeight: 600 }}>{session.displayName}</span>
+                <span style={{ fontSize: 11, color: "#A8754A", fontFamily: "system-ui, sans-serif" }}>Tú</span>
+              </div>
+
+              {/* Otros miembros */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {blankMembers.map((m, i) => (
+                  <div key={i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span style={{ ...styles.avatar, background: m.trim() ? colorFor(m + i) : "#D9CFC1" }}>
+                      {m.trim() ? initials(m) : i + 1}
+                    </span>
+                    <input style={{ ...styles.input, flex: 1 }} value={m} onChange={(e) => updateMember(i, e.target.value)} onBlur={() => touch("members")} placeholder={`Persona ${i + 1}`} />
+                    {blankMembers.length > 1 && (
+                      <button style={styles.iconBtnGhost} onClick={() => removeMemberField(i)} aria-label="Quitar persona"><X size={16} /></button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
             <button style={styles.btnDashed} onClick={addMemberField}><Plus size={16} /> Agregar persona</button>
             {touched.members && !hasEnoughMembers && (
@@ -789,50 +808,60 @@ function GroupForm({ group = null, session, onCancel, onCreate, onSave, onDelete
 
 // Una fila arrastrable de la lista de categorías (dnd-kit: funciona con mouse y con touch,
 // a diferencia del drag & drop nativo de HTML que en celulares no responde al dedo).
-function SortableCategoryRow({ cat, onEditIcon, onChangeLabel, onRemove }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cat.id });
+function SortableCategoryRow({ cat, onEditIcon, onChangeLabel, onRemove, draggable }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cat.id, disabled: !draggable });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
   };
   return (
-    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 6, padding: "8px 10px" }}>
+    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 8, padding: "10px 14px" }}>
       {/* Handle — ícono SVG (se centra bien, a diferencia del glifo de texto) a todo el alto
           de la fila para que el área de agarre sea más grande. touchAction:"none" es necesario
-          para que el drag responda al dedo en vez de disparar el scroll. */}
-      <span
-        {...attributes}
-        {...listeners}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          alignSelf: "stretch",
-          width: 32,
-          color: "#C9BBA0",
-          cursor: "grab",
-          touchAction: "none",
-        }}
-      >
-        <Menu size={18} />
-      </span>
-      <button
-        onClick={onEditIcon}
-        style={{ width: 34, height: 34, minWidth: 34, borderRadius: 8, border: "1px solid #DDD2BE", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#544A3C", cursor: "pointer" }}
-        aria-label="Cambiar ícono"
-      >
-        <IconComp iconKey={cat.iconKey} size={16} />
-      </button>
-      <input
-        style={{ ...styles.input, flex: 1, padding: "7px 10px", fontSize: 14 }}
-        value={cat.label}
-        onChange={(e) => onChangeLabel(e.target.value)}
-        placeholder="Nombre de categoría"
-      />
-      <button style={styles.iconBtnGhost} onClick={onRemove} aria-label="Eliminar categoría">
-        <X size={15} />
-      </button>
+          para que el drag responda al dedo en vez de disparar el scroll. Sin ícono si hay un
+          solo ítem — no hay con qué reordenar. */}
+      {draggable ? (
+        <span
+          {...attributes}
+          {...listeners}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            alignSelf: "stretch",
+            width: 32,
+            color: "#C9BBA0",
+            cursor: "grab",
+            touchAction: "none",
+          }}
+        >
+          <Menu size={18} />
+        </span>
+      ) : (
+        <span style={{ width: 32, flexShrink: 0 }} />
+      )}
+      {/* gap:6 acá adentro (no en la fila entera) — el handle solo necesita
+          4px hasta lo siguiente, pero el botón de ícono/input/botón de
+          borrar sí son cajas separadas que necesitan su propio espacio. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
+        <button
+          onClick={onEditIcon}
+          style={{ width: 34, height: 34, minWidth: 34, borderRadius: 8, border: "1px solid #DDD2BE", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#544A3C", cursor: "pointer" }}
+          aria-label="Cambiar ícono"
+        >
+          <IconComp iconKey={cat.iconKey} size={16} />
+        </button>
+        <input
+          style={{ ...styles.input, flex: 1, padding: "7px 10px", fontSize: 14 }}
+          value={cat.label}
+          onChange={(e) => onChangeLabel(e.target.value)}
+          placeholder="Nombre de categoría"
+        />
+        <button style={styles.iconBtnGhost} onClick={onRemove} aria-label="Eliminar categoría">
+          <X size={15} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -1882,7 +1911,11 @@ function InviteScreen({ group, session, groupInvites = [], onBack, onSend, onCan
           Selecciona a qué miembro del grupo corresponde la persona que vas a invitar, y escribe su nombre de usuario en la app.
         </p>
 
-        <p style={styles.label}>¿A qué miembro corresponde? <span style={{ color: "#B0473A" }}>*</span></p>
+        {/* Mismo motivo que "Personas"/"Integrantes" — label+contenido
+            envueltos juntos (gap:8) con margin:0 explícito en el <p> (si no,
+            su margen por defecto del navegador se suma al gap). */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <p style={{ ...styles.label, display: "block", margin: 0 }}>¿A qué miembro corresponde? <span style={{ color: "#B0473A" }}>*</span></p>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {invitableMembers.length === 0 && (
             <p style={styles.muted}>Todos los miembros ya tienen usuario vinculado.</p>
@@ -1939,6 +1972,7 @@ function InviteScreen({ group, session, groupInvites = [], onBack, onSend, onCan
               </div>
             );
           })}
+        </div>
         </div>
         {touched.member && !selectedMemberId && (
           <p style={{ margin: "-4px 0 0", fontSize: 12, color: "#B0473A", fontFamily: "system-ui, sans-serif" }}>Elegí a qué miembro corresponde.</p>

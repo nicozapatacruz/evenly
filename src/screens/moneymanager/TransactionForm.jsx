@@ -623,6 +623,7 @@ export function ManageCategories({ session, type, categories, reload, showError,
                       onChangeIcon={(v) => { setIcons((prev) => ({ ...prev, [id]: v })); saveIcon(id, v); }}
                       onRemove={() => setConfirmRemoveId(id)}
                       isConfirming={confirmRemoveId === id}
+                      draggable={order.length > 1}
                     />
                     {confirmRemoveId === id && (
                       <ConfirmInline
@@ -692,19 +693,29 @@ function NewCategoryForm({ session, type, categories, reload, showError, onCance
   );
 }
 
-function SortableCategoryManageRow({ id, name, icon, onChangeName, onBlur, onChangeIcon, onRemove, isConfirming }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+function SortableCategoryManageRow({ id, name, icon, onChangeName, onBlur, onChangeIcon, onRemove, isConfirming, draggable }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !draggable });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   return (
-    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 6, padding: "6px 8px 6px 4px", borderRadius: isConfirming ? "10px 10px 0 0" : 10 }}>
-      <span {...attributes} {...listeners} style={{ display: "flex", alignItems: "center", justifyContent: "center", alignSelf: "stretch", width: 28, color: "#C9BBA0", cursor: "grab", touchAction: "none" }}>
-        <Menu size={18} />
-      </span>
-      <IconInput value={icon} onChange={onChangeIcon} />
-      <input style={{ ...styles.input, flex: 1, padding: "7px 10px", fontSize: 14 }} value={name} onChange={(e) => onChangeName(e.target.value)} onBlur={onBlur} />
-      <button style={styles.iconBtnGhost} onClick={onRemove} aria-label="Borrar categoría">
-        <X size={16} />
-      </button>
+    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 8, padding: "10px 14px", borderRadius: isConfirming ? "10px 10px 0 0" : 10 }}>
+      {/* Sin ícono de arrastrar si hay un solo ítem — no hay con qué reordenar. */}
+      {draggable ? (
+        <span {...attributes} {...listeners} style={{ display: "flex", alignItems: "center", justifyContent: "center", alignSelf: "stretch", width: 28, color: "#C9BBA0", cursor: "grab", touchAction: "none" }}>
+          <Menu size={18} />
+        </span>
+      ) : (
+        <span style={{ width: 28, flexShrink: 0 }} />
+      )}
+      {/* gap:6 acá adentro (no en la fila entera) — el handle solo necesita
+          4px hasta lo siguiente, pero IconInput/input/botón sí son cajas
+          separadas que necesitan su propio espacio visible. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
+        <IconInput value={icon} onChange={onChangeIcon} />
+        <input style={{ ...styles.input, flex: 1, padding: "7px 10px", fontSize: 14 }} value={name} onChange={(e) => onChangeName(e.target.value)} onBlur={onBlur} />
+        <button style={styles.iconBtnGhost} onClick={onRemove} aria-label="Borrar categoría">
+          <X size={16} />
+        </button>
+      </div>
     </div>
   );
 }

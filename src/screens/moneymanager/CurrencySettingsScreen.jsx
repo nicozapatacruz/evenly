@@ -79,7 +79,7 @@ export default function CurrencySettingsScreen({ session, settings, reload, show
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {otherCurrencies.map((c) => (
                   <div key={c}>
-                    <SortableCurrencyRow code={c} isConfirming={confirmRemoveCode === c} onRemove={() => setConfirmRemoveCode(c)} />
+                    <SortableCurrencyRow code={c} isConfirming={confirmRemoveCode === c} onRemove={() => setConfirmRemoveCode(c)} draggable={otherCurrencies.length > 1} />
                     {confirmRemoveCode === c && (
                       <ConfirmInline
                         message={`¿Quitar ${c} de la lista?`}
@@ -116,18 +116,28 @@ export default function CurrencySettingsScreen({ session, settings, reload, show
   );
 }
 
-function SortableCurrencyRow({ code, isConfirming, onRemove }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: code });
+function SortableCurrencyRow({ code, isConfirming, onRemove, draggable }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: code, disabled: !draggable });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   return (
-    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 6, padding: "6px 8px 6px 4px", borderRadius: isConfirming ? "10px 10px 0 0" : 10 }}>
-      <span {...attributes} {...listeners} style={{ display: "flex", alignItems: "center", justifyContent: "center", alignSelf: "stretch", width: 28, color: "#C9BBA0", cursor: "grab", touchAction: "none" }}>
-        <Menu size={18} />
-      </span>
-      <span style={{ flex: 1, fontFamily: "system-ui, sans-serif", fontSize: 14 }}>{code} ({CURRENCIES[code].symbol})</span>
-      <button style={styles.iconBtnGhost} onClick={onRemove} aria-label={`Quitar ${code}`}>
-        <X size={16} />
-      </button>
+    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 8, padding: "10px 14px", borderRadius: isConfirming ? "10px 10px 0 0" : 10 }}>
+      {/* Sin ícono de arrastrar si hay un solo ítem — no hay con qué reordenar. */}
+      {draggable ? (
+        <span {...attributes} {...listeners} style={{ display: "flex", alignItems: "center", justifyContent: "center", alignSelf: "stretch", width: 28, color: "#C9BBA0", cursor: "grab", touchAction: "none" }}>
+          <Menu size={18} />
+        </span>
+      ) : (
+        <span style={{ width: 28, flexShrink: 0 }} />
+      )}
+      {/* gap:6 acá adentro — el texto no tiene padding propio como un botón,
+          necesita su propio espacio visible hasta el botón de borrar. Solo
+          el handle necesita los 4px del gap de la fila. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
+        <span style={{ flex: 1, fontFamily: "system-ui, sans-serif", fontSize: 14 }}>{code} ({CURRENCIES[code].symbol})</span>
+        <button style={styles.iconBtnGhost} onClick={onRemove} aria-label={`Quitar ${code}`}>
+          <X size={16} />
+        </button>
+      </div>
     </div>
   );
 }

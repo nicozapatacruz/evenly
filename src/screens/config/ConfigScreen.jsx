@@ -587,7 +587,7 @@ function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onO
             {groupOrder.map((groupId) => {
               const g = groups.find((x) => x.id === groupId);
               if (!g) return null;
-              return <SortableGroupRow key={g.id} group={g} onOpen={() => onOpenGroup(g.id)} />;
+              return <SortableGroupRow key={g.id} group={g} onOpen={() => onOpenGroup(g.id)} draggable={groupOrder.length > 1} />;
             })}
           </div>
         </SortableContext>
@@ -599,31 +599,36 @@ function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onO
 
 // Una fila arrastrable de "tus grupos" (mismo mecanismo — dnd-kit — que las
 // categorías de EditGroup, y mismo ícono de agarre: 3 líneas horizontales).
-function SortableGroupRow({ group, onOpen }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: group.id });
+function SortableGroupRow({ group, onOpen, draggable }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: group.id, disabled: !draggable });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
   };
   return (
-    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 6, padding: "8px 10px 8px 4px" }}>
-      <span
-        {...attributes}
-        {...listeners}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          alignSelf: "stretch",
-          width: 28,
-          color: "#C9BBA0",
-          cursor: "grab",
-          touchAction: "none",
-        }}
-      >
-        <Menu size={18} />
-      </span>
+    <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 4, padding: "10px 14px" }}>
+      {/* Sin ícono de arrastrar si hay un solo ítem — no hay con qué reordenar. */}
+      {draggable ? (
+        <span
+          {...attributes}
+          {...listeners}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            alignSelf: "stretch",
+            width: 28,
+            color: "#C9BBA0",
+            cursor: "grab",
+            touchAction: "none",
+          }}
+        >
+          <Menu size={18} />
+        </span>
+      ) : (
+        <span style={{ width: 28, flexShrink: 0 }} />
+      )}
       <button style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left", font: "inherit", color: "inherit" }} onClick={onOpen}>
         <span style={{ ...styles.avatar, background: colorFor(group.id) }}>{initials(group.name)}</span>
         <span style={{ flex: 1, minWidth: 0 }}>{group.name}</span>

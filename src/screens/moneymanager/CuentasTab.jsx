@@ -197,7 +197,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
         {deletedByGroup.length > 0 && (
           <div>
             <button
-              style={styles.collapsibleHeader}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: "#FAF7F2", border: "1px solid #DDD2BE", borderRadius: deletedOpen ? "10px 10px 0 0" : 10, padding: "10px 14px", cursor: "pointer" }}
               onClick={() => setDeletedOpen((v) => !v)}
               aria-expanded={deletedOpen}
             >
@@ -206,11 +206,11 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
             </button>
 
             {deletedOpen && (
-              <>
+              <div style={{ border: "1px solid #DDD2BE", borderTop: "none", borderRadius: "0 0 10px 10px", padding: "12px", display: "flex", flexDirection: "column", gap: 8, background: "#fff" }}>
                 {deletedByGroup.map(({ group, items }) => {
                   const groupTotal = items.reduce((s, a) => s + accountBalance(a.id, accountTotals), 0);
                   return (
-                  <div key={group.id} style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden", marginTop: 8 }}>
+                  <div key={group.id} style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "#FAF7F2", borderBottom: "1px solid #F0EBE2" }}>
                       <span style={{ fontWeight: 700, fontSize: 13.5, fontFamily: "system-ui, sans-serif" }}>{group.name}</span>
                       <span style={{ fontWeight: 700, fontSize: 13.5, fontFamily: "system-ui, sans-serif", color: balanceColor(groupTotal) }}>{money(groupTotal, settings.main_currency)}</span>
@@ -227,8 +227,8 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
                   </div>
                   );
                 })}
-                <p style={{ ...styles.muted, padding: 0, marginTop: 8 }}>Las cuentas eliminadas no suman al balance general.</p>
-              </>
+                <p style={{ ...styles.muted, padding: 0 }}>Las cuentas eliminadas no suman al balance general.</p>
+              </div>
             )}
           </div>
         )}

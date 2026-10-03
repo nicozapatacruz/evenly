@@ -184,16 +184,6 @@ export const styles = {
     fontFamily: "system-ui, sans-serif",
     cursor: "pointer",
   },
-  collapsibleHeader: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    background: "transparent",
-    border: "none",
-    padding: "4px 0",
-    width: "100%",
-    cursor: "pointer",
-  },
   monthSeparator: {
     margin: "6px 20px 0",
     paddingBottom: 4,

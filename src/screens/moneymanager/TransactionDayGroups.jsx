@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Trash2, Divide } from "lucide-react";
+import { Trash2, Divide, ArrowLeftRight } from "lucide-react";
 import { money, measureTextWidth, dateInputValueInZone } from "../../lib/helpers.jsx";
 
 const DAY_AMOUNTS_FONT = "12.5px system-ui, sans-serif";
@@ -116,21 +116,25 @@ export function TransactionDayGroups({ transactions, settings, accounts, categor
                 style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14, cursor: "pointer", background: badge ? "#FBF1E0" : undefined }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
-                  {t.type !== "transfer" && (
-                    // Alto fijo siempre (haya ícono o no) — si no, una fila sin
-                    // categoría queda más baja que una con categoría, porque el
-                    // emoji del ícono es lo que más alto mide de toda la fila.
-                    <span style={{ position: "relative", flexShrink: 0, display: "inline-flex", width: 18, height: 18, alignItems: "center", justifyContent: "center" }}>
-                      {categoryIcon(t.category_id) && (
-                        <span style={{ fontSize: 18, lineHeight: 1, opacity: categoryDeleted(t.category_id) ? 0.5 : 1 }}>{categoryIcon(t.category_id)}</span>
-                      )}
-                      {categoryDeleted(t.category_id) && (
-                        <span style={{ position: "absolute", bottom: -3, right: -5, background: "#fff", borderRadius: "50%", padding: 1, display: "flex" }}>
-                          <Trash2 size={10} color="#B0473A" />
-                        </span>
-                      )}
-                    </span>
-                  )}
+                  {/* Alto fijo siempre (haya ícono o no) — si no, una fila sin
+                      categoría queda más baja que una con categoría, porque el
+                      emoji del ícono es lo que más alto mide de toda la fila. */}
+                  <span style={{ position: "relative", flexShrink: 0, display: "inline-flex", width: 18, height: 18, alignItems: "center", justifyContent: "center" }}>
+                    {t.type === "transfer" ? (
+                      <ArrowLeftRight size={16} color="#4A6FA5" />
+                    ) : (
+                      <>
+                        {categoryIcon(t.category_id) && (
+                          <span style={{ fontSize: 18, lineHeight: 1, opacity: categoryDeleted(t.category_id) ? 0.5 : 1 }}>{categoryIcon(t.category_id)}</span>
+                        )}
+                        {categoryDeleted(t.category_id) && (
+                          <span style={{ position: "absolute", bottom: -3, right: -5, background: "#fff", borderRadius: "50%", padding: 1, display: "flex" }}>
+                            <Trash2 size={10} color="#B0473A" />
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </span>
                   {/* minHeight: 32 — una transacción sin nota (sin "título") solo
                       muestra 1 línea en vez de 2, y quedaba más baja que el
                       resto; con esto reserva el mismo alto igual. */}

@@ -182,7 +182,19 @@ const GROUP_SELECT = `
 
 // Traduce una fila de Supabase (snake_case, numeric como string, timestamptz como ISO)
 // al shape en memoria que ya consumen GroupView/NewExpense/SettleUp/EditGroup.
-function toClientGroup(row) {
+function toClientGroup(row, userId) {
+  // Vos siempre primero en la lista de integrantes (pagadores, participantes,
+  // "Integrantes" en Editar grupo, etc.) — `sort_order` acá NO sirve para
+  // esto (es el orden de TUS grupos en la lista, guardado en tu propia fila
+  // de group_members, no el orden de los miembros dentro de un grupo). Sort
+  // estable: todos los demás quedan en el orden que ya traía el servidor.
+  const members = (row.group_members || []).map((m) => ({
+    id: m.id,
+    name: m.name,
+    linkedUserId: m.linked_user_id,
+    sortOrder: m.sort_order,
+  }));
+  members.sort((a, b) => (a.linkedUserId === userId ? -1 : b.linkedUserId === userId ? 1 : 0));
   return {
     id: row.id,
     name: row.name,
@@ -191,12 +203,7 @@ function toClientGroup(row) {
     photoUrl: row.photo_url || null,
     creatorId: row.creator_id,
     createdAt: new Date(row.created_at).getTime(),
-    members: (row.group_members || []).map((m) => ({
-      id: m.id,
-      name: m.name,
-      linkedUserId: m.linked_user_id,
-      sortOrder: m.sort_order,
-    })),
+    members,
     categories: (row.categories || [])
       .slice()
       .sort((a, b) => a.sort_order - b.sort_order)
@@ -258,7 +265,7 @@ function useGroups(userId) {
         .eq("deleted", false)
         .order("created_at", { ascending: true });
       if (error) throw error;
-      setGroups(sortGroupsForUser(data.map(toClientGroup), userId));
+      setGroups(sortGroupsForUser(data.map((row) => toClientGroup(row, userId)), userId));
     } catch {
       setGroups([]);
     } finally {
@@ -280,7 +287,7 @@ function useGroups(userId) {
       .eq("id", groupId)
       .single();
     if (error) throw error;
-    const g = toClientGroup(data);
+    const g = toClientGroup(data, userId);
     setGroups((prev) => {
       const next = prev ? [...prev] : [];
       const idx = next.findIndex((x) => x.id === groupId);

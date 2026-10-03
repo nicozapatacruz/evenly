@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from "../../lib/supabaseClient.js";
 import {
   Plus, Receipt, X, ChevronRight, ArrowRight, Check, Trash2, Settings,
@@ -723,43 +723,42 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
               </button>
             )}
 
-            {/* ── Categorías colapsables ── */}
-            {/* Header+contenido envueltos juntos (gap:8, no el gap:14 del
-                form de afuera) — mismo motivo que "Personas"/"Integrantes". */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <button
-              style={styles.collapsibleHeader}
-              onClick={() => setCatsOpen(v => !v)}
-              aria-expanded={catsOpen}
-            >
-              <span style={styles.label}>Categorías de gasto ({categories.length})</span>
-              {catsOpen ? <ChevronUp size={18} color="#6B6355" /> : <ChevronDownIcon size={18} color="#6B6355" />}
-            </button>
+            {/* ── Categorías colapsables ── mismo aspecto que "Dividido en"
+                (caja con borde, el body queda pegado y conectado abajo). */}
+            <div>
+              <button
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: "#FAF7F2", border: "1px solid #DDD2BE", borderRadius: catsOpen ? "10px 10px 0 0" : 10, padding: "10px 14px", cursor: "pointer" }}
+                onClick={() => setCatsOpen(v => !v)}
+                aria-expanded={catsOpen}
+              >
+                <span style={styles.label}>Categorías de gasto ({categories.length})</span>
+                {catsOpen ? <ChevronUp size={18} color="#6B6355" /> : <ChevronDownIcon size={18} color="#6B6355" />}
+              </button>
 
-            {catsOpen && (
-              <>
-                <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleCategoryDragEnd}>
-                  <SortableContext items={categories.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      {categories.map((cat) => (
-                        <SortableCategoryRow
-                          key={cat.id}
-                          cat={cat}
-                          onEditIcon={() => setEditingCatId(cat.id)}
-                          onChangeLabel={(label) => updateCategory(cat.id, { label })}
-                          onRemove={() => removeCategory(cat.id)}
-                          draggable={categories.length > 1}
-                        />
-                      ))}
-                    </div>
-                  </SortableContext>
-                </DndContext>
-                <button style={styles.btnDashed} onClick={addCategory}><Plus size={16} /> Nueva categoría</button>
-                {touched.categories && hasEmptyCategory && (
-                  <p style={{ margin: "-4px 0 0", fontSize: 12, color: "#B0473A", fontFamily: "system-ui, sans-serif" }}>Todas las categorías necesitan un nombre.</p>
-                )}
-              </>
-            )}
+              {catsOpen && (
+                <div style={{ border: "1px solid #DDD2BE", borderTop: "none", borderRadius: "0 0 10px 10px", padding: "12px", display: "flex", flexDirection: "column", gap: 10, background: "#fff" }}>
+                  <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleCategoryDragEnd}>
+                    <SortableContext items={categories.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {categories.map((cat) => (
+                          <SortableCategoryRow
+                            key={cat.id}
+                            cat={cat}
+                            onEditIcon={() => setEditingCatId(cat.id)}
+                            onChangeLabel={(label) => updateCategory(cat.id, { label })}
+                            onRemove={() => removeCategory(cat.id)}
+                            draggable={categories.length > 1}
+                          />
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                  <button style={styles.btnDashed} onClick={addCategory}><Plus size={16} /> Nueva categoría</button>
+                  {touched.categories && hasEmptyCategory && (
+                    <p style={{ margin: "-4px 0 0", fontSize: 12, color: "#B0473A", fontFamily: "system-ui, sans-serif" }}>Todas las categorías necesitan un nombre.</p>
+                  )}
+                </div>
+              )}
             </div>
           </>
         ) : (
@@ -1512,6 +1511,7 @@ function ExpenseDetail({ group, expenseId, onBack, onEdit }) {
 function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onDelete, session, moneyManager }) {
   const { members, baseCurrency } = group;
   const existing = expenseId ? group.expenses.find((e) => e.id === expenseId) : null;
+  const myMemberId = group.members.find((m) => m.linkedUserId === session?.userId)?.id;
 
   const [description, setDescription] = useState(existing?.description || "");
   const [amount, setAmount] = useState(existing ? String(existing.amount) : "");
@@ -1524,8 +1524,11 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
   const existingPayers = existing?.payers || (existing?.paidBy ? { [existing.paidBy]: existing.amount } : null);
   const initPayerMode = existingPayers && Object.keys(existingPayers).length > 1 ? "multi" : "single";
   const [payerMode, setPayerMode] = useState(initPayerMode);
+  // Gasto nuevo (sin pagadores todavía): yo soy el pagador por defecto, no
+  // "el primer miembro de la lista" — casi siempre soy quien está cargando
+  // el gasto en este momento.
   const [singlePayer, setSinglePayer] = useState(
-    existing?.paidBy || (existingPayers ? Object.keys(existingPayers)[0] : members[0]?.id || "")
+    existing?.paidBy || (existingPayers ? Object.keys(existingPayers)[0] : (myMemberId || members[0]?.id || ""))
   );
   const [payerAmounts, setPayerAmounts] = useState(
     () => Object.fromEntries(members.map((m) => [m.id, existingPayers?.[m.id] ? String(existingPayers[m.id]) : ""]))
@@ -1556,33 +1559,12 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
   const [touched, setTouched] = useState({});
   const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
 
-  // Mi Money Manager — solo si YO tengo este grupo vinculado. El selector se
-  // muestra siempre que abro este gasto (lo haya cargado yo o no), precargado
-  // con lo que ya elegí antes para ESTE gasto puntual (si lo reabro), o con
-  // mi default "propio" si es la primera vez que lo toco.
-  const myMemberId = group.members.find((m) => m.linkedUserId === session?.userId)?.id;
+  // Mi Money Manager — solo si YO tengo este grupo vinculado. (myMemberId ya
+  // se calculó arriba, lo necesitaba el default de "¿quién pagó?")
   const activeLink = moneyManager?.slLinks?.find((l) => l.active && l.group_id === group.id && l.user_id === session?.userId);
   const [mmAccountId, setMmAccountId] = useState("");
   const [mmCategoryId, setMmCategoryId] = useState("");
-  useEffect(() => {
-    if (!activeLink) return;
-    let cancelled = false;
-    (async () => {
-      let choice = null;
-      if (existing) {
-        const { data } = await supabase
-          .from("sl_mm_expense_choices")
-          .select("account_id, category_id")
-          .eq("link_id", activeLink.id).eq("source_kind", "expense").eq("source_id", existing.id)
-          .maybeSingle();
-        choice = data;
-      }
-      if (cancelled) return;
-      setMmAccountId(choice?.account_id || activeLink.default_own_account_id);
-      setMmCategoryId(choice?.category_id || "");
-    })();
-    return () => { cancelled = true; };
-  }, [activeLink?.id, existing?.id]);
+  const savedMmChoiceRef = useRef(null); // null = todavía no se chequeó; {} = se chequeó y no había nada guardado
 
   const numericAmount = parseAmountInput(amount || "");
   const validAmount = !isNaN(numericAmount) && numericAmount > 0;
@@ -1643,12 +1625,63 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
     return computeShares({ splitMode: "shares", amount: numericAmount, participantIds, shareUnits: units });
   };
 
-  // ¿Tengo yo alguna parte en este gasto (lo pagué, me toca una parte, o
-  // ambas)? Solo entonces hace falta una cuenta de Money Manager — si no
-  // tengo nada que ver con este gasto, el selector no aplica.
-  const mmShares = buildShares();
-  const mmPayers = buildPayers();
-  const mmInvolved = !!(activeLink && myMemberId && ((mmShares[myMemberId] || 0) > 0.005 || (mmPayers[myMemberId] || 0) > 0.005));
+  // 4 casos, según si yo pagué algo y/o me toca una parte real:
+  // - Pago sí (participe o no): sale Cuenta, con default "propia".
+  // - Pago no + participo sí: sale Cuenta, con default "ajena".
+  // - Pago no + participo no: no sale Cuenta (no hay ninguna transferencia
+  //   saliendo de una cuenta mía).
+  // La Categoría de Money solo tiene sentido si participo de verdad — si
+  // pagué pero no me toca nada, no existe ningún "gasto" mío en Money (solo
+  // el préstamo, que nunca lleva categoría), así que esa categoría nunca se
+  // usaría en ningún lado.
+  //
+  // Esto se decide por SELECCIÓN (quién está marcado como pagador/participante),
+  // no por los montos ya calculados (buildPayers/buildShares) — si no, estos
+  // campos no aparecían hasta escribir un Importe válido, lo cual no tiene
+  // sentido: ya sabés si pagás/participás desde que tocás los botones de
+  // arriba, antes de terminar de escribir el monto.
+  const iPay = payerMode === "single" ? singlePayer === myMemberId : multiPayerSelected.has(myMemberId);
+  const iParticipate = participants.has(myMemberId);
+  const mmInvolved = !!(activeLink && myMemberId && (iPay || iParticipate));
+  const showMmCategory = !!(activeLink && myMemberId && iParticipate);
+
+  // La primera vez (por vínculo/gasto): trae la elección ya guardada para
+  // ESTE gasto puntual, si existe (nunca se pisa después). Si no hay
+  // ninguna todavía, arranca en el default que corresponda según si pago o
+  // no en este momento.
+  useEffect(() => {
+    if (!activeLink) return;
+    let cancelled = false;
+    savedMmChoiceRef.current = null;
+    (async () => {
+      let choice = null;
+      if (existing) {
+        const { data } = await supabase
+          .from("sl_mm_expense_choices")
+          .select("account_id, category_id")
+          .eq("link_id", activeLink.id).eq("source_kind", "expense").eq("source_id", existing.id)
+          .maybeSingle();
+        choice = data;
+      }
+      if (cancelled) return;
+      savedMmChoiceRef.current = choice || {};
+      setMmAccountId(choice?.account_id || (iPay ? activeLink.default_own_account_id : activeLink.default_other_account_id));
+      setMmCategoryId(choice?.category_id || "");
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLink?.id, existing?.id]);
+
+  // Si cambiás quién pagó ANTES de tocar el selector de Cuenta a mano, el
+  // default (propia/ajena) se actualiza solo — apenas lo tocás vos
+  // (touched.mmAccountId), o si ya había una elección guardada para este
+  // gasto, deja de tocarse.
+  useEffect(() => {
+    if (!activeLink || touched.mmAccountId) return;
+    if (savedMmChoiceRef.current?.account_id) return;
+    setMmAccountId(iPay ? activeLink.default_own_account_id : activeLink.default_other_account_id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [iPay, activeLink?.id]);
 
   // Ya no devuelve mensajes: el botón de Guardar se deshabilita con esta misma condición,
   // así que para cuando handleSave llega a ejecutarse esto siempre es true — es solo un
@@ -1751,7 +1784,59 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
           <span style={{ fontSize: 12, fontWeight: 400, color: "#B0473A", marginTop: -8, fontFamily: "system-ui, sans-serif" }}>Ingresá un importe válido.</span>
         )}
 
-        <Field label="Categoría">
+        {mmInvolved && (
+          <Field label="Cuenta" required error={touched.mmAccountId && !mmAccountId ? "Este campo es obligatorio." : ""}>
+            <div style={{ position: "relative" }}>
+              <PickerField
+                value={mmAccountId}
+                onChange={setMmAccountId}
+                onBlur={() => touch("mmAccountId")}
+                placeholder="Elegí una cuenta"
+                groups={moneyManager.groups
+                  .filter((g) => !g.deleted && g.system_key !== "split_ledger")
+                  .map((g) => ({
+                    label: g.name,
+                    items: moneyManager.accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
+                  }))
+                  .filter((g) => g.items.length > 0)}
+              />
+              <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", display: "flex", pointerEvents: "none" }} title="Viene de/va a Money Manager">
+                <SplitLedgerIcon size={26} />
+              </span>
+            </div>
+          </Field>
+        )}
+
+        {showMmCategory && (
+          <Field label="Categoría personal">
+            <div style={{ position: "relative" }}>
+              <PickerField
+                value={mmCategoryId}
+                onChange={setMmCategoryId}
+                onClear={() => setMmCategoryId("")}
+                placeholder="Sin categoría"
+                groups={[{
+                  label: null,
+                  items: moneyManager.categories.filter((c) => c.type === "expense" && !c.deleted).map((c) => ({ value: c.id, label: c.name, icon: c.icon })),
+                }]}
+              />
+              {/* right:40 (no 12, como Cuenta) SOLO cuando hay una categoría
+                  elegida — ahí PickerField muestra su propia "X" de limpiar
+                  en right:6 y se superponía con este ícono. Sin selección no
+                  hay "X", así que usa el mismo offset que el resto para
+                  quedar alineado con Cuenta/Grupo. */}
+              <span style={{ position: "absolute", right: mmCategoryId ? 40 : 12, top: "50%", transform: "translateY(-50%)", display: "flex", pointerEvents: "none" }} title="Viene de/va a Money Manager">
+                <SplitLedgerIcon size={26} />
+              </span>
+            </div>
+          </Field>
+        )}
+
+        {/* La categoría de Split siempre está — la ve todo el grupo. El label
+            queda fijo en "Categoría de {grupo}" apenas el grupo está
+            vinculado a Money Manager (participes/pagues o no) — así no
+            cambia de nombre según el caso, que sería más confuso que útil. */}
+        <Field label={activeLink ? `Categoría de ${group.name}` : "Categoría"}>
           <select style={{ ...styles.input, height: 44, boxSizing: "border-box", paddingRight: 10 }} value={category} onChange={(e) => setCategory(e.target.value)}>
             {groupCategories(group).map((c) => (
               <option key={c.id} value={c.id}>{c.label}</option>
@@ -1778,10 +1863,12 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
           <span style={{ fontSize: 12, fontWeight: 400, color: "#B0473A", marginTop: -8, fontFamily: "system-ui, sans-serif" }}>Este campo es obligatorio.</span>
         )}
 
-        <p style={styles.label}>¿Quién pagó?</p>
-        <div style={styles.splitModeRow}>
-          <button style={payerMode === "single" ? styles.tabActive : styles.tab} onClick={() => setPayerMode("single")}>Una persona</button>
-          <button style={payerMode === "multi" ? styles.tabActive : styles.tab} onClick={() => setPayerMode("multi")}>Varias personas</button>
+        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+          <p style={styles.label}>¿Quién pagó?</p>
+          <div style={styles.splitModeRow}>
+            <button style={payerMode === "single" ? styles.tabActive : styles.tab} onClick={() => setPayerMode("single")}>Una persona</button>
+            <button style={payerMode === "multi" ? styles.tabActive : styles.tab} onClick={() => setPayerMode("multi")}>Varias personas</button>
+          </div>
         </div>
 
         {payerMode === "single" && (
@@ -1971,39 +2058,6 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
 
         {(notesOpen || notes) && (
           <textarea style={{ ...styles.input, minHeight: 60, resize: "vertical", fontFamily: "system-ui, sans-serif" }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas adicionales…" />
-        )}
-
-        {mmInvolved && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <p style={{ ...styles.label, display: "block", margin: 0 }}>Mi Money Manager</p>
-            <Field label="Cuenta" required error={touched.mmAccountId && !mmAccountId ? "Este campo es obligatorio." : ""}>
-              <PickerField
-                value={mmAccountId}
-                onChange={setMmAccountId}
-                onBlur={() => touch("mmAccountId")}
-                placeholder="Elegí una cuenta"
-                groups={moneyManager.groups
-                  .filter((g) => !g.deleted && g.system_key !== "split_ledger")
-                  .map((g) => ({
-                    label: g.name,
-                    items: moneyManager.accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
-                  }))
-                  .filter((g) => g.items.length > 0)}
-              />
-            </Field>
-            <Field label="Categoría">
-              <PickerField
-                value={mmCategoryId}
-                onChange={setMmCategoryId}
-                onClear={() => setMmCategoryId("")}
-                placeholder="Sin categoría"
-                groups={[{
-                  label: null,
-                  items: moneyManager.categories.filter((c) => c.type === "expense" && !c.deleted).map((c) => ({ value: c.id, label: c.name, icon: c.icon })),
-                }]}
-              />
-            </Field>
-          </div>
         )}
 
         {err && <p style={styles.errText}>{err}</p>}

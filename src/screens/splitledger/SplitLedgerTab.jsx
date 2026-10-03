@@ -9,7 +9,7 @@ import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCen
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { styles } from "../../lib/styles.js";
-import { TopBar, RootHeader, ConfirmInline, Modal, Footer, PhotoPicker, Field, ToggleField, PickerField } from "../../components/Shared.jsx";
+import { TopBar, RootHeader, ConfirmInline, Modal, Footer, PhotoPicker, Field, ToggleField, PickerField, SplitLedgerIcon } from "../../components/Shared.jsx";
 import { linkGroupToAccount, updateLinkDefaults, unlinkGroup } from "../../lib/splitLedgerLink.js";
 import {
   uid, CURRENCIES, CURRENCY_LIST, money, parseAmountInput, ICON_KEYS, IconComp,
@@ -63,6 +63,7 @@ export default function SplitLedgerTab({
           groups={groups}
           loading={loading}
           session={session}
+          moneyManager={moneyManager}
           onOpen={(id) => setView({ screen: "group", groupId: id })}
           onNewExpense={() => setView({ screen: "newExpense" })}
         />
@@ -357,7 +358,7 @@ function groupCardLines(g, session) {
   return lines.length > 0 ? lines : [{ key: "settled", node: "Saldado" }];
 }
 
-function Home({ groups, loading, session, onOpen, onNewExpense }) {
+function Home({ groups, loading, session, moneyManager, onOpen, onNewExpense }) {
   return (
     <div style={styles.screen}>
       <RootHeader title="Tus grupos" />
@@ -378,6 +379,7 @@ function Home({ groups, loading, session, onOpen, onNewExpense }) {
       {!loading && groups && groups.length > 0 && (
         <ul style={styles.groupList}>
           {groups.map((g) => {
+            const isLinked = moneyManager?.slLinks?.some((l) => l.active && l.group_id === g.id && l.user_id === session.userId);
             return (
               <li key={g.id}>
                 <button style={styles.groupCard} onClick={() => onOpen(g.id)}>
@@ -395,7 +397,14 @@ function Home({ groups, loading, session, onOpen, onNewExpense }) {
                       ))}
                     </div>
                   </div>
-                  <ChevronRight size={20} color="#A89A87" />
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                    {isLinked && (
+                      <span style={{ display: "flex" }} title="Vinculado a Money Manager">
+                        <SplitLedgerIcon size={26} />
+                      </span>
+                    )}
+                    <ChevronRight size={20} color="#A89A87" />
+                  </div>
                 </button>
               </li>
             );
@@ -2037,12 +2046,22 @@ function NewExpense({ group, groups, defaultGroupId, expenseId, onCancel, onSave
   }
 
   const effectiveGroup = (groups || []).find((g) => g.id === pickedGroupId) || null;
+  const isGroupLinked = effectiveGroup && moneyManager?.slLinks?.some(
+    (l) => l.active && l.group_id === effectiveGroup.id && l.user_id === session.userId
+  );
   const groupPicker = (
     <Field label="Grupo">
-      <select style={styles.input} value={pickedGroupId} onChange={(e) => setPickedGroupId(e.target.value)}>
-        <option value="">Selecciona un grupo…</option>
-        {(groups || []).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-      </select>
+      <div style={{ position: "relative" }}>
+        <select style={{ ...styles.input, width: "100%", paddingRight: isGroupLinked ? 44 : undefined }} value={pickedGroupId} onChange={(e) => setPickedGroupId(e.target.value)}>
+          <option value="">Selecciona un grupo…</option>
+          {(groups || []).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+        </select>
+        {isGroupLinked && (
+          <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", display: "flex", pointerEvents: "none" }} title="Vinculado a Money Manager">
+            <SplitLedgerIcon size={26} />
+          </span>
+        )}
+      </div>
     </Field>
   );
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Search as SearchIcon, SlidersHorizontal, Trash2 } from "lucide-react";
+import { Search as SearchIcon, SlidersHorizontal, Trash2, Divide } from "lucide-react";
 import { styles } from "../../lib/styles.js";
 import { TopBar } from "../../components/Shared.jsx";
 import { money, dateInputValueInZone, measureTextWidth } from "../../lib/helpers.jsx";
@@ -80,7 +80,7 @@ function SearchResultRow({ t, accounts, categories, slLinks, settings, dateColWi
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
         {badge && (
           <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "#A8754A", maxWidth: 80, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={badge.name}>
-            {badge.icon && <span style={{ fontSize: 12, flexShrink: 0 }}>{badge.icon}</span>}
+            <Divide size={12} color="#A8754A" style={{ flexShrink: 0 }} />
             <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{badge.name}</span>
           </span>
         )}

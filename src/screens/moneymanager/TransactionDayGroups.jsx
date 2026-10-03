@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Trash2 } from "lucide-react";
+import { Trash2, Divide } from "lucide-react";
 import { money, measureTextWidth, dateInputValueInZone } from "../../lib/helpers.jsx";
 
 const DAY_AMOUNTS_FONT = "12.5px system-ui, sans-serif";
@@ -155,7 +155,7 @@ export function TransactionDayGroups({ transactions, settings, accounts, categor
                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                   {badge && (
                     <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "#A8754A", maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={badge.name}>
-                      {badge.icon && <span style={{ fontSize: 12, flexShrink: 0 }}>{badge.icon}</span>}
+                      <Divide size={12} color="#A8754A" style={{ flexShrink: 0 }} />
                       <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{badge.name}</span>
                     </span>
                   )}

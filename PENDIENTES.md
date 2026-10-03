@@ -47,6 +47,15 @@ No tocar salvo que Nicolas las traiga de vuelta explícitamente.
 
 ## F. Bugs / cosméticos menores
 
+- [x] ~~Los grupos de Split Ledger no se están borrando.~~ Resuelto
+      2026-10-03: reportado 2026-10-02. Causa real: `deleteGroup` sí marca
+      `deleted = true`, pero `useGroups().load()` traía TODOS los grupos sin
+      filtrar esa columna — confiaba en un supuesto (nunca verificado) de
+      que la RLS de `groups` ocultaba los borrados sola. No es así: el grupo
+      desaparecía un instante (filtro optimista local) y volvía a aparecer
+      en la próxima recarga de la lista (ej. al aceptar una invitación).
+      Arreglado agregando `.eq("deleted", false)` a esa consulta en
+      `SplitLedger.jsx`.
 - [x] ~~Drag-and-drop de reordenar con un solo ítem no debería mostrar el ícono de arrastrar (categorías, cuentas, grupos, "otras monedas") — no hay con qué reordenar si hay uno solo.~~ Resuelto 2026-10-02: eran 6 listas arrastrables en total (categorías de Money Manager, categorías de grupo en Split Ledger, "tus grupos", grupos de cuentas, cuentas dentro de un grupo, "otras monedas") — todas reciben ahora un `draggable={lista.length > 1}` que, cuando es `false`, oculta el ícono (deja un espacio vacío del mismo ancho para no desalinear la fila) y además pasa `disabled` a `useSortable` para que tampoco funcione el arrastre por teclado.
 - [x] ~~El contorno de foco naranja del `ConfirmInline` no respeta las esquinas achatadas cuando está pegado a un input arriba (visto en Configuración → Split Ledger → "Nombre visible"). Puramente visual.~~ Resuelto 2026-09-30: los botones ya no llevan anillo de foco, y los inputs pasaron de `outline` a `box-shadow` (ver `DESIGN_NOTES.md`), que sí respeta bordes asimétricos.
 

@@ -255,6 +255,7 @@ function useGroups(userId) {
       const { data, error } = await supabase
         .from("groups")
         .select(GROUP_SELECT)
+        .eq("deleted", false)
         .order("created_at", { ascending: true });
       if (error) throw error;
       setGroups(sortGroupsForUser(data.map(toClientGroup), userId));
@@ -290,8 +291,12 @@ function useGroups(userId) {
     return g;
   }, []);
 
-  // Soft-delete: deja la fila en la base (recuperable a mano desde el Table Editor
-  // poniendo deleted = false), la RLS de "groups" ya la oculta de cualquier query.
+  // Soft-delete: deja la fila en la base (recuperable a mano desde el Table
+  // Editor poniendo deleted = false) — el filtro `.eq("deleted", false)` de
+  // `load()` es lo que la oculta, la RLS de "groups" no filtra por esta
+  // columna (el supuesto anterior de este comentario era incorrecto: sin
+  // ese filtro, un grupo "borrado" volvía a aparecer en cuanto se
+  // recargaban los grupos, ej. al aceptar una invitación).
   const deleteGroup = useCallback(async (id) => {
     const { error } = await supabase.from("groups").update({ deleted: true }).eq("id", id);
     if (error) throw error;

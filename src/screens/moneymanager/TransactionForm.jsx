@@ -17,9 +17,10 @@ const TYPE_INFO = {
 
 /* =========================================================================
    NUEVA TRANSACCIÓN — Ingreso/Gasto/Transferencia en un solo formulario
-   (igual que la app que estamos replicando). Nota: acá solo editamos el
-   "título" corto (mapea a la columna `title`); `memo` (la nota larga) por
-   ahora solo llega vía la importación masiva, todavía no es editable acá.
+   (igual que la app que estamos replicando). Los nombres de columna no
+   coinciden con las etiquetas que ve el usuario: "Descripción" (lo que
+   identifica el gasto, se ve en todos lados) mapea a `title`; "Nota" (info
+   extra, solo visible al abrir la transacción) mapea a `memo`.
    ========================================================================= */
 
 export default function TransactionForm({
@@ -380,7 +381,7 @@ export default function TransactionForm({
           </p>
         )}
 
-        <Field label="Nota">
+        <Field label="Descripción">
           <div style={{ position: "relative" }}>
             <input
               style={{ ...styles.input, width: "100%" }}
@@ -411,7 +412,7 @@ export default function TransactionForm({
           </div>
         </Field>
 
-        <Field label="Descripción">
+        <Field label="Nota">
           <textarea rows={4} style={{ ...styles.input, resize: "none", fontFamily: "system-ui, sans-serif" }} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Opcional" />
         </Field>
 

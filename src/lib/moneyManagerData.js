@@ -497,7 +497,7 @@ export function useCategoryTimeline(userId, type, categoryId) {
   return { totals, loading };
 }
 
-// Títulos (campo "Nota") de transacciones recientes, para el autocompletado
+// Títulos (campo "Descripción", columna title) de transacciones recientes, para el autocompletado
 // del formulario — una sola consulta al abrir el formulario, no una por
 // tecla. Se trae un lote acotado (las últimas 300 con nota) en vez de toda la
 // tabla, y se dedupe en el cliente preservando el orden (más reciente primero).

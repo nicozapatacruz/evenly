@@ -1718,12 +1718,12 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
 
       <div style={{ ...styles.form, paddingBottom: 100 }}>
         {extraHeaderField}
-        <Field label="Descripción" required error={touched.description && !description.trim() ? "Este campo es obligatorio." : ""}>
-          <input style={styles.input} value={description} onChange={(e) => setDescription(e.target.value)} onBlur={() => touch("description")} placeholder="Cena, taxi, supermercado…" />
+        <Field label="Fecha">
+          <input style={{ ...styles.input, height: 44, boxSizing: "border-box" }} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
         </Field>
 
         <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-          <Field label="Monto" required style={{ flex: 1 }}>
+          <Field label="Importe" required style={{ flex: 1 }}>
             <input style={styles.input} value={amount} onChange={(e) => setAmount(e.target.value)} onBlur={() => touch("amount")} placeholder="0.00" inputMode="decimal" />
           </Field>
           <select
@@ -1734,14 +1734,40 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
             {[baseCurrency, ...CURRENCY_LIST.filter((c) => c !== baseCurrency)].map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
-        {/* El error vive FUERA del Field (que solo tiene Monto) para que no le
+        {/* El error vive FUERA del Field (que solo tiene Importe) para que no le
             sume altura a esa columna sola — si no, el select de moneda
             (hermano en el flex de arriba, "flex-end") queda alineado con el
             error de abajo en vez de con el input. */}
         {touched.amount && !validAmount && (
           <span style={{ fontSize: 12, fontWeight: 400, color: "#B0473A", marginTop: -8, fontFamily: "system-ui, sans-serif" }}>Ingresá un importe válido.</span>
         )}
-        {/* Fila: Fecha + Categoría + icono Foto + icono Nota — se pone después de dividido en */}
+
+        <Field label="Categoría">
+          <select style={{ ...styles.input, height: 44, boxSizing: "border-box", paddingRight: 10 }} value={category} onChange={(e) => setCategory(e.target.value)}>
+            {groupCategories(group).map((c) => (
+              <option key={c.id} value={c.id}>{c.label}</option>
+            ))}
+          </select>
+        </Field>
+
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+          <Field label="Descripción" required style={{ flex: 1 }}>
+            <input style={{ ...styles.input, height: 44, boxSizing: "border-box" }} value={description} onChange={(e) => setDescription(e.target.value)} onBlur={() => touch("description")} placeholder="Cena, taxi, supermercado…" />
+          </Field>
+          <label title="Añadir foto" style={{ width: 44, height: 44, boxSizing: "border-box", borderRadius: 10, border: `1px solid ${imageUrl ? "#C75D3B" : "#DDD2BE"}`, background: imageUrl ? "#C75D3B1a" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, color: imageUrl ? "#C75D3B" : "#6B6355" }}>
+            <Camera size={18} />
+            <input type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageChange} />
+          </label>
+          <button title="Añadir nota" onClick={() => setNotesOpen(v => !v)} style={{ width: 44, height: 44, boxSizing: "border-box", borderRadius: 10, border: `1px solid ${notesOpen || notes ? "#C75D3B" : "#DDD2BE"}`, background: notesOpen || notes ? "#C75D3B1a" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, color: notesOpen || notes ? "#C75D3B" : "#6B6355" }}>
+            <PenLine size={18} />
+          </button>
+        </div>
+        {/* Mismo criterio que el error de Monto: vive FUERA del Field para no
+            sumarle altura solo a esa columna y desalinear los íconos de
+            Foto/Nota (hermanos en el mismo flex row). */}
+        {touched.description && !description.trim() && (
+          <span style={{ fontSize: 12, fontWeight: 400, color: "#B0473A", marginTop: -8, fontFamily: "system-ui, sans-serif" }}>Este campo es obligatorio.</span>
+        )}
 
         <p style={styles.label}>¿Quién pagó?</p>
         <div style={styles.splitModeRow}>
@@ -1924,26 +1950,6 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
           )}
         </div>
 
-        {/* Fila: Fecha + Categoría + icono Foto + icono Nota */}
-        <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-          <Field label="Fecha" style={{ flex: 1 }}>
-            <input style={{ ...styles.input, height: 44, boxSizing: "border-box" }} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          </Field>
-          <Field label="Categoría" style={{ flex: 1 }}>
-            <select style={{ ...styles.input, height: 44, boxSizing: "border-box", paddingRight: 10 }} value={category} onChange={(e) => setCategory(e.target.value)}>
-              {groupCategories(group).map((c) => (
-                <option key={c.id} value={c.id}>{c.label}</option>
-              ))}
-            </select>
-          </Field>
-          <label title="Añadir foto" style={{ width: 44, height: 44, borderRadius: 10, border: `1.5px solid ${imageUrl ? "#C75D3B" : "#DDD2BE"}`, background: imageUrl ? "#C75D3B1a" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, color: imageUrl ? "#C75D3B" : "#6B6355" }}>
-            <Camera size={18} />
-            <input type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageChange} />
-          </label>
-          <button title="Añadir nota" onClick={() => setNotesOpen(v => !v)} style={{ width: 44, height: 44, borderRadius: 10, border: `1.5px solid ${notesOpen || notes ? "#C75D3B" : "#DDD2BE"}`, background: notesOpen || notes ? "#C75D3B1a" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, color: notesOpen || notes ? "#C75D3B" : "#6B6355" }}>
-            <PenLine size={18} />
-          </button>
-        </div>
 
         {imageUrl && (
           <div style={{ position: "relative" }}>
@@ -2127,7 +2133,7 @@ function SettleUp({ group, prefill, onCancel, onSave }) {
         </div>
 
         <div style={{ display: "flex", gap: 10 }}>
-          <Field label="Monto" required error={amountTouched && !validAmount ? "Ingresá un importe válido." : ""} style={{ flex: 1.4 }}>
+          <Field label="Importe" required error={amountTouched && !validAmount ? "Ingresá un importe válido." : ""} style={{ flex: 1.4 }}>
             <input style={styles.input} value={amount} onChange={(e) => setAmount(e.target.value)} onBlur={() => setAmountTouched(true)} placeholder="0.00" inputMode="decimal" />
           </Field>
           <Field label="Moneda" style={{ flex: 1 }}>

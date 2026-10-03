@@ -514,6 +514,10 @@ export function useRecentNoteTitles(userId) {
         .eq("user_id", userId)
         .eq("deleted", false)
         .not("title", "is", null)
+        // Las sincronizadas desde Split Ledger no son notas tuyas — son la
+        // descripción del gasto compartido, no deberían ensuciar tus
+        // sugerencias de autocompletado.
+        .is("sl_link_id", null)
         .order("date", { ascending: false })
         .limit(300);
       if (cancelled) return;

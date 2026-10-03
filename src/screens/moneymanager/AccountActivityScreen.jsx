@@ -30,7 +30,7 @@ function balanceBefore(totals, year, month) {
 // se vuelve a montar al volver; si el tab/mes fueran estado local, se
 // perderían en ese viaje de ida y vuelta.
 export default function AccountActivityScreen({
-  userId, settings, accounts, categories, accountId, accountName, accountIcon,
+  userId, settings, accounts, categories, slLinks, accountId, accountName, accountIcon,
   tab, setTab, viewMonth, setViewMonth, onBack, onNewTransaction, onEditTransaction,
 }) {
   const { totals, loading: loadingTotals } = useAccountMonthTotals(userId, accountId);
@@ -60,7 +60,7 @@ export default function AccountActivityScreen({
         </div>
       ) : tab === "diario" ? (
         <DiarioSubTab
-          userId={userId} settings={settings} accounts={accounts} categories={categories}
+          userId={userId} settings={settings} accounts={accounts} categories={categories} slLinks={slLinks}
           accountId={accountId} totals={totals} viewMonth={viewMonth} setViewMonth={setViewMonth}
           onNewTransaction={onNewTransaction} onEditTransaction={onEditTransaction}
         />
@@ -85,7 +85,7 @@ export default function AccountActivityScreen({
   );
 }
 
-function DiarioSubTab({ userId, settings, accounts, categories, accountId, totals, viewMonth, setViewMonth, onNewTransaction, onEditTransaction }) {
+function DiarioSubTab({ userId, settings, accounts, categories, slLinks, accountId, totals, viewMonth, setViewMonth, onNewTransaction, onEditTransaction }) {
   const { transactions: monthTx, loading } = useAccountMonthTransactions(userId, accountId, viewMonth);
   const swipeHandlers = useMonthSwipe(viewMonth, setViewMonth);
   const slide = useMonthSlide(viewMonth);
@@ -165,6 +165,7 @@ function DiarioSubTab({ userId, settings, accounts, categories, accountId, total
             settings={settings}
             accounts={accounts}
             categories={categories}
+            slLinks={slLinks}
             perspectiveAccountId={accountId}
             runningBalances={runningBalances}
             onNewTransaction={onNewTransaction}

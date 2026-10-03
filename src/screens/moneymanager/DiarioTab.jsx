@@ -14,7 +14,7 @@ import { TransactionDayGroups } from "./TransactionDayGroups.jsx";
    Resumen que acá no replicamos.
    ========================================================================= */
 
-export default function DiarioTab({ userId, settings, groups, accounts, categories, viewMonth, setViewMonth, onNewTransaction, onEditTransaction, onOpenSearch, filters, onOpenFilters, onClearFilters }) {
+export default function DiarioTab({ userId, settings, groups, accounts, categories, slLinks, viewMonth, setViewMonth, onNewTransaction, onEditTransaction, onOpenSearch, filters, onOpenFilters, onClearFilters }) {
   // Solo pedimos las transacciones del mes visible (no toda la tabla) — se
   // refetchea solo cuando cambiás de mes.
   const { transactions: monthTx, loading } = useMonthTransactions(userId, viewMonth);
@@ -87,6 +87,7 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
               settings={settings}
               accounts={accounts}
               categories={categories}
+              slLinks={slLinks}
               onNewTransaction={onNewTransaction}
               onEditTransaction={onEditTransaction}
             />

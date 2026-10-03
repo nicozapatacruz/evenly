@@ -75,7 +75,7 @@ function CategoryTimelineChart({ totals, viewMonth, setViewMonth, color, setting
 // lista) — misma estructura visual que Transacciones (lista agrupada por
 // día), pero filtrada a esta categoría/mes, con una línea de tiempo arriba
 // para saltar entre meses sin volver atrás.
-export default function CategoryDrillDownScreen({ userId, settings, accounts, categories, type, categoryId, categoryName, categoryIcon, viewMonth, setViewMonth, onBack, onNewTransaction, onEditTransaction }) {
+export default function CategoryDrillDownScreen({ userId, settings, accounts, categories, slLinks, type, categoryId, categoryName, categoryIcon, viewMonth, setViewMonth, onBack, onNewTransaction, onEditTransaction }) {
   const { transactions: monthTx, loading: loadingMonth } = useMonthTransactions(userId, viewMonth);
   const { totals, loading: loadingTimeline } = useCategoryTimeline(userId, type, categoryId);
   const swipeHandlers = useMonthSwipe(viewMonth, setViewMonth);
@@ -121,6 +121,7 @@ export default function CategoryDrillDownScreen({ userId, settings, accounts, ca
               settings={settings}
               accounts={accounts}
               categories={categories}
+              slLinks={slLinks}
               onNewTransaction={onNewTransaction}
               onEditTransaction={onEditTransaction}
             />

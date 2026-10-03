@@ -929,6 +929,16 @@ function SplitLedgerMoneyLink({
 
   if (!myMemberId) return null; // no soy miembro vinculado de este grupo — no aplica
 
+  // Aviso de saldo previo: la sincronización solo mira gastos/pagos desde
+  // que se vincula ("nada retroactivo") — si ya había un saldo pendiente
+  // antes, ese nunca se va a reflejar en Money Manager. Solo tiene sentido
+  // mostrarlo al crear un vínculo nuevo, no en uno ya activo.
+  const pendingBalances = !activeLink
+    ? Object.entries(computeBalances(group))
+        .map(([currency, byMember]) => [currency, byMember[myMemberId] || 0])
+        .filter(([, amt]) => Math.abs(amt) > 0.005)
+    : [];
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <ToggleField
@@ -938,6 +948,11 @@ function SplitLedgerMoneyLink({
         disabled={disabled || unlinking}
         onChange={handleToggle}
       />
+      {linked && pendingBalances.length > 0 && (
+        <p style={{ ...styles.muted, padding: 0, color: "#B0473A" }}>
+          Ya tenías un saldo pendiente en este grupo ({pendingBalances.map(([currency, amt]) => money(amt, currency)).join(", ")}) — no se va a reflejar en Money Manager, solo lo que pase de acá en adelante.
+        </p>
+      )}
       {confirmingUnlink && (
         <ConfirmInline
           message="¿Desvincular este grupo de tu Money Manager? Las transacciones ya sincronizadas no se borran, pero vas a dejar de ver las nuevas."

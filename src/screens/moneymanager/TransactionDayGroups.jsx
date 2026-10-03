@@ -1,6 +1,5 @@
 import React, { useMemo } from "react";
 import { Trash2 } from "lucide-react";
-import { styles } from "../../lib/styles.js";
 import { money, measureTextWidth, dateInputValueInZone } from "../../lib/helpers.jsx";
 
 const DAY_AMOUNTS_FONT = "12.5px system-ui, sans-serif";
@@ -21,12 +20,23 @@ const DAY_LABEL = (d) => d.toLocaleDateString("es-ES", { weekday: "short" }).rep
 // `runningBalances` (Map id→saldo) agrega una segunda línea con el saldo
 // acumulado después de esa transacción — solo tiene sentido con
 // perspectiveAccountId.
-export function TransactionDayGroups({ transactions, settings, accounts, categories, onNewTransaction, onEditTransaction, perspectiveAccountId, runningBalances }) {
+export function TransactionDayGroups({ transactions, settings, accounts, categories, slLinks, onNewTransaction, onEditTransaction, perspectiveAccountId, runningBalances }) {
   const accountName = (id) => accounts.find((a) => a.id === id)?.name || "—";
   const accountIcon = (id) => accounts.find((a) => a.id === id)?.icon;
   const accountDeleted = (id) => !!accounts.find((a) => a.id === id)?.deleted;
   const categoryIcon = (id) => categories.find((c) => c.id === id)?.icon;
   const categoryDeleted = (id) => !!categories.find((c) => c.id === id)?.deleted;
+
+  // Nombre/ícono del grupo de Split Ledger — se toma de la cuenta pseudo del
+  // vínculo (su nombre/ícono quedan fijos desde que se vinculó, protegidos
+  // contra edición en Cuentas), no de `memo` (ese queda libre, el usuario lo
+  // puede cambiar sin que la marca visual se rompa).
+  const splitBadge = (t) => {
+    if (!t.sl_link_id) return null;
+    const link = slLinks?.find((l) => l.id === t.sl_link_id);
+    const pseudo = link && accounts.find((a) => a.id === link.pseudo_account_id);
+    return pseudo ? { name: pseudo.name, icon: pseudo.icon } : null;
+  };
 
   const accountLabel = (id) => (
     <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: 3, ...(accountDeleted(id) ? { textDecoration: "line-through", color: "#B0473A" } : null) }}>
@@ -97,11 +107,13 @@ export function TransactionDayGroups({ transactions, settings, accounts, categor
                 <span style={{ color: "#B0473A", minWidth: maxExpenseWidth, textAlign: "right" }}>{money(dayExpense, settings.main_currency)}</span>
               </span>
             </div>
-            {txs.map((t) => (
+            {txs.map((t) => {
+              const badge = splitBadge(t);
+              return (
               <div
                 key={t.id}
                 onClick={() => onEditTransaction(t)}
-                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14, cursor: "pointer" }}
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14, cursor: "pointer", background: badge ? "#FBF1E0" : undefined }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
                   {t.type !== "transfer" && (
@@ -140,24 +152,33 @@ export function TransactionDayGroups({ transactions, settings, accounts, categor
                     )}
                   </div>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0 }}>
-                  <span style={{
-                    color: perspectiveAccountId
-                      ? (contribution(t) > 0 ? "#3B6E62" : contribution(t) < 0 ? "#B0473A" : "#4A6FA5")
-                      : (t.type === "income" ? "#3B6E62" : t.type === "expense" ? "#B0473A" : "#4A6FA5"),
-                    fontWeight: 600,
-                  }}>
-                    {money(t.amount, t.currency)}
-                  </span>
-                  {t.currency !== settings.main_currency && (
-                    <span style={{ fontSize: 11, color: "#6B6355" }}>= {money(t.amount_main, settings.main_currency)}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  {badge && (
+                    <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "#A8754A", maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={badge.name}>
+                      {badge.icon && <span style={{ fontSize: 12, flexShrink: 0 }}>{badge.icon}</span>}
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{badge.name}</span>
+                    </span>
                   )}
-                  {runningBalances?.has(t.id) && (
-                    <span style={{ fontSize: 11, color: "#6B6355" }}>{money(runningBalances.get(t.id), settings.main_currency)}</span>
-                  )}
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+                    <span style={{
+                      color: perspectiveAccountId
+                        ? (contribution(t) > 0 ? "#3B6E62" : contribution(t) < 0 ? "#B0473A" : "#4A6FA5")
+                        : (t.type === "income" ? "#3B6E62" : t.type === "expense" ? "#B0473A" : "#4A6FA5"),
+                      fontWeight: 600,
+                    }}>
+                      {money(t.amount, t.currency)}
+                    </span>
+                    {t.currency !== settings.main_currency && (
+                      <span style={{ fontSize: 11, color: "#6B6355" }}>= {money(t.amount_main, settings.main_currency)}</span>
+                    )}
+                    {runningBalances?.has(t.id) && (
+                      <span style={{ fontSize: 11, color: "#6B6355" }}>{money(runningBalances.get(t.id), settings.main_currency)}</span>
+                    )}
+                  </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         );
       })}

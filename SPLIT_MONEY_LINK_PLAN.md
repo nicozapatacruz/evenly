@@ -245,7 +245,9 @@ simplemente no hace nada la segunda vez.
   uno existente, sin importar quién lo cargó originalmente.
 - **Marcado visual**: en `TransactionDayGroups.jsx` (Transacciones,
   drill-downs, extracto de cuenta) y en `SearchScreen.jsx` (Buscador) — ícono
-  de Split + nombre del grupo al lado del monto, fondo celeste clarito.
+  de Split + nombre del grupo al lado del monto, fondo dorado clarito
+  (`#FBF1E0`/texto `#A8754A` — un celeste probado primero no pegaba con la
+  paleta cálida del resto de la app).
 - **Proteger la cuenta "Split Ledger"**: no se puede borrar/renombrar a mano
   en Cuentas, ni elegir como cuenta normal al crear una transacción — se
   desvincula desde Split Ledger, no desde Cuentas.
@@ -289,7 +291,14 @@ simplemente no hace nada la segunda vez.
    un gasto compartido 50/50 y confirmar que aparece 50% en Transacciones +
    la cuenta del grupo se mueve; borrarlo y confirmar que ambas transacciones
    desaparecen solas.
-3. - [ ] **Marcado visual** (ícono + nombre + fondo celeste).
+3. - [x] **Marcado visual** (ícono + nombre + fondo celeste). Implementado
+   2026-10-03: en `TransactionDayGroups.jsx` (Transacciones, drill-down de
+   categoría, extracto de cuenta) y `SearchScreen.jsx` (Buscador), toda fila
+   con `sl_link_id` recibe fondo celeste clarito (`#EAF2F8`) y un chip con el
+   ícono + nombre del grupo al lado del monto. El nombre/ícono sale de la
+   cuenta pseudo del vínculo (`sl_mm_links.pseudo_account_id` → cuenta en
+   `accounts`), no de `memo` — así no se rompe si el usuario edita la nota
+   de esa transacción (memo queda libre, como ya estaba decidido).
 4. - [x] **Selector de cuenta + categoría inline** al cargar un gasto.
    Implementado 2026-10-02, antes de lo planeado: una prueba en vivo del M2
    mostró que sin esto "gastos propios" nunca se usa (la reconciliación no
@@ -302,9 +311,25 @@ simplemente no hace nada la segunda vez.
    `ignoreDuplicates`) en `sl_mm_expense_choices` — tu elección de ahora
    siempre gana, sin importar si la reconciliación ya había sembrado un
    default antes. Falta probar en vivo.
-5. - [ ] **Multi-moneda** (tasa de cambio por vínculo).
-6. - [ ] Pulido: saldo previo a vincular (aviso), autocompletado de notas que
-   ignora lo sincronizado, etc.
+5. - [ ] **Multi-moneda** (tasa de cambio por vínculo). Bloqueado a propósito
+   (2026-10-03): el chequeo "misma moneda" de M2 compara contra la moneda
+   principal GLOBAL del usuario, pero lo correcto es compararlo contra la
+   moneda de la cuenta elegida — y hoy las cuentas de Money Manager NO
+   tienen una moneda fija propia (cada transacción trae la suya). Encararlo
+   bien requiere primero resolver eso (ver PENDIENTES.md sección B, "cada
+   cuenta con su propia moneda fija") — Nicolas prefiere terminar primero
+   todo Split Ledger y volver a esto después.
+6. - [x] Pulido. Implementado 2026-10-03:
+   - **Aviso de saldo previo a vincular**: al prender el toggle para crear un
+     vínculo nuevo (no al editar uno ya activo), si `computeBalances(group)`
+     muestra algo pendiente para vos en cualquier moneda, se muestra un
+     aviso ("Ya tenías un saldo pendiente... no se va a reflejar en Money
+     Manager") en `SplitLedgerMoneyLink`.
+   - **Autocompletado de notas ignora lo sincronizado**: `useRecentNoteTitles`
+     agregó `.is("sl_link_id", null)` — las descripciones de gastos
+     compartidos ya no aparecen como sugerencia de nota personal.
+   - Quedó abierto a propósito ("etc.") por si aparece algo más chico en el
+     camino — no hay nada más identificado todavía.
 
 ## Verificación
 

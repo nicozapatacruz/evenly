@@ -827,6 +827,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           settings={moneyManager.settings}
           accounts={moneyManager.accounts}
           categories={moneyManager.categories}
+          slLinks={moneyManager.slLinks}
           type={statsView.type}
           categoryId={statsView.categoryId}
           categoryName={statsView.categoryName}
@@ -870,6 +871,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           groups={moneyManager.groups}
           accounts={moneyManager.accounts}
           categories={moneyManager.categories}
+          slLinks={moneyManager.slLinks}
           viewMonth={ledgerMonth}
           setViewMonth={setLedgerMonth}
           onNewTransaction={(date) => setLedgerView({ screen: "newTransaction", date, returnTo: "list" })}
@@ -899,6 +901,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           groups={moneyManager.groups}
           accounts={moneyManager.accounts}
           categories={moneyManager.categories}
+          slLinks={moneyManager.slLinks}
           query={searchQuery}
           setQuery={setSearchQuery}
           filters={searchFilters}

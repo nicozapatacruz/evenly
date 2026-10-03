@@ -57,6 +57,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
           settings={settings}
           accounts={accounts}
           categories={categories}
+          slLinks={slLinks}
           accountId={view.accountId}
           accountName={activityAccount.name}
           accountIcon={activityAccount.icon}

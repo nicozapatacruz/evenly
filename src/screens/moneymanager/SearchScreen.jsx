@@ -23,10 +23,15 @@ function ddmmyyyy(ms, tz) {
 // encabezado de "día" ambiguo. También muestra categoría (ícono + nombre) en
 // vez de solo el ícono — sin el contexto de "estás parado en Mercado" que sí
 // tiene Estadísticas, un emoji solo no alcanza para identificarla.
-function SearchResultRow({ t, accounts, categories, settings, dateColWidth, onEdit }) {
+function SearchResultRow({ t, accounts, categories, slLinks, settings, dateColWidth, onEdit }) {
   const account = accounts.find((a) => a.id === t.account_id);
   const toAccount = accounts.find((a) => a.id === t.to_account_id);
   const category = categories.find((c) => c.id === t.category_id);
+
+  // Mismo criterio que TransactionDayGroups: el nombre/ícono del grupo sale
+  // de la cuenta pseudo del vínculo, no de `memo` (libre, editable).
+  const link = t.sl_link_id && slLinks?.find((l) => l.id === t.sl_link_id);
+  const badge = link && accounts.find((a) => a.id === link.pseudo_account_id);
 
   const accountLabel = (a) => a && (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 3, ...(a.deleted ? { textDecoration: "line-through", color: "#B0473A" } : null) }}>
@@ -37,7 +42,7 @@ function SearchResultRow({ t, accounts, categories, settings, dateColWidth, onEd
   );
 
   return (
-    <div onClick={() => onEdit(t)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14, cursor: "pointer" }}>
+    <div onClick={() => onEdit(t)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14, cursor: "pointer", background: badge ? "#FBF1E0" : undefined }}>
       <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
         {/* Bloque fecha+categoría — reemplaza el ícono solo de TransactionDayGroups:
             acá hace falta la fecha (sin encabezado de día que agrupe) Y el
@@ -72,14 +77,22 @@ function SearchResultRow({ t, accounts, categories, settings, dateColWidth, onEd
           )}
         </div>
       </div>
-      <span style={{ flexShrink: 0, fontWeight: 600, color: t.type === "income" ? "#3B6E62" : t.type === "expense" ? "#B0473A" : "#4A6FA5" }}>
-        {money(t.amount, t.currency)}
-      </span>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        {badge && (
+          <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "#A8754A", maxWidth: 80, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={badge.name}>
+            {badge.icon && <span style={{ fontSize: 12, flexShrink: 0 }}>{badge.icon}</span>}
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{badge.name}</span>
+          </span>
+        )}
+        <span style={{ fontWeight: 600, color: t.type === "income" ? "#3B6E62" : t.type === "expense" ? "#B0473A" : "#4A6FA5" }}>
+          {money(t.amount, t.currency)}
+        </span>
+      </div>
     </div>
   );
 }
 
-function SearchResults({ results, settings, accounts, categories, onEditTransaction }) {
+function SearchResults({ results, settings, accounts, categories, slLinks, onEditTransaction }) {
   const income = results.filter((t) => t.type === "income").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
   const expense = results.filter((t) => t.type === "expense").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
   const transfer = results.filter((t) => t.type === "transfer").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
@@ -112,7 +125,7 @@ function SearchResults({ results, settings, accounts, categories, onEditTransact
       </div>
       <div style={{ marginTop: 12, borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
         {results.map((t) => (
-          <SearchResultRow key={t.id} t={t} accounts={accounts} categories={categories} settings={settings} dateColWidth={dateColWidth} onEdit={onEditTransaction} />
+          <SearchResultRow key={t.id} t={t} accounts={accounts} categories={categories} slLinks={slLinks} settings={settings} dateColWidth={dateColWidth} onEdit={onEditTransaction} />
         ))}
       </div>
     </div>
@@ -131,7 +144,7 @@ function SearchResults({ results, settings, accounts, categories, onEditTransact
    ========================================================================= */
 
 export default function SearchScreen({
-  session, settings, groups, accounts, categories, query, setQuery, filters, setFilters,
+  session, settings, groups, accounts, categories, slLinks, query, setQuery, filters, setFilters,
   onBack, onEditTransaction, showError,
 }) {
   const [results, setResults] = useState([]);
@@ -268,6 +281,7 @@ export default function SearchScreen({
             settings={settings}
             accounts={accounts}
             categories={categories}
+            slLinks={slLinks}
             onEditTransaction={onEditTransaction}
           />
         )}

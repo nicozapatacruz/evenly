@@ -125,8 +125,13 @@ export const styles = {
   avatar: { width: 32, height: 32, minWidth: 32, borderRadius: "50%", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, border: "2px solid #FBF8F2", fontFamily: "system-ui, sans-serif" },
   groupName: { margin: 0, fontWeight: 600, fontSize: 15.5, color: "#2B2620" },
   groupMeta: { margin: "2px 0 0", fontSize: 12.5, color: "#6B6355", fontFamily: "system-ui, sans-serif" },
-  topBar: { ...fixedHeaderBase, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "calc(20px + env(safe-area-inset-top)) 14px 8px", gap: 8 },
-  topBarTitle: { margin: 0, fontSize: 18, fontWeight: 600, flex: 1, textAlign: "center" },
+  // Grid (no flex) a propósito: con flex, el título (flex:1) queda centrado
+  // en SU propio espacio, que no es la mitad de la barra si el lado derecho
+  // tiene más de un ícono — se ve descentrado. Con grid, las columnas de los
+  // costados son ambas 1fr (el mismo ancho entre sí pase lo que pase del
+  // otro lado), así el título del medio siempre cae en el centro real.
+  topBar: { ...fixedHeaderBase, display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", padding: "calc(20px + env(safe-area-inset-top)) 14px 8px", gap: 8 },
+  topBarTitle: { margin: 0, fontSize: 18, fontWeight: 600, textAlign: "center" },
   iconBtnGhost: { width: 36, height: 36, borderRadius: "50%", border: "none", background: "transparent", color: "#544A3C", display: "flex", alignItems: "center", justifyContent: "center" },
   iconBtnPrimary: { width: 44, height: 44, borderRadius: "50%", border: "none", background: "#C75D3B", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 10px rgba(199,93,59,0.3)" },
   form: { padding: "12px 20px 28px", display: "flex", flexDirection: "column", gap: 14 },

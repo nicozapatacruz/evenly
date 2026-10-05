@@ -138,12 +138,9 @@ export function Field({ label, info, required, error, style, children }) {
 export function TopBar({ title, onBack, right }) {
   return (
     <div style={styles.topBar}>
-      <button style={styles.iconBtnGhost} onClick={onBack} aria-label="Volver"><ArrowLeft size={20} /></button>
+      <button style={{ ...styles.iconBtnGhost, justifySelf: "start" }} onClick={onBack} aria-label="Volver"><ArrowLeft size={20} /></button>
       <h2 style={styles.topBarTitle}>{title}</h2>
-      {/* minWidth (no width fijo): balancea el botón de volver cuando `right`
-          es un solo ícono (el caso de siempre), pero deja crecer el
-          contenedor si hace falta más de uno (ej. Copiar + Eliminar). */}
-      <div style={{ minWidth: 36, display: "flex", justifyContent: "flex-end" }}>{right}</div>
+      <div style={{ display: "flex", justifySelf: "end" }}>{right}</div>
     </div>
   );
 }

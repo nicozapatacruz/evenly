@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Menu, Plus, ArrowLeftRight, Trash2, Copy } from "lucide-react";
+import { X, Menu, Plus, ArrowLeftRight, Trash2, Copy, Star } from "lucide-react";
 import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -24,8 +24,9 @@ const TYPE_INFO = {
    ========================================================================= */
 
 export default function TransactionForm({
-  session, settings, groups, accounts, categories, onCancel, onSave, onDelete, reloadCategories, showError, showInfo,
+  session, settings, groups, accounts, categories, onCancel, onSave, onDelete, onBookmark, reloadCategories, showError, showInfo,
   forceRecurringOpen = false, hideRemoveRecurring = false, editingTransaction = null, defaultDate = null, defaultAccountId = null,
+  prefillBookmark = null,
 }) {
   const [managingCategoryType, setManagingCategoryType] = useState(null); // "income" | "expense" | null
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -45,19 +46,24 @@ export default function TransactionForm({
   // aplicar: la copia es una transacción independiente, no sincronizada.
   const isSynced = !isCopyMode && !!editingTransaction?.sl_link_id;
 
-  const [type, setType] = useState(editingTransaction?.type || "expense");
+  // prefillBookmark solo aplica cuando no hay editingTransaction (un
+  // marcador arranca "Nueva transacción", nunca "Editar") — y nunca trae
+  // fecha, siempre arranca en hoy (o defaultDate si vino de otro lado).
+  const [type, setType] = useState(editingTransaction?.type || prefillBookmark?.type || "expense");
   const [date, setDate] = useState(editingTransaction ? dateInputValueInZone(new Date(editingTransaction.date).getTime(), editingTransaction.timezone) : (defaultDate || todayInputValue()));
-  const [amount, setAmount] = useState(editingTransaction ? String(editingTransaction.amount) : "");
-  const [currency, setCurrency] = useState(editingTransaction?.currency || settings.main_currency);
-  const [exchangeRate, setExchangeRate] = useState(editingTransaction?.exchange_rate ? String(editingTransaction.exchange_rate) : "");
+  const [amount, setAmount] = useState(editingTransaction ? String(editingTransaction.amount) : (prefillBookmark ? String(prefillBookmark.amount) : ""));
+  const [currency, setCurrency] = useState(editingTransaction?.currency || prefillBookmark?.currency || settings.main_currency);
+  const [exchangeRate, setExchangeRate] = useState(
+    (editingTransaction?.exchange_rate || prefillBookmark?.exchange_rate) ? String(editingTransaction?.exchange_rate || prefillBookmark?.exchange_rate) : ""
+  );
   // La tasa se guarda siempre como "cuántas {moneda de la transacción} vale 1
   // {moneda principal}" (mismo formato de siempre) — este toggle solo cambia
   // qué lado se le pide escribir al usuario; se invierte antes de guardar.
   const [rateFlipped, setRateFlipped] = useState(false);
-  const [categoryId, setCategoryId] = useState(editingTransaction?.category_id || "");
-  const [accountId, setAccountId] = useState(editingTransaction?.account_id || defaultAccountId || "");
-  const [toAccountId, setToAccountId] = useState(editingTransaction?.to_account_id || "");
-  const [note, setNote] = useState(editingTransaction?.title || "");
+  const [categoryId, setCategoryId] = useState(editingTransaction?.category_id || prefillBookmark?.category_id || "");
+  const [accountId, setAccountId] = useState(editingTransaction?.account_id || prefillBookmark?.account_id || defaultAccountId || "");
+  const [toAccountId, setToAccountId] = useState(editingTransaction?.to_account_id || prefillBookmark?.to_account_id || "");
+  const [note, setNote] = useState(editingTransaction?.title || prefillBookmark?.title || "");
   // Separado en dos banderas a propósito: "noteFocused" sigue al foco real,
   // "noteDismissed" se prende solo al elegir una sugerencia (para que se
   // cierre aunque queden otras coincidencias, ej. "Mercadona" vs "Mercadona
@@ -69,7 +75,7 @@ export default function TransactionForm({
   const noteSuggestions = settings.autocomplete_notes && note.trim()
     ? recentNoteTitles.filter((t) => t.toLowerCase().includes(note.trim().toLowerCase()) && t.toLowerCase() !== note.trim().toLowerCase()).slice(0, 5)
     : [];
-  const [description, setDescription] = useState(editingTransaction?.memo || "");
+  const [description, setDescription] = useState(editingTransaction?.memo || prefillBookmark?.memo || "");
   const [saving, setSaving] = useState(false);
   const [touched, setTouched] = useState({});
   const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
@@ -192,6 +198,27 @@ export default function TransactionForm({
     }
   };
 
+  // Guarda esto mismo como marcador (plantilla reutilizable, sin fecha) —
+  // no navega ni cambia nada en este formulario, solo crea el marcador aparte.
+  const handleBookmark = async () => {
+    if (!validAmount || !accountId || (type === "transfer" && (!toAccountId || toAccountId === accountId))) {
+      setTouched((t) => ({ ...t, amount: true, accountId: true, toAccountId: true }));
+      return;
+    }
+    const rate = needsRate ? canonicalRate : null;
+    await onBookmark({
+      type,
+      account_id: accountId,
+      to_account_id: type === "transfer" ? toAccountId : null,
+      category_id: type === "transfer" ? null : (categoryId || null),
+      currency,
+      amount: numericAmount,
+      exchange_rate: rate,
+      title: note.trim() || null,
+      memo: description.trim() || null,
+    });
+  };
+
   // Copiar no guarda nada: deja el formulario con los mismos datos, listo
   // para seguir editando (o guardar tal cual) como una transacción nueva.
   const handlePickCopyDate = (useToday) => {
@@ -211,6 +238,11 @@ export default function TransactionForm({
         onBack={onCancel}
         right={effectiveEditing && (
           <div style={{ display: "flex", gap: 4 }}>
+            {onBookmark && (
+              <button style={styles.iconBtnGhost} onClick={handleBookmark} aria-label="Guardar como marcador">
+                <Star size={17} />
+              </button>
+            )}
             {!isSynced && (
               <button style={styles.iconBtnGhost} onClick={() => setShowCopyModal(true)} aria-label="Copiar">
                 <Copy size={17} />

@@ -11,8 +11,10 @@ import TransactionForm from "./screens/moneymanager/TransactionForm.jsx";
 import EstadisticasTab from "./screens/moneymanager/EstadisticasTab.jsx";
 import CategoryDrillDownScreen from "./screens/moneymanager/CategoryDrillDownScreen.jsx";
 import SearchScreen from "./screens/moneymanager/SearchScreen.jsx";
+import BookmarksScreen from "./screens/moneymanager/BookmarksScreen.jsx";
 import { FiltersPanel } from "./screens/moneymanager/FiltersPanel.jsx";
 import { useMoneyManager } from "./lib/moneyManagerData.js";
+import { createBookmark } from "./lib/bookmarksData.js";
 import { EMPTY_FILTERS } from "./lib/filterHelpers.js";
 
 // Wrapper fino: FiltersPanel necesita un "draft" propio (para poder
@@ -653,6 +655,19 @@ function AppShell({ session, onLogout, refreshProfile }) {
     }
   };
 
+  // Guardar como marcador — no toca mm_transactions ni navega a ningún
+  // lado, el formulario que lo disparó se queda tal cual estaba.
+  const bookmarkMoneyTransaction = async (tx) => {
+    try {
+      const { duplicate } = await createBookmark(session.userId, tx);
+      showInfo(duplicate ? "Ya existe un marcador igual a este." : "Guardado como marcador.");
+      return true;
+    } catch (e) {
+      showError(`No se pudo guardar el marcador: ${e?.message || e}`);
+      return false;
+    }
+  };
+
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 3800);
@@ -799,6 +814,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           setView={setAccountsView}
           onSaveMoneyTransaction={saveMoneyTransaction}
           onDeleteMoneyTransaction={deleteMoneyTransaction}
+          onBookmarkMoneyTransaction={bookmarkMoneyTransaction}
         />
       )}
 
@@ -868,6 +884,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
             const ok = await deleteMoneyTransaction(id);
             if (ok) setStatsView({ screen: "drilldown", categoryId: statsView.categoryId, categoryName: statsView.categoryName, categoryIcon: statsView.categoryIcon, type: statsView.type });
           }}
+          onBookmark={bookmarkMoneyTransaction}
         />
       )}
 
@@ -884,9 +901,22 @@ function AppShell({ session, onLogout, refreshProfile }) {
           onNewTransaction={(date) => setLedgerView({ screen: "newTransaction", date, returnTo: "list" })}
           onEditTransaction={(t) => setLedgerView({ screen: "editTransaction", transaction: t, returnTo: "list" })}
           onOpenSearch={() => setLedgerView({ screen: "search" })}
+          onOpenBookmarks={() => setLedgerView({ screen: "bookmarks" })}
           filters={diarioFilters}
           onOpenFilters={() => setLedgerView({ screen: "filters" })}
           onClearFilters={() => setDiarioFilters(EMPTY_FILTERS)}
+        />
+      )}
+
+      {activeTab === "ledger" && ledgerView.screen === "bookmarks" && (
+        <BookmarksScreen
+          userId={session.userId}
+          accounts={moneyManager.accounts}
+          categories={moneyManager.categories}
+          showError={showError}
+          showInfo={showInfo}
+          onBack={() => setLedgerView({ screen: "list" })}
+          onUseBookmark={(bookmark) => setLedgerView({ screen: "newTransaction", prefillBookmark: bookmark, returnTo: "list" })}
         />
       )}
 
@@ -931,6 +961,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           showInfo={showInfo}
           editingTransaction={ledgerView.transaction}
           defaultDate={ledgerView.date}
+          prefillBookmark={ledgerView.prefillBookmark}
           onCancel={() => setLedgerView({ screen: ledgerView.returnTo })}
           onSave={async (tx) => {
             const ok = await saveMoneyTransaction(tx);
@@ -940,6 +971,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
             const ok = await deleteMoneyTransaction(id);
             if (ok) setLedgerView({ screen: ledgerView.returnTo });
           }}
+          onBookmark={bookmarkMoneyTransaction}
         />
       )}
 

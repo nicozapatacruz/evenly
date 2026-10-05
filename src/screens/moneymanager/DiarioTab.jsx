@@ -1,5 +1,5 @@
 import React from "react";
-import { Plus, Search, SlidersHorizontal } from "lucide-react";
+import { Plus, Search, SlidersHorizontal, Star } from "lucide-react";
 import { styles } from "../../lib/styles.js";
 import { RootHeader, MonthNav, TodayButton, FiltersActiveBanner, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
@@ -14,7 +14,7 @@ import { TransactionDayGroups } from "./TransactionDayGroups.jsx";
    Resumen que acá no replicamos.
    ========================================================================= */
 
-export default function DiarioTab({ userId, settings, groups, accounts, categories, slLinks, viewMonth, setViewMonth, onNewTransaction, onEditTransaction, onOpenSearch, filters, onOpenFilters, onClearFilters }) {
+export default function DiarioTab({ userId, settings, groups, accounts, categories, slLinks, viewMonth, setViewMonth, onNewTransaction, onEditTransaction, onOpenSearch, onOpenBookmarks, filters, onOpenFilters, onClearFilters }) {
   // Solo pedimos las transacciones del mes visible (no toda la tabla) — se
   // refetchea solo cuando cambiás de mes.
   const { transactions: monthTx, loading } = useMonthTransactions(userId, viewMonth);
@@ -36,6 +36,9 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
               <button style={{ ...styles.iconBtnGhost, position: "relative" }} onClick={onOpenFilters} aria-label="Filtros">
                 <SlidersHorizontal size={19} />
                 {hasActiveFilters(filters) && <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: "#C75D3B" }} />}
+              </button>
+              <button style={styles.iconBtnGhost} onClick={onOpenBookmarks} aria-label="Marcadores">
+                <Star size={19} />
               </button>
               <button style={styles.iconBtnGhost} onClick={onOpenSearch} aria-label="Buscar">
                 <Search size={19} />

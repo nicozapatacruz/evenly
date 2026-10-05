@@ -30,7 +30,7 @@ import {
 export default function SplitLedgerTab({
   session, groups, loading, reloadGroup, deleteGroup,
   view, setView, showError, showSuccess, showInfo,
-  moneyManager,
+  moneyManager, onBackOverride,
 }) {
   const [groupInvites, setGroupInvites] = useState([]); // invitaciones pendientes del grupo que estoy editando
 
@@ -71,7 +71,7 @@ export default function SplitLedgerTab({
 
       {view.screen === "newGroup" && (
         <GroupForm
-          onCancel={() => setView({ screen: "home" })}
+          onCancel={onBackOverride || (() => setView({ screen: "home" }))}
           session={session}
           showError={showError}
           onCreate={async ({ name, baseCurrency, members, photoUrl }) => {
@@ -103,7 +103,7 @@ export default function SplitLedgerTab({
       {view.screen === "group" && activeGroup && (
         <GroupView
           group={activeGroup}
-          onBack={() => setView({ screen: "home" })}
+          onBack={onBackOverride || (() => setView({ screen: "home" }))}
           onAddExpense={() => setView({ screen: "newExpense", groupId: activeGroup.id })}
           onOpenExpense={(expenseId) => setView({ screen: "expenseDetail", groupId: activeGroup.id, expenseId })}
           onSettleUp={(prefill) => setView({ screen: "settleUp", groupId: activeGroup.id, prefill })}
@@ -137,13 +137,13 @@ export default function SplitLedgerTab({
           expenseId={view.expenseId}
           session={session}
           moneyManager={moneyManager}
-          onCancel={() => setView(
+          onCancel={onBackOverride || (() => setView(
             view.groupId
               ? (view.expenseId
                   ? { screen: "expenseDetail", groupId: view.groupId, expenseId: view.expenseId }
                   : { screen: "group", groupId: view.groupId })
               : { screen: "home" }
-          )}
+          ))}
           onSave={async (expense) => {
             const groupId = activeGroup?.id ?? expense.groupId;
             const exists = !!expense.id;
@@ -224,7 +224,7 @@ export default function SplitLedgerTab({
           group={activeGroup}
           session={session}
           moneyManager={moneyManager}
-          onCancel={() => setView({ screen: "group", groupId: activeGroup.id })}
+          onCancel={onBackOverride || (() => setView({ screen: "group", groupId: activeGroup.id }))}
           onSave={async ({ name, baseCurrency, photoUrl, membersToAdd, memberIdsToRemove, categoriesToAdd, categoriesToUpdate, categoryIdsToRemove }) => {
             try {
               const { error: e1 } = await supabase

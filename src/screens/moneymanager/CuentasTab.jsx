@@ -18,7 +18,7 @@ import TransactionForm from "./TransactionForm.jsx";
    manageGroups / manageAccounts: pantallas de edición (TopBar).
    ========================================================================= */
 
-export default function CuentasTab({ session, settings, groups, accounts, accountTotals, categories, slLinks, onOpenSplitLedgerGroup, reload, reloadCategories, showError, showInfo, view, setView, onSaveMoneyTransaction, onDeleteMoneyTransaction, onBookmarkMoneyTransaction }) {
+export default function CuentasTab({ session, settings, groups, accounts, accountTotals, categories, slLinks, onOpenSplitLedgerGroup, onOpenSplitLedgerExpense, reload, reloadCategories, showError, showInfo, view, setView, onSaveMoneyTransaction, onDeleteMoneyTransaction, onBookmarkMoneyTransaction }) {
   const balanceColor = (n) => (n > 0.004 ? "#3B6E62" : n < -0.004 ? "#B0473A" : "#6B6355");
   const [deletedOpen, setDeletedOpen] = useState(false);
 
@@ -82,6 +82,8 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
         groups={groups}
         accounts={accounts}
         categories={categories}
+        slLinks={slLinks}
+        onOpenSplitLedgerExpense={onOpenSplitLedgerExpense}
         reloadCategories={reloadCategories}
         showError={showError}
         showInfo={showInfo}

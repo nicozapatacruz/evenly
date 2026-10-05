@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Menu, Plus, ArrowLeftRight, Trash2, Copy, Star } from "lucide-react";
+import { X, Menu, Plus, ArrowLeftRight, Trash2, Copy, Star, Divide } from "lucide-react";
 import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -26,7 +26,7 @@ const TYPE_INFO = {
 export default function TransactionForm({
   session, settings, groups, accounts, categories, onCancel, onSave, onDelete, onBookmark, reloadCategories, showError, showInfo,
   forceRecurringOpen = false, hideRemoveRecurring = false, editingTransaction = null, defaultDate = null, defaultAccountId = null,
-  prefillBookmark = null,
+  prefillBookmark = null, slLinks = null, onOpenSplitLedgerExpense = null,
 }) {
   const [managingCategoryType, setManagingCategoryType] = useState(null); // "income" | "expense" | null
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -45,6 +45,10 @@ export default function TransactionForm({
   // libres — esos nunca los toca la reconciliación. En modo copia deja de
   // aplicar: la copia es una transacción independiente, no sincronizada.
   const isSynced = !isCopyMode && !!editingTransaction?.sl_link_id;
+  // De dónde volver en Split Ledger — `sl_link_id` es el vínculo, no el
+  // grupo directamente. Un pago no tiene pantalla de edición propia ahí
+  // (openSplitLedgerExpense lo resuelve llevando al grupo nomás).
+  const splitGroupId = isSynced ? slLinks?.find((l) => l.id === editingTransaction.sl_link_id)?.group_id : null;
 
   // prefillBookmark solo aplica cuando no hay editingTransaction (un
   // marcador arranca "Nueva transacción", nunca "Editar") — y nunca trae
@@ -238,7 +242,16 @@ export default function TransactionForm({
         onBack={onCancel}
         right={effectiveEditing && (
           <div style={{ display: "flex", gap: 4 }}>
-            {onBookmark && (
+            {isSynced && splitGroupId && onOpenSplitLedgerExpense && (
+              <button
+                style={{ ...styles.btnToday, display: "flex", alignItems: "center", gap: 4 }}
+                onClick={() => onOpenSplitLedgerExpense(splitGroupId, editingTransaction.sl_source_kind, editingTransaction.sl_source_id)}
+              >
+                <Divide size={13} color="#A8754A" />
+                Ver original
+              </button>
+            )}
+            {onBookmark && !isSynced && (
               <button style={styles.iconBtnGhost} onClick={handleBookmark} aria-label="Guardar como marcador">
                 <Star size={17} />
               </button>

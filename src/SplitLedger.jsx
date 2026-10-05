@@ -709,12 +709,52 @@ function AppShell({ session, onLogout, refreshProfile }) {
     } catch (e) { showError(`No se pudo aceptar la invitación: ${e?.message || e}`); }
   }, [session.userId, session.displayName, reloadGroup, loadInvites]);
 
+  // De dónde vinimos al saltar de pestaña "de golpe" (Cuentas o una
+  // transacción sincronizada → Split Ledger; Estadísticas → Buscador) — para
+  // que el botón de volver de ESA pantalla puntual (no cualquier otra)
+  // regrese ahí en vez de a la navegación interna normal de la pestaña de
+  // destino. Se borra solo apenas la pantalla cambia a otra distinta a la de
+  // destino — si el usuario sigue navegando por su cuenta ahí, un "atrás"
+  // posterior ya no debería saltar afuera. Dos pares (uno por pestaña de
+  // destino) porque cada uno mira el `view` de una pestaña distinta.
+  const [splitLedgerReturn, setSplitLedgerReturn] = useState(null); // { tab, screen }
+  useEffect(() => {
+    setSplitLedgerReturn((r) => (r && r.screen !== splitLedgerView.screen ? null : r));
+  }, [splitLedgerView.screen]);
+  const deepLinkBack = splitLedgerReturn && splitLedgerReturn.screen === splitLedgerView.screen
+    ? () => { setActiveTab(splitLedgerReturn.tab); setSplitLedgerReturn(null); }
+    : null;
+
+  const [ledgerReturn, setLedgerReturn] = useState(null); // { tab, screen }
+  useEffect(() => {
+    setLedgerReturn((r) => (r && r.screen !== ledgerView.screen ? null : r));
+  }, [ledgerView.screen]);
+  const ledgerDeepLinkBack = ledgerReturn && ledgerReturn.screen === ledgerView.screen
+    ? () => { setActiveTab(ledgerReturn.tab); setLedgerReturn(null); }
+    : null;
+
+  // Punto único para saltar a Split Ledger desde otra pestaña, marcando de
+  // dónde volver — mirar `deepLinkBack` arriba.
+  const goToSplitLedger = useCallback((screen, extra = {}) => {
+    setSplitLedgerReturn({ tab: activeTab, screen });
+    setActiveTab("splitledger");
+    setSplitLedgerView({ screen, ...extra });
+  }, [activeTab]);
+
   // Usado por la cuenta pseudo "Split Ledger" en Cuentas/Config — su flecha
   // no edita una cuenta real, lleva derecho a "Editar grupo" en Split Ledger.
-  const openSplitLedgerGroup = useCallback((groupId) => {
-    setActiveTab("splitledger");
-    setSplitLedgerView({ screen: "editGroup", groupId });
-  }, []);
+  const openSplitLedgerGroup = useCallback((groupId) => goToSplitLedger("editGroup", { groupId }), [goToSplitLedger]);
+
+  // Usado por TransactionForm en una transacción sincronizada — lleva al
+  // gasto/pago de origen. Un pago no tiene pantalla de edición propia en
+  // Split Ledger (ver GroupView, ahí se ve pero no se abre) — en ese caso
+  // lleva al grupo nomás, no a un editor que no existe.
+  const openSplitLedgerExpense = useCallback((groupId, sourceKind, sourceId) => {
+    goToSplitLedger(
+      sourceKind === "expense" ? "newExpense" : "group",
+      sourceKind === "expense" ? { groupId, expenseId: sourceId } : { groupId }
+    );
+  }, [goToSplitLedger]);
 
   const handleRejectInvite = useCallback(async (invite) => {
     let rejected = false;
@@ -793,6 +833,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           showSuccess={showSuccess}
           showInfo={showInfo}
           moneyManager={moneyManager}
+          onBackOverride={deepLinkBack}
         />
       )}
 
@@ -806,6 +847,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           categories={moneyManager.categories}
           slLinks={moneyManager.slLinks}
           onOpenSplitLedgerGroup={openSplitLedgerGroup}
+          onOpenSplitLedgerExpense={openSplitLedgerExpense}
           reload={moneyManager.reload}
           reloadCategories={moneyManager.reload}
           showError={showError}
@@ -829,7 +871,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           filters={diarioFilters}
           onOpenFilters={() => setStatsView({ screen: "filters" })}
           onClearFilters={() => setDiarioFilters(EMPTY_FILTERS)}
-          onOpenSearch={() => { setActiveTab("ledger"); setLedgerView({ screen: "search" }); }}
+          onOpenSearch={() => { setLedgerReturn({ tab: "stats", screen: "search" }); setActiveTab("ledger"); setLedgerView({ screen: "search" }); }}
         />
       )}
 
@@ -870,6 +912,8 @@ function AppShell({ session, onLogout, refreshProfile }) {
           groups={moneyManager.groups}
           accounts={moneyManager.accounts}
           categories={moneyManager.categories}
+          slLinks={moneyManager.slLinks}
+          onOpenSplitLedgerExpense={openSplitLedgerExpense}
           reloadCategories={moneyManager.reload}
           showError={showError}
           showInfo={showInfo}
@@ -944,7 +988,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           filters={searchFilters}
           setFilters={setSearchFilters}
           showError={showError}
-          onBack={() => setLedgerView({ screen: "list" })}
+          onBack={ledgerDeepLinkBack || (() => setLedgerView({ screen: "list" }))}
           onEditTransaction={(t) => setLedgerView({ screen: "editTransaction", transaction: t, returnTo: "search" })}
         />
       )}
@@ -956,6 +1000,8 @@ function AppShell({ session, onLogout, refreshProfile }) {
           groups={moneyManager.groups}
           accounts={moneyManager.accounts}
           categories={moneyManager.categories}
+          slLinks={moneyManager.slLinks}
+          onOpenSplitLedgerExpense={openSplitLedgerExpense}
           reloadCategories={moneyManager.reload}
           showError={showError}
           showInfo={showInfo}
@@ -985,8 +1031,8 @@ function AppShell({ session, onLogout, refreshProfile }) {
           refreshProfile={refreshProfile}
           groups={groups}
           reloadGroups={reloadGroups}
-          onCreateGroup={() => { setActiveTab("splitledger"); setSplitLedgerView({ screen: "newGroup" }); }}
-          onOpenGroup={(groupId) => { setActiveTab("splitledger"); setSplitLedgerView({ screen: "group", groupId }); }}
+          onCreateGroup={() => goToSplitLedger("newGroup")}
+          onOpenGroup={(groupId) => goToSplitLedger("group", { groupId })}
           showError={showError}
           showSuccess={showSuccess}
           showInfo={showInfo}

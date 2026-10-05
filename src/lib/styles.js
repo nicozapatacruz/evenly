@@ -255,7 +255,7 @@ export const styles = {
   checkboxOn: { background: "#C75D3B", borderColor: "#C75D3B" },
   customInput: { width: 80, fontFamily: "system-ui, sans-serif", fontSize: 14, padding: "7px 9px", borderRadius: 8, border: "1px solid #DDD2BE", textAlign: "right" },
   errText: { color: "#B0473A", fontSize: 13, fontFamily: "system-ui, sans-serif", margin: 0, background: "#FBEDE7", padding: "8px 12px", borderRadius: 8 },
-  toast: { position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)", background: "#2B2620", color: "#fff", padding: "10px 18px", borderRadius: 10, fontSize: 13, fontFamily: "system-ui, sans-serif", zIndex: 50, maxWidth: "90%", textAlign: "center" },
+  toast: { position: "fixed", top: "calc(16px + env(safe-area-inset-top))", left: "50%", transform: "translateX(-50%)", background: "#2B2620", color: "#fff", padding: "10px 18px", borderRadius: 10, fontSize: 13, fontFamily: "system-ui, sans-serif", zIndex: 50, maxWidth: "90%", textAlign: "center" },
 
   // Barra de navegación inferior (5 tabs, fija, solo visible en la raíz de cada tab)
   tabBar: {

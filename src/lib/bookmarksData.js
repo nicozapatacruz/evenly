@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "./supabaseClient.js";
 
 /* =========================================================================
@@ -13,10 +13,14 @@ import { supabase } from "./supabaseClient.js";
 export function useBookmarks(userId) {
   const [bookmarks, setBookmarks] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Solo la carga inicial debe mostrar "Cargando…" — un reload() después de
+  // borrar/reordenar no debería, porque ya hay datos en pantalla (mostrar y
+  // esconder el texto empuja todo el contenido de abajo, un salto feo).
+  const loadedOnceRef = useRef(false);
 
   const load = useCallback(async () => {
     if (!userId) { setLoading(false); return; }
-    setLoading(true);
+    if (!loadedOnceRef.current) setLoading(true);
     const { data } = await supabase
       .from("mm_bookmarks")
       .select("*")
@@ -24,6 +28,7 @@ export function useBookmarks(userId) {
       .order("sort_order");
     setBookmarks(data || []);
     setLoading(false);
+    loadedOnceRef.current = true;
   }, [userId]);
 
   useEffect(() => { load(); }, [load]);

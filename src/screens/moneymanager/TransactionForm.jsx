@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { X, Menu, Plus, ArrowLeftRight, Trash2 } from "lucide-react";
+import { X, Menu, Plus, ArrowLeftRight, Trash2, Copy } from "lucide-react";
 import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, Footer, ConfirmInline, IconInput, PickerField, Field } from "../../components/Shared.jsx";
-import { parseAmountInput, todayInputValue, dateInputValueInZone, money } from "../../lib/helpers.jsx";
+import { TopBar, Footer, ConfirmInline, IconInput, PickerField, Field, Modal } from "../../components/Shared.jsx";
+import { parseAmountInput, todayInputValue, dateInputValueInZone, money, fmtDate } from "../../lib/helpers.jsx";
 import { RECURRING_FREQUENCIES, nextOccurrence, computeAmountMain, useRecentNoteTitles } from "../../lib/moneyManagerData.js";
 
 const TYPE_INFO = {
@@ -30,12 +30,20 @@ export default function TransactionForm({
   const [managingCategoryType, setManagingCategoryType] = useState(null); // "income" | "expense" | null
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showCopyModal, setShowCopyModal] = useState(false);
+  // Copiar no navega a ningún lado ni guarda nada solo: convierte este mismo
+  // formulario en uno de "nueva transacción" con los datos ya completados
+  // (como pediste, igual que la app original) — así el usuario puede ajustar
+  // algo más antes de guardar, en vez de tener que reabrir lo recién creado.
+  const [isCopyMode, setIsCopyMode] = useState(false);
+  const effectiveEditing = isCopyMode ? null : editingTransaction;
 
   // Viene de Split Ledger — la reconciliación controla para siempre monto,
   // cuenta, fecha y tipo (se recalculan solos la próxima vez que corra); acá
   // quedan bloqueados para no pelear contra eso. Categoría y nota quedan
-  // libres — esos nunca los toca la reconciliación.
-  const isSynced = !!editingTransaction?.sl_link_id;
+  // libres — esos nunca los toca la reconciliación. En modo copia deja de
+  // aplicar: la copia es una transacción independiente, no sincronizada.
+  const isSynced = !isCopyMode && !!editingTransaction?.sl_link_id;
 
   const [type, setType] = useState(editingTransaction?.type || "expense");
   const [date, setDate] = useState(editingTransaction ? dateInputValueInZone(new Date(editingTransaction.date).getTime(), editingTransaction.timezone) : (defaultDate || todayInputValue()));
@@ -120,8 +128,9 @@ export default function TransactionForm({
   const recurringValid = !recurringOpen || (freq && (freq.interval !== null || customInterval >= 2));
 
   // Al editar, no dejar guardar si no se cambió nada — creando una siempre
-  // es "dirty" (no hay un original con qué comparar).
-  const isDirty = !editingTransaction || (
+  // es "dirty" (no hay un original con qué comparar), y copiar cuenta como
+  // crear (effectiveEditing ya es null en modo copia).
+  const isDirty = !effectiveEditing || (
     type !== editingTransaction.type
     || date !== dateInputValueInZone(new Date(editingTransaction.date).getTime(), editingTransaction.timezone)
     || amount !== String(editingTransaction.amount)
@@ -164,7 +173,7 @@ export default function TransactionForm({
         };
       }
       await onSave({
-        id: editingTransaction?.id,
+        id: effectiveEditing?.id,
         type,
         account_id: accountId,
         to_account_id: type === "transfer" ? toAccountId : null,
@@ -183,19 +192,53 @@ export default function TransactionForm({
     }
   };
 
+  // Copiar no guarda nada: deja el formulario con los mismos datos, listo
+  // para seguir editando (o guardar tal cual) como una transacción nueva.
+  const handlePickCopyDate = (useToday) => {
+    setDate(useToday
+      ? todayInputValue()
+      : dateInputValueInZone(new Date(editingTransaction.date).getTime(), editingTransaction.timezone));
+    setIsCopyMode(true);
+    setShowCopyModal(false);
+  };
+
   const accent = TYPE_INFO[type].color;
 
   return (
     <div style={styles.screen}>
       <TopBar
-        title={editingTransaction ? `Editar ${TYPE_INFO[type].label}` : TYPE_INFO[type].newLabel}
+        title={effectiveEditing ? `Editar ${TYPE_INFO[type].label}` : TYPE_INFO[type].newLabel}
         onBack={onCancel}
-        right={editingTransaction && !isSynced && (
-          <button style={styles.iconBtnGhost} onClick={() => setConfirmDelete(true)} aria-label="Eliminar">
-            <Trash2 size={17} />
-          </button>
+        right={effectiveEditing && (
+          <div style={{ display: "flex", gap: 4 }}>
+            {!isSynced && (
+              <button style={styles.iconBtnGhost} onClick={() => setShowCopyModal(true)} aria-label="Copiar">
+                <Copy size={17} />
+              </button>
+            )}
+            {!isSynced && (
+              <button style={styles.iconBtnGhost} onClick={() => setConfirmDelete(true)} aria-label="Eliminar">
+                <Trash2 size={17} />
+              </button>
+            )}
+          </div>
         )}
       />
+      {showCopyModal && (
+        <Modal title="Copiar transacción" onClose={() => setShowCopyModal(false)}>
+          <p style={{ margin: "0 0 14px", fontSize: 14, fontFamily: "system-ui, sans-serif", color: "#6B6355", whiteSpace: "pre-line" }}>
+            {"Se completa un formulario nuevo con estos mismos datos.\nElegí la fecha."}
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <button style={{ ...styles.btnSecondary, marginTop: 0 }} onClick={() => handlePickCopyDate(true)}>
+              Con la fecha de hoy ({fmtDate(new Date(todayInputValue() + "T12:00:00").getTime())})
+            </button>
+            <button style={{ ...styles.btnSecondary, marginTop: 0 }} onClick={() => handlePickCopyDate(false)}>
+              Con la fecha del registro ({fmtDate(new Date(editingTransaction.date).getTime())})
+            </button>
+          </div>
+        </Modal>
+      )}
       {confirmDelete && (
         <ConfirmInline
           message={`¿Eliminar este ${TYPE_INFO[type].label.toLowerCase()}?`}
@@ -210,7 +253,15 @@ export default function TransactionForm({
           style={{ margin: "6px 20px 12px", borderRadius: 12, borderTop: "1px solid #EBC9BA" }}
         />
       )}
-      <div style={{ ...styles.form, paddingBottom: 100 }}>
+      {/* key cambia SOLO al entrar en modo copia — fuerza a React a remontar
+          este div para que la animación (mismo mecanismo que useMonthSlide)
+          arranque, dando la sensación de "pantalla nueva" aunque sea el
+          mismo formulario. Sin className al abrir normalmente (isCopyMode
+          empieza en false) — la animación es solo para esa transición. */}
+      {/* animationDuration inline (no tocar .mm-slide-next en sí) — esa clase
+          es compartida con el cambio de mes, y acá se quiere un poco más
+          lenta que ahí sin afectarlo. */}
+      <div key={isCopyMode ? "copy" : "orig"} className={isCopyMode ? "mm-slide-next" : undefined} style={{ ...styles.form, paddingBottom: 100, animationDuration: isCopyMode ? "0.32s" : undefined }}>
         {isSynced && (
           <p style={{ ...styles.muted, padding: 0 }}>
             Viene de Split Ledger — el monto, la cuenta, la fecha y el tipo se actualizan solos. Podés cambiarle la categoría o la nota.

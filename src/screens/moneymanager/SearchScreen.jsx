@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Search as SearchIcon, SlidersHorizontal, Trash2, Divide } from "lucide-react";
+import { Search as SearchIcon, SlidersHorizontal, Trash2, Divide, AlertCircle } from "lucide-react";
 import { styles } from "../../lib/styles.js";
 import { TopBar } from "../../components/Shared.jsx";
 import { money, dateInputValueInZone, measureTextWidth } from "../../lib/helpers.jsx";
-import { useRecentNoteTitles, searchTransactions } from "../../lib/moneyManagerData.js";
+import { useRecentNoteTitles, searchTransactions, isRatePending } from "../../lib/moneyManagerData.js";
 import { EMPTY_FILTERS, hasActiveFilters } from "../../lib/filterHelpers.js";
 import { FiltersPanel } from "./FiltersPanel.jsx";
 
@@ -32,6 +32,7 @@ function SearchResultRow({ t, accounts, categories, slLinks, settings, dateColWi
   // de la cuenta pseudo del vínculo, no de `memo` (libre, editable).
   const link = t.sl_link_id && slLinks?.find((l) => l.id === t.sl_link_id);
   const badge = link && accounts.find((a) => a.id === link.pseudo_account_id);
+  const pending = isRatePending(t, settings.main_currency);
 
   const accountLabel = (a) => a && (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 3, ...(a.deleted ? { textDecoration: "line-through", color: "#B0473A" } : null) }}>
@@ -42,7 +43,10 @@ function SearchResultRow({ t, accounts, categories, slLinks, settings, dateColWi
   );
 
   return (
-    <div onClick={() => onEdit(t)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14, cursor: "pointer", background: badge ? "#FBF1E0" : undefined }}>
+    <div onClick={() => onEdit(t)} style={{ position: "relative", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14, cursor: "pointer", background: pending ? "#FBEDE7" : badge ? "#FBF1E0" : undefined }}>
+      {/* Pendiente de tasa: el resto de la fila se atenúa y el badge queda
+          centrado encima — mismo criterio que TransactionDayGroups. */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flex: 1, minWidth: 0, opacity: pending ? 0.35 : 1 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
         {/* Bloque fecha+categoría — reemplaza el ícono solo de TransactionDayGroups:
             acá hace falta la fecha (sin encabezado de día que agrupe) Y el
@@ -78,7 +82,7 @@ function SearchResultRow({ t, accounts, categories, slLinks, settings, dateColWi
         </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-        {badge && (
+        {!pending && badge && (
           <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "#A8754A", maxWidth: 80, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={badge.name}>
             <Divide size={12} color="#A8754A" style={{ flexShrink: 0 }} />
             <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{badge.name}</span>
@@ -88,6 +92,13 @@ function SearchResultRow({ t, accounts, categories, slLinks, settings, dateColWi
           {money(t.amount, t.currency)}
         </span>
       </div>
+      </div>
+      {pending && (
+        <span style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", display: "flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 700, color: "#B0473A", background: "#fff", border: "1px solid #EBC9BA", borderRadius: 999, padding: "4px 10px", whiteSpace: "nowrap", boxShadow: "0 1px 4px rgba(0,0,0,0.1)" }} title="Moneda diferente, pendiente tasa de cambio">
+          <AlertCircle size={12} style={{ flexShrink: 0 }} />
+          Pendiente tasa de cambio
+        </span>
+      )}
     </div>
   );
 }

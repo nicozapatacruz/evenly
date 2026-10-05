@@ -1,9 +1,9 @@
 import React from "react";
 import { Plus, Search, SlidersHorizontal, Star } from "lucide-react";
 import { styles } from "../../lib/styles.js";
-import { RootHeader, MonthNav, TodayButton, FiltersActiveBanner, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
+import { RootHeader, MonthNav, TodayButton, FiltersActiveBanner, PendingRateBanner, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
-import { useMonthTransactions } from "../../lib/moneyManagerData.js";
+import { useMonthTransactions, usePendingRateTransactions } from "../../lib/moneyManagerData.js";
 import { hasActiveFilters, matchesFilters } from "../../lib/filterHelpers.js";
 import { TransactionDayGroups } from "./TransactionDayGroups.jsx";
 
@@ -21,6 +21,10 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
   const swipeHandlers = useMonthSwipe(viewMonth, setViewMonth);
   const slide = useMonthSlide(viewMonth);
   const filtered = hasActiveFilters(filters) ? monthTx.filter((t) => matchesFilters(t, filters)) : monthTx;
+  // A propósito NO se saca del mes visible (`filtered`) — una pendiente en
+  // otro mes, o una transferencia de préstamo oculta, quedaría invisible si
+  // dependiera de lo que esta pantalla ya cargó. Ver usePendingRateTransactions.
+  const { transactions: pendingRateTx } = usePendingRateTransactions(userId);
 
   const monthIncome = filtered.filter((t) => t.type === "income").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
   const monthExpense = filtered.filter((t) => t.type === "expense").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
@@ -63,6 +67,20 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
             </div>
           </div>
         </div>
+        {/* Fuera del subHeader que se desliza con el mes a propósito — esto
+            no depende de qué mes estés viendo, tiene que quedar visible
+            siempre que haya algo pendiente, no solo al navegar a ese mes.
+            paddingTop:12 (sin padding abajo) — el mismo valor que ya tiene
+            el paddingTop del body de abajo, así el banner queda con el
+            mismo espacio arriba y abajo (el de abajo lo da el propio body,
+            sin agregar nada extra acá) pase lo que pase con el body. Mismo
+            padding horizontal (20px) que el resto del header, no el 14px
+            que usan las filas del body. */}
+        {pendingRateTx.length > 0 && (
+          <div style={{ padding: "12px 20px 0" }}>
+            <PendingRateBanner count={pendingRateTx.length} onOpen={() => onEditTransaction(pendingRateTx[0])} />
+          </div>
+        )}
       </div>
       <div key={slide.key} className={slide.className} style={{ ...styles.form, flex: 1, paddingTop: 12, paddingBottom: 100 }} {...swipeHandlers}>
         {/* Un solo div envolviendo banner+contenido (no 2 hijos sueltos del

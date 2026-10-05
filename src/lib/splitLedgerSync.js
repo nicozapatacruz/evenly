@@ -60,17 +60,21 @@ async function loadLinkContext(link, userId) {
   return { groupName: group.name, memberId: member.id, expenses: expenses || [], payments: payments || [] };
 }
 
-// ¿Tiene esta fila alguna parte para mí, y está en la misma moneda que mi
-// cuenta principal? (multi-moneda queda para más adelante — ver plan, M5).
-function expenseInvolvesMe(e, memberId, mainCurrency) {
-  if (e.deleted || e.currency !== mainCurrency) return false;
+// ¿Tiene esta fila alguna parte para mí? La moneda ya NO decide si se
+// sincroniza o no (antes se ignoraba del todo si no coincidía con la
+// principal) — ahora siempre se sincroniza, y si la moneda no coincide con
+// tu principal, la transacción queda con `exchange_rate: null` ("pendiente
+// de tasa") hasta que la abras y la completes a mano, igual que cualquier
+// transacción manual en otra moneda. Ver reconcileLink más abajo.
+function expenseInvolvesMe(e, memberId) {
+  if (e.deleted) return false;
   const shareAmt = Number(e.shares?.[memberId] || 0);
   const paidAmt = Number(e.payers?.[memberId] || 0);
   return shareAmt > EPSILON || Math.abs(paidAmt - shareAmt) > EPSILON;
 }
 
-function paymentInvolvesMe(p, memberId, mainCurrency) {
-  if (p.deleted || p.currency !== mainCurrency) return false;
+function paymentInvolvesMe(p, memberId) {
+  if (p.deleted) return false;
   return p.from_member_id === memberId || p.to_member_id === memberId;
 }
 
@@ -103,11 +107,11 @@ async function ensureExpenseChoices(link, involvedKeys, choicesBySourceKey) {
 // Qué transacciones DEBERÍAN existir para mí, mirando la regla (share +
 // préstamo si corresponde) — nunca se mezcla con qué cuenta usar, eso ya
 // viene resuelto en choicesBySourceKey.
-function computeDesiredTransactions(link, ctx, choicesBySourceKey, mainCurrency) {
+function computeDesiredTransactions(link, ctx, choicesBySourceKey) {
   const desired = [];
 
   for (const e of ctx.expenses) {
-    if (!expenseInvolvesMe(e, ctx.memberId, mainCurrency)) continue;
+    if (!expenseInvolvesMe(e, ctx.memberId)) continue;
     const shareAmt = Number(e.shares?.[ctx.memberId] || 0);
     const paidAmt = Number(e.payers?.[ctx.memberId] || 0);
     const choice = choicesBySourceKey.get(`expense:${e.id}`);
@@ -127,7 +131,7 @@ function computeDesiredTransactions(link, ctx, choicesBySourceKey, mainCurrency)
   }
 
   for (const p of ctx.payments) {
-    if (!paymentInvolvesMe(p, ctx.memberId, mainCurrency)) continue;
+    if (!paymentInvolvesMe(p, ctx.memberId)) continue;
     const isFrom = p.from_member_id === ctx.memberId;
     const choice = choicesBySourceKey.get(`payment:${p.id}`);
     const accountId = choice?.account_id || link.default_other_account_id;
@@ -151,16 +155,34 @@ async function reconcileLink(link, userId, mainCurrency) {
   const choicesBySourceKey = new Map((existingChoices || []).map((c) => [`${c.source_kind}:${c.source_id}`, c]));
 
   const involvedKeys = [
-    ...ctx.expenses.filter((e) => expenseInvolvesMe(e, ctx.memberId, mainCurrency)).map((e) => `expense:${e.id}`),
-    ...ctx.payments.filter((p) => paymentInvolvesMe(p, ctx.memberId, mainCurrency)).map((p) => `payment:${p.id}`),
+    ...ctx.expenses.filter((e) => expenseInvolvesMe(e, ctx.memberId)).map((e) => `expense:${e.id}`),
+    ...ctx.payments.filter((p) => paymentInvolvesMe(p, ctx.memberId)).map((p) => `payment:${p.id}`),
   ];
   await ensureExpenseChoices(link, involvedKeys, choicesBySourceKey);
 
-  const desired = computeDesiredTransactions(link, ctx, choicesBySourceKey, mainCurrency);
+  const desired = computeDesiredTransactions(link, ctx, choicesBySourceKey);
   const desiredByKey = new Map(desired.map((d) => [d.key, d]));
 
   const { data: existingTx } = await supabase.from("mm_transactions").select("*").eq("sl_link_id", link.id);
   const existingByKey = new Map((existingTx || []).map((t) => [`${t.sl_source_kind}:${t.sl_source_id}:${t.sl_role}`, t]));
+
+  // `exchange_rate` nunca lo toca la reconciliación — solo lo escribe el
+  // usuario a mano (en TransactionForm) cuando la moneda del gasto no
+  // coincide con su principal. Acá solo se RECALCULA amount_main con la
+  // tasa que ya exista (si existe); si todavía no hay ninguna, queda en 0
+  // (no corrompe los totales) hasta que la completen — nunca se resetea a
+  // un valor crudo sin convertir.
+  //
+  // EXCEPCIÓN: si la moneda del gasto cambió desde la última vez (alguien
+  // la editó en Split Ledger, ej. de USD a COP), la tasa guardada era para
+  // la moneda VIEJA — aplicarla a la moneda nueva daría un total
+  // completamente inventado. En ese caso se ignora (como si no hubiera
+  // ninguna) y vuelve a quedar pendiente, para que carguen la tasa correcta.
+  const amountMainFor = (d, existing) => {
+    if (d.currency === mainCurrency) return d.amount;
+    const rate = existing && existing.currency === d.currency ? existing.exchange_rate : null;
+    return rate ? d.amount / rate : 0;
+  };
 
   const toInsert = [];
   const toUpdate = [];
@@ -171,7 +193,7 @@ async function reconcileLink(link, userId, mainCurrency) {
         user_id: userId, sl_link_id: link.id, sl_source_kind: d.source_kind, sl_source_id: d.source_id, sl_role: d.role,
         type: d.type, account_id: d.account_id, to_account_id: d.to_account_id,
         category_id: d.category_id, currency: d.currency, amount: d.amount,
-        exchange_rate: null, amount_main: d.amount,
+        exchange_rate: null, amount_main: amountMainFor(d, null),
         title: d.title, memo: d.memo, date: new Date(d.date).toISOString(),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         deleted: false,
@@ -183,20 +205,23 @@ async function reconcileLink(link, userId, mainCurrency) {
     // abajo (toInsert) y después quedan libres: un cambio de categoría hecho
     // a mano en Money Manager (o vía el picker de Split Ledger, que escribe
     // aparte en sl_mm_expense_choices) nunca se pisa solo en la próxima vuelta.
+    const amountMain = amountMainFor(d, existing);
     const needsUpdate = existing.deleted
       || existing.account_id !== d.account_id
       || existing.to_account_id !== d.to_account_id
       || Number(existing.amount) !== d.amount
       || existing.currency !== d.currency
-      || Number(existing.amount_main) !== d.amount
+      || Number(existing.amount_main) !== amountMain
       || new Date(existing.date).getTime() !== new Date(d.date).getTime();
     if (needsUpdate) {
+      const currencyChanged = existing.currency !== d.currency;
       toUpdate.push({
         id: existing.id,
         patch: {
           account_id: d.account_id, to_account_id: d.to_account_id,
-          currency: d.currency, amount: d.amount, amount_main: d.amount,
+          currency: d.currency, amount: d.amount, amount_main: amountMain,
           date: new Date(d.date).toISOString(), deleted: false,
+          ...(currencyChanged ? { exchange_rate: null } : {}),
         },
       });
     }

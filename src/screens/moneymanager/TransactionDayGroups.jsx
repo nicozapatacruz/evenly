@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
-import { Trash2, Divide, ArrowLeftRight } from "lucide-react";
+import { Trash2, Divide, ArrowLeftRight, AlertCircle } from "lucide-react";
 import { money, measureTextWidth, dateInputValueInZone } from "../../lib/helpers.jsx";
+import { isRatePending } from "../../lib/moneyManagerData.js";
 
 const DAY_AMOUNTS_FONT = "12.5px system-ui, sans-serif";
 const DAY_LABEL = (d) => d.toLocaleDateString("es-ES", { weekday: "short" }).replace(".", "");
@@ -109,77 +110,90 @@ export function TransactionDayGroups({ transactions, settings, accounts, categor
             </div>
             {txs.map((t) => {
               const badge = splitBadge(t);
+              const pending = isRatePending(t, settings.main_currency);
               return (
               <div
                 key={t.id}
                 onClick={() => onEditTransaction(t)}
-                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14, cursor: "pointer", background: badge ? "#FBF1E0" : undefined }}
+                style={{ position: "relative", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14, cursor: "pointer", background: pending ? "#FBEDE7" : badge ? "#FBF1E0" : undefined }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
-                  {/* Alto fijo siempre (haya ícono o no) — si no, una fila sin
-                      categoría queda más baja que una con categoría, porque el
-                      emoji del ícono es lo que más alto mide de toda la fila. */}
-                  <span style={{ position: "relative", flexShrink: 0, display: "inline-flex", width: 18, height: 18, alignItems: "center", justifyContent: "center" }}>
-                    {t.type === "transfer" ? (
-                      <ArrowLeftRight size={16} color="#4A6FA5" />
-                    ) : (
-                      <>
-                        {categoryIcon(t.category_id) && (
-                          <span style={{ fontSize: 18, lineHeight: 1, opacity: categoryDeleted(t.category_id) ? 0.5 : 1 }}>{categoryIcon(t.category_id)}</span>
-                        )}
-                        {categoryDeleted(t.category_id) && (
-                          <span style={{ position: "absolute", bottom: -3, right: -5, background: "#fff", borderRadius: "50%", padding: 1, display: "flex" }}>
-                            <Trash2 size={10} color="#B0473A" />
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </span>
-                  {/* minHeight: 32 — una transacción sin nota (sin "título") solo
-                      muestra 1 línea en vez de 2, y quedaba más baja que el
-                      resto; con esto reserva el mismo alto igual. */}
-                  <div style={{ minWidth: 0, minHeight: 32, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                    {t.type === "transfer" ? (
-                      <>
-                        <p style={{ margin: 0, fontWeight: 600 }}>{t.title || "Transferencia"}</p>
-                        <p style={{ margin: 0, fontSize: 12, color: "#6B6355", display: "flex", alignItems: "center", gap: 4 }}>
-                          {accountLabel(t.account_id)} → {accountLabel(t.to_account_id)}
-                        </p>
-                      </>
-                    ) : t.title ? (
-                      <>
-                        <p style={{ margin: 0, fontWeight: 600 }}>{t.title}</p>
+                {/* Pendiente de tasa: el resto de la fila se atenúa y el badge
+                    queda centrado encima, en vez de competir por espacio con
+                    el ícono/nota/monto — así se nota de una que algo falta,
+                    no es solo un chip más al lado de los demás. */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flex: 1, minWidth: 0, opacity: pending ? 0.35 : 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
+                    {/* Alto fijo siempre (haya ícono o no) — si no, una fila sin
+                        categoría queda más baja que una con categoría, porque el
+                        emoji del ícono es lo que más alto mide de toda la fila. */}
+                    <span style={{ position: "relative", flexShrink: 0, display: "inline-flex", width: 18, height: 18, alignItems: "center", justifyContent: "center" }}>
+                      {t.type === "transfer" ? (
+                        <ArrowLeftRight size={16} color="#4A6FA5" />
+                      ) : (
+                        <>
+                          {categoryIcon(t.category_id) && (
+                            <span style={{ fontSize: 18, lineHeight: 1, opacity: categoryDeleted(t.category_id) ? 0.5 : 1 }}>{categoryIcon(t.category_id)}</span>
+                          )}
+                          {categoryDeleted(t.category_id) && (
+                            <span style={{ position: "absolute", bottom: -3, right: -5, background: "#fff", borderRadius: "50%", padding: 1, display: "flex" }}>
+                              <Trash2 size={10} color="#B0473A" />
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </span>
+                    {/* minHeight: 32 — una transacción sin nota (sin "título") solo
+                        muestra 1 línea en vez de 2, y quedaba más baja que el
+                        resto; con esto reserva el mismo alto igual. */}
+                    <div style={{ minWidth: 0, minHeight: 32, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                      {t.type === "transfer" ? (
+                        <>
+                          <p style={{ margin: 0, fontWeight: 600 }}>{t.title || "Transferencia"}</p>
+                          <p style={{ margin: 0, fontSize: 12, color: "#6B6355", display: "flex", alignItems: "center", gap: 4 }}>
+                            {accountLabel(t.account_id)} → {accountLabel(t.to_account_id)}
+                          </p>
+                        </>
+                      ) : t.title ? (
+                        <>
+                          <p style={{ margin: 0, fontWeight: 600 }}>{t.title}</p>
+                          <p style={{ margin: 0, fontSize: 12, color: "#6B6355" }}>{accountLabel(t.account_id)}</p>
+                        </>
+                      ) : (
                         <p style={{ margin: 0, fontSize: 12, color: "#6B6355" }}>{accountLabel(t.account_id)}</p>
-                      </>
-                    ) : (
-                      <p style={{ margin: 0, fontSize: 12, color: "#6B6355" }}>{accountLabel(t.account_id)}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                    {!pending && badge && (
+                      <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "#A8754A", maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={badge.name}>
+                        <Divide size={12} color="#A8754A" style={{ flexShrink: 0 }} />
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{badge.name}</span>
+                      </span>
                     )}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+                      <span style={{
+                        color: perspectiveAccountId
+                          ? (contribution(t) > 0 ? "#3B6E62" : contribution(t) < 0 ? "#B0473A" : "#4A6FA5")
+                          : (t.type === "income" ? "#3B6E62" : t.type === "expense" ? "#B0473A" : "#4A6FA5"),
+                        fontWeight: 600,
+                      }}>
+                        {money(t.amount, t.currency)}
+                      </span>
+                      {t.currency !== settings.main_currency && (
+                        <span style={{ fontSize: 11, color: "#6B6355" }}>= {money(t.amount_main, settings.main_currency)}</span>
+                      )}
+                      {runningBalances?.has(t.id) && (
+                        <span style={{ fontSize: 11, color: "#6B6355" }}>{money(runningBalances.get(t.id), settings.main_currency)}</span>
+                      )}
+                    </div>
                   </div>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                  {badge && (
-                    <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "#A8754A", maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={badge.name}>
-                      <Divide size={12} color="#A8754A" style={{ flexShrink: 0 }} />
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{badge.name}</span>
-                    </span>
-                  )}
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-                    <span style={{
-                      color: perspectiveAccountId
-                        ? (contribution(t) > 0 ? "#3B6E62" : contribution(t) < 0 ? "#B0473A" : "#4A6FA5")
-                        : (t.type === "income" ? "#3B6E62" : t.type === "expense" ? "#B0473A" : "#4A6FA5"),
-                      fontWeight: 600,
-                    }}>
-                      {money(t.amount, t.currency)}
-                    </span>
-                    {t.currency !== settings.main_currency && (
-                      <span style={{ fontSize: 11, color: "#6B6355" }}>= {money(t.amount_main, settings.main_currency)}</span>
-                    )}
-                    {runningBalances?.has(t.id) && (
-                      <span style={{ fontSize: 11, color: "#6B6355" }}>{money(runningBalances.get(t.id), settings.main_currency)}</span>
-                    )}
-                  </div>
-                </div>
+                {pending && (
+                  <span style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)", display: "flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 700, color: "#B0473A", background: "#fff", border: "1px solid #EBC9BA", borderRadius: 999, padding: "4px 10px", whiteSpace: "nowrap", boxShadow: "0 1px 4px rgba(0,0,0,0.1)" }} title="Moneda diferente, pendiente tasa de cambio">
+                    <AlertCircle size={12} style={{ flexShrink: 0 }} />
+                    Pendiente tasa de cambio
+                  </span>
+                )}
               </div>
               );
             })}

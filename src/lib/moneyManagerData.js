@@ -771,6 +771,47 @@ export function computeAmountMain(amount, currency, mainCurrency, rate) {
   return amount;
 }
 
+// Sincronizada desde Split Ledger, en una moneda distinta a la principal,
+// sin tasa todavía — ver splitLedgerSync.js. Compartida entre TransactionDayGroups,
+// SearchScreen y DiarioTab (banner), para no repetir la misma condición 3 veces.
+export function isRatePending(t, mainCurrency) {
+  return !!t.sl_link_id && t.exchange_rate == null && t.currency !== mainCurrency;
+}
+
+// Todas las transacciones pendientes de tasa, de CUALQUIER mes — a propósito
+// no se limita al mes visible (quedaría escondida si está en otro mes) ni
+// excluye las transferencias de préstamo ocultas de Split Ledger (Presté/Me
+// prestaron, que nunca aparecen en Transacciones/Buscador): si una de esas
+// queda pendiente, hoy no hay NINGÚN otro lugar que avise salvo entrando
+// manualmente al extracto de esa cuenta — este listado es la única forma de
+// enterarse sin tener que acordarte de revisar cada grupo vinculado.
+export function usePendingRateTransactions(userId) {
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    if (!userId) { setLoading(false); return; }
+    setLoading(true);
+    const { data: settingsRow } = await supabase.from("mm_settings").select("main_currency").eq("user_id", userId).maybeSingle();
+    const mainCurrency = settingsRow?.main_currency || "EUR";
+    const { data } = await supabase
+      .from("mm_transactions")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("deleted", false)
+      .not("sl_link_id", "is", null)
+      .is("exchange_rate", null)
+      .neq("currency", mainCurrency)
+      .order("date", { ascending: true });
+    setTransactions(data || []);
+    setLoading(false);
+  }, [userId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  return { transactions, loading, reload: load };
+}
+
 // accountTotals: una fila por cuenta (vista mm_account_totals), ya sumada y
 // convertida a la moneda principal del lado del servidor (suma `amount_main`,
 // no `amount`) — acá no hay más conversión que hacer.

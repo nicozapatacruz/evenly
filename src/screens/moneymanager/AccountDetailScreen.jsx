@@ -3,7 +3,7 @@ import { Trash2 } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, Footer, ConfirmInline, IconInput, PickerField, ToggleField, Field } from "../../components/Shared.jsx";
-import { money } from "../../lib/helpers.jsx";
+import { money, CURRENCIES, CURRENCY_LIST } from "../../lib/helpers.jsx";
 import { accountBalance, computeCreditCardBalance, creditCardNextPaymentDate, disableAutoPayForDeletedAccounts, useCreditCardActivity } from "../../lib/moneyManagerData.js";
 
 const DAY_OPTIONS = Array.from({ length: 31 }, (_, i) => i + 1);
@@ -22,6 +22,9 @@ export default function AccountDetailScreen({ session, account = null, groups, a
   const [groupId, setGroupId] = useState(account?.group_id || defaultGroupId || groups[0]?.id || "");
   const [name, setName] = useState(account?.name || "");
   const [icon, setIcon] = useState(account?.icon || "");
+  // Fija para siempre al crear la cuenta — no se vuelve a pedir ni se puede
+  // cambiar después (ver PENDIENTES.md sección B, versión acotada).
+  const [currency, setCurrency] = useState(account?.currency || settings.main_currency);
   const [isCreditCard, setIsCreditCard] = useState(account?.is_credit_card || false);
   const [paymentAccountId, setPaymentAccountId] = useState(account?.payment_account_id || "");
   const [statementDay, setStatementDay] = useState(account?.statement_day || 1);
@@ -42,6 +45,7 @@ export default function AccountDetailScreen({ session, account = null, groups, a
     groupId !== account.group_id
     || name.trim() !== account.name
     || icon !== (account.icon || "")
+    || currency !== account.currency
     || isCreditCard !== account.is_credit_card
     || paymentAccountId !== (account.payment_account_id || "")
     || statementDay !== (account.statement_day || 1)
@@ -99,6 +103,7 @@ export default function AccountDetailScreen({ session, account = null, groups, a
         group_id: groupId,
         name: name.trim(),
         icon: icon || null,
+        currency,
         is_credit_card: isCreditCard,
         payment_account_id: isCreditCard ? (paymentAccountId || null) : null,
         statement_day: isCreditCard ? statementDay : null,
@@ -178,6 +183,17 @@ export default function AccountDetailScreen({ session, account = null, groups, a
         {isSystemAccount && (
           <p style={{ ...styles.muted, padding: 0, marginTop: -8 }}>
             Representa un grupo vinculado de Split Ledger — se desvincula desde ahí, no se edita acá.
+          </p>
+        )}
+
+        <Field label="Moneda">
+          <select style={styles.input} value={currency} onChange={(e) => setCurrency(e.target.value)}>
+            {CURRENCY_LIST.map((c) => <option key={c} value={c}>{c} ({CURRENCIES[c].symbol})</option>)}
+          </select>
+        </Field>
+        {account && currency !== account.currency && (
+          <p style={{ ...styles.muted, padding: 0, marginTop: -8, color: "#B0473A" }}>
+            Es solo una etiqueta: cambiarla no convierte ningún monto ya registrado ni futuro, solo identifica en qué moneda está esta cuenta.
           </p>
         )}
 

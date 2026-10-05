@@ -296,7 +296,9 @@ export default function TransactionForm({
       <div key={isCopyMode ? "copy" : "orig"} className={isCopyMode ? "mm-slide-next" : undefined} style={{ ...styles.form, paddingBottom: 100, animationDuration: isCopyMode ? "0.32s" : undefined }}>
         {isSynced && (
           <p style={{ ...styles.muted, padding: 0 }}>
-            Viene de Split Ledger — el monto, la cuenta, la fecha y el tipo se actualizan solos. Podés cambiarle la categoría o la nota.
+            {needsRate
+              ? "Viene de Split Ledger, en una moneda distinta a tu principal — el monto, la cuenta, la fecha y el tipo se actualizan solos. Ingresá la tasa de cambio para que se calcule bien en tus totales."
+              : "Viene de Split Ledger — el monto, la cuenta, la fecha y el tipo se actualizan solos. Podés cambiarle la categoría o la nota."}
           </p>
         )}
         <div style={{ ...styles.tabRow, padding: 0, opacity: isSynced ? 0.6 : 1 }}>
@@ -339,19 +341,29 @@ export default function TransactionForm({
           <span style={{ fontSize: 12, fontWeight: 400, color: "#B0473A", marginTop: -8, fontFamily: "system-ui, sans-serif" }}>Ingresá un importe válido.</span>
         )}
 
+        {isSynced && needsRate && editingTransaction?.exchange_rate == null && (
+          <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, color: "#B0473A", fontFamily: "system-ui, sans-serif" }}>
+            Debés llenar la tasa de cambio para poder tener en cuenta esta transacción en tus totales.
+          </p>
+        )}
+
         {needsRate && (
           <Field label={`1 ${rateFlipped ? currency : settings.main_currency} equivale a`} required error={touched.exchangeRate && !validRate ? "Ingresá una tasa válida." : ""}>
             <div style={{ display: "flex", gap: 8 }}>
               <div style={{ position: "relative", flex: 1 }}>
-                <input style={{ ...styles.input, width: "100%", paddingRight: 50, opacity: isSynced ? 0.6 : 1 }} value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} onBlur={() => touch("exchangeRate")} placeholder="1.00" inputMode="decimal" disabled={isSynced} />
+                {/* A diferencia del resto del formulario cuando isSynced, esta
+                    sí queda editable — es el único dato que la reconciliación
+                    de Split Ledger NO puede completar sola (no hay nadie
+                    mirando un formulario en ese momento), así que queda
+                    "pendiente" hasta que la cargues acá. */}
+                <input style={{ ...styles.input, width: "100%", paddingRight: 50 }} value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} onBlur={() => touch("exchangeRate")} placeholder="1.00" inputMode="decimal" />
                 <span style={{ position: "absolute", top: "50%", right: 13, transform: "translateY(-50%)", fontFamily: "system-ui, sans-serif", fontSize: 14, fontWeight: 600, color: "#544A3C", pointerEvents: "none" }}>
                   {rateFlipped ? settings.main_currency : currency}
                 </span>
               </div>
               <button
                 type="button"
-                style={{ ...styles.btnSecondarySmall, opacity: isSynced ? 0.6 : 1 }}
-                disabled={isSynced}
+                style={styles.btnSecondarySmall}
                 onClick={() => {
                   setRateFlipped((f) => !f);
                   setExchangeRate((prev) => {

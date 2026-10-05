@@ -60,7 +60,7 @@ export default function CurrencySettingsScreen({ session, settings, reload, show
     <div style={styles.screen}>
       <TopBar title="Ajustes de moneda" onBack={onBack} />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        <Field label="Moneda principal">
+        <Field label="Moneda principal" info="Es la moneda por defecto de las cuentas.">
           <select style={styles.input} value={mainCurrency} onChange={(e) => setMainCurrency(e.target.value)}>
             {CURRENCY_LIST.map((c) => <option key={c} value={c}>{c} ({CURRENCIES[c].symbol})</option>)}
           </select>

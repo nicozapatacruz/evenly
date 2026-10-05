@@ -242,6 +242,17 @@ export function FiltersActiveBanner({ onOpen, onClear }) {
   );
 }
 
+// Mismo look que FiltersActiveBanner (sin botón de "quitar" — no hay nada
+// que limpiar, solo se resuelve cargando la tasa) — tocarlo abre la primera
+// transacción pendiente para completarla.
+export function PendingRateBanner({ count, onOpen }) {
+  return (
+    <button type="button" onClick={onOpen} style={{ display: "flex", width: "100%", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 20, background: "#FBEDE7", border: "1px solid #EBC9BA", textAlign: "left", fontSize: 13, fontWeight: 600, fontFamily: "system-ui, sans-serif", color: "#C75D3B", cursor: "pointer" }}>
+      {count === 1 ? "1 transacción pendiente de tasa de cambio" : `${count} transacciones pendientes de tasa de cambio`}
+    </button>
+  );
+}
+
 export function TodayButton({ viewMonth, setViewMonth }) {
   const now = new Date();
   const isCurrentMonth = viewMonth.getFullYear() === now.getFullYear() && viewMonth.getMonth() === now.getMonth();

@@ -311,14 +311,45 @@ simplemente no hace nada la segunda vez.
    `ignoreDuplicates`) en `sl_mm_expense_choices` — tu elección de ahora
    siempre gana, sin importar si la reconciliación ya había sembrado un
    default antes. Falta probar en vivo.
-5. - [ ] **Multi-moneda** (tasa de cambio por vínculo). Bloqueado a propósito
-   (2026-10-03): el chequeo "misma moneda" de M2 compara contra la moneda
-   principal GLOBAL del usuario, pero lo correcto es compararlo contra la
-   moneda de la cuenta elegida — y hoy las cuentas de Money Manager NO
-   tienen una moneda fija propia (cada transacción trae la suya). Encararlo
-   bien requiere primero resolver eso (ver PENDIENTES.md sección B, "cada
-   cuenta con su propia moneda fija") — Nicolas prefiere terminar primero
-   todo Split Ledger y volver a esto después.
+5. - [x] **Multi-moneda.** Resuelto 2026-10-05, distinto a como estaba
+   planteado acá originalmente. La idea de comparar contra la moneda de la
+   cuenta elegida (en vez de la principal global) se descartó: aunque
+   `mm_accounts.currency` ya existe (ver PENDIENTES.md sección B), igual
+   haría falta una tasa para calcular bien `amount_main` (que siempre se
+   expresa en la moneda principal global, nunca en la de la cuenta — así
+   funciona TODA transacción en la app, no solo las de Split Ledger), así
+   que esa comparación no evitaba el problema de fondo.
+
+   Diseño final (idea de Nicolas, más simple): la sincronización deja de
+   ignorar los gastos en otra moneda — siempre los sincroniza. Si la moneda
+   del gasto no coincide con la principal, la transacción se crea igual
+   pero con `exchange_rate: null` y `amount_main: 0` ("pendiente de tasa",
+   no corrompe ningún total mientras tanto) — en Transacciones/Buscador
+   aparece marcada ("Falta tasa", fondo de aviso) y al abrirla para editar,
+   el campo de tasa de cambio queda editable (el único, el resto sigue
+   bloqueado) para completarla a mano, igual que cualquier transacción
+   manual en otra moneda. Una vez cargada la tasa, la reconciliación la
+   respeta para siempre (nunca la vuelve a pisar con un valor sin
+   convertir), incluso si el monto en origen cambia después.
+
+   Cambios: `expenseInvolvesMe`/`paymentInvolvesMe` en
+   `splitLedgerSync.js` ya no filtran por moneda; `reconcileLink` calcula
+   `amount_main` a partir de la tasa ya guardada en la transacción
+   existente (si hay), nunca de un valor crudo. `TransactionForm.jsx`
+   habilita el campo de tasa para transacciones sincronizadas cuando hace
+   falta. Badge "Pendiente tasa de cambio" (centrado, resto de la fila
+   atenuado) en `TransactionDayGroups.jsx` y `SearchScreen.jsx`.
+
+   Ajustes posteriores el mismo día: si la moneda del gasto cambia después
+   de ya tener una tasa cargada (ej. de USD a COP), esa tasa queda
+   descartada (sería la tasa equivocada para la moneda nueva) y vuelve a
+   quedar pendiente — `reconcileLink` detecta el cambio comparando contra
+   la moneda ya guardada. Además, el banner de "N pendientes" en
+   Transacciones (`usePendingRateTransactions`) deliberadamente NO se
+   limita al mes visible ni excluye las transferencias ocultas de préstamo
+   (Presté/Me prestaron) — esas nunca aparecen en Transacciones/Buscador, así
+   que sin este chequeo global no habría ninguna forma de enterarse de que
+   una quedó pendiente salvo entrando a mano al extracto de esa cuenta.
 6. - [x] Pulido. Implementado 2026-10-03:
    - **Aviso de saldo previo a vincular**: al prender el toggle para crear un
      vínculo nuevo (no al editar uno ya activo), si `computeBalances(group)`

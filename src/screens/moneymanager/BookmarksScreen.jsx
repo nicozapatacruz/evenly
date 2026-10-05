@@ -81,7 +81,11 @@ export default function BookmarksScreen({ userId, accounts, categories, onBack, 
         }
       />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        {loading && <p style={{ ...styles.muted, padding: 0 }}>Cargando…</p>}
+        {loading && (
+          <div style={styles.emptyState}>
+            <p style={styles.emptyTitle}>Cargando…</p>
+          </div>
+        )}
         {!loading && grouped.length === 0 && (
           <div style={styles.emptyState}>
             <p style={styles.emptyTitle}>Todavía no tenés marcadores</p>
@@ -243,7 +247,11 @@ function BookmarkPickerScreen({ userId, accounts, categories, onBack, onPicked, 
     <div style={styles.screen}>
       <TopBar title="Elegí una transacción" onBack={onBack} />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        {transactions === null && <p style={{ ...styles.muted, padding: 0 }}>Cargando…</p>}
+        {transactions === null && (
+          <div style={styles.emptyState}>
+            <p style={styles.emptyTitle}>Cargando…</p>
+          </div>
+        )}
         {transactions?.length === 0 && (
           <div style={styles.emptyState}>
             <p style={styles.emptyTitle}>No hay transacciones todavía</p>

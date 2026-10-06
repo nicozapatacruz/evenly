@@ -104,9 +104,13 @@ function SearchResultRow({ t, accounts, categories, slLinks, settings, dateColWi
 }
 
 function SearchResults({ results, settings, accounts, categories, slLinks, onEditTransaction }) {
-  const income = results.filter((t) => t.type === "income").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
-  const expense = results.filter((t) => t.type === "expense").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
-  const transfer = results.filter((t) => t.type === "transfer").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+  // Parche de continuidad hasta la Fase 2 (ver MULTI_CURRENCY_PLAN.md) — los
+  // resultados pueden venir de cuentas de monedas distintas, así que estos
+  // totales solo suman las de tu moneda principal por ahora.
+  const isMainCurrencyTx = (t) => (accounts.find((a) => a.id === t.account_id)?.currency || settings.main_currency) === settings.main_currency;
+  const income = results.filter((t) => t.type === "income" && isMainCurrencyTx(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+  const expense = results.filter((t) => t.type === "expense" && isMainCurrencyTx(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+  const transfer = results.filter((t) => t.type === "transfer" && isMainCurrencyTx(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
   // Ancho fijo = el de la fecha (siempre "dd/mm/yyyy", mismo ancho) — la
   // categoría se achica con elipsis si no entra, nunca empuja la columna.
   const dateColWidth = useMemo(() => Math.ceil(measureTextWidth("00/00/0000", DATE_COL_FONT)), []);

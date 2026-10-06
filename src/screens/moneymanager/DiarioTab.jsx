@@ -26,8 +26,16 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
   // dependiera de lo que esta pantalla ya cargó. Ver usePendingRateTransactions.
   const { transactions: pendingRateTx } = usePendingRateTransactions(userId);
 
-  const monthIncome = filtered.filter((t) => t.type === "income").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
-  const monthExpense = filtered.filter((t) => t.type === "expense").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+  // Parche de continuidad hasta la Fase 2 (ver MULTI_CURRENCY_PLAN.md): este
+  // resumen suma transacciones de TODAS las cuentas del mes en un solo
+  // número — si hay cuentas de monedas distintas, blendearía valores que ya
+  // no están en la misma moneda (amount_main ahora es "en la moneda de SU
+  // cuenta", no en una principal global). Hasta que haya un selector de
+  // moneda acá (Fase 2), nos quedamos solo con las cuentas de tu moneda
+  // principal — no muestra todo, pero lo que muestra es correcto.
+  const isMainCurrencyTx = (t) => (accounts.find((a) => a.id === t.account_id)?.currency || settings.main_currency) === settings.main_currency;
+  const monthIncome = filtered.filter((t) => t.type === "income" && isMainCurrencyTx(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+  const monthExpense = filtered.filter((t) => t.type === "expense" && isMainCurrencyTx(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
 
   return (
     <div style={{ ...styles.screen, display: "flex", flexDirection: "column" }}>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { X, Menu, Plus, ArrowLeftRight, Trash2, Copy, Star, Divide } from "lucide-react";
 import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
@@ -56,7 +56,11 @@ export default function TransactionForm({
   const [type, setType] = useState(editingTransaction?.type || prefillBookmark?.type || "expense");
   const [date, setDate] = useState(editingTransaction ? dateInputValueInZone(new Date(editingTransaction.date).getTime(), editingTransaction.timezone) : (defaultDate || todayInputValue()));
   const [amount, setAmount] = useState(editingTransaction ? String(editingTransaction.amount) : (prefillBookmark ? String(prefillBookmark.amount) : ""));
-  const [currency, setCurrency] = useState(editingTransaction?.currency || prefillBookmark?.currency || settings.main_currency);
+  const [currency, setCurrency] = useState(
+    editingTransaction?.currency || prefillBookmark?.currency
+    || accounts.find((a) => a.id === (prefillBookmark?.account_id || defaultAccountId))?.currency
+    || settings.main_currency
+  );
   const [exchangeRate, setExchangeRate] = useState(
     (editingTransaction?.exchange_rate || prefillBookmark?.exchange_rate) ? String(editingTransaction?.exchange_rate || prefillBookmark?.exchange_rate) : ""
   );
@@ -83,6 +87,34 @@ export default function TransactionForm({
   const [saving, setSaving] = useState(false);
   const [touched, setTouched] = useState({});
   const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
+
+  // Moneda de la cuenta elegida — es una restricción dura (ver PENDIENTES.md
+  // sección B): toda transacción queda en la moneda de SU cuenta, no en una
+  // principal global. El fallback a main_currency es solo para cuando
+  // todavía no se eligió ninguna cuenta.
+  const accountCurrency = accounts.find((a) => a.id === accountId)?.currency || settings.main_currency;
+  // Sugiere la moneda de la cuenta recién elegida — pero no en el primer
+  // render (ahí ya la sembró el useState de `currency` de arriba, a partir
+  // de editingTransaction/prefillBookmark/defaultAccountId) y no si el
+  // usuario ya tocó el selector de moneda a mano.
+  //
+  // OJO: NO alcanza con un flag "ya corrió una vez" (useRef(true) que se
+  // apaga solo) — React StrictMode (en desarrollo) corre cada efecto DOS
+  // veces a propósito, y ese flag se consume en la primera, dejando pasar
+  // la segunda igual — al reabrir una transacción ya guardada, eso pisaba
+  // su moneda original con la de la cuenta (bug real, encontrado probando).
+  // En cambio, comparar contra el ÚLTIMO accountId que de verdad procesamos
+  // es inmune a eso: las dos corridas de StrictMode ven el mismo accountId
+  // sin cambios, así que las dos se saltean por igual.
+  const lastSuggestedAccountId = useRef(accountId);
+  useEffect(() => {
+    if (accountId === lastSuggestedAccountId.current) return;
+    lastSuggestedAccountId.current = accountId;
+    if (touched.currency || isSynced) return;
+    const acc = accounts.find((a) => a.id === accountId);
+    if (acc) { setCurrency(acc.currency); setRateFlipped(false); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountId]);
 
   const [recurringOpen, setRecurringOpen] = useState(forceRecurringOpen);
   const [freqValue, setFreqValue] = useState("month-1");
@@ -125,12 +157,16 @@ export default function TransactionForm({
   // sin esa opción y no hay forma de mantenerla al editar.
   const currencyOptions = [settings.main_currency, ...(settings.other_currencies || [])];
   if (!currencyOptions.includes(currency)) currencyOptions.push(currency);
+  // La moneda de la cuenta elegida tiene que poder elegirse siempre en este
+  // selector, aunque no esté en "Otras monedas" de Ajustes — es el caso
+  // normal (sin tasa), no una excepción.
+  if (!currencyOptions.includes(accountCurrency)) currencyOptions.push(accountCurrency);
 
   const numericAmount = parseAmountInput(amount);
   const validAmount = !isNaN(numericAmount) && numericAmount > 0;
   const numericRate = parseAmountInput(exchangeRate);
   const canonicalRate = rateFlipped && numericRate ? 1 / numericRate : numericRate;
-  const needsRate = currency !== settings.main_currency;
+  const needsRate = currency !== accountCurrency;
   const validRate = !needsRate || (!isNaN(canonicalRate) && canonicalRate > 0);
 
   const freq = RECURRING_FREQUENCIES.find((f) => f.value === freqValue);
@@ -157,7 +193,7 @@ export default function TransactionForm({
   // Categoría es opcional (queda como "Sin categoría" si no se elige
   // ninguna) — solo transferencia exige sus dos cuentas.
   const canSave = validAmount && validRate && !!accountId && recurringValid && isDirty && (
-    type !== "transfer" || (!!toAccountId && toAccountId !== accountId)
+    type !== "transfer" || (!!toAccountId && toAccountId !== accountId && accounts.find((a) => a.id === toAccountId)?.currency === accountCurrency)
   );
 
   const handleSave = async () => {
@@ -170,7 +206,7 @@ export default function TransactionForm({
     try {
       const txDate = new Date(date + "T12:00:00");
       const rate = needsRate ? canonicalRate : null;
-      const amountMain = computeAmountMain(numericAmount, currency, settings.main_currency, rate);
+      const amountMain = computeAmountMain(numericAmount, currency, accountCurrency, rate);
       let recurring = null;
       if (recurringOpen) {
         const interval = freq.interval ?? customInterval;
@@ -340,7 +376,7 @@ export default function TransactionForm({
           <select
             style={{ ...styles.input, width: 80, flexShrink: 0, padding: "11px 6px", textAlign: "center", fontWeight: 600, color: "#544A3C", opacity: isSynced ? 0.6 : 1 }}
             value={currency}
-            onChange={(e) => { setCurrency(e.target.value); setRateFlipped(false); }}
+            onChange={(e) => { setCurrency(e.target.value); setRateFlipped(false); touch("currency"); }}
             disabled={isSynced}
           >
             {currencyOptions.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -361,7 +397,7 @@ export default function TransactionForm({
         )}
 
         {needsRate && (
-          <Field label={`1 ${rateFlipped ? currency : settings.main_currency} equivale a`} required error={touched.exchangeRate && !validRate ? "Ingresá una tasa válida." : ""}>
+          <Field label={`1 ${rateFlipped ? currency : accountCurrency} equivale a`} required error={touched.exchangeRate && !validRate ? "Ingresá una tasa válida." : ""}>
             <div style={{ display: "flex", gap: 8 }}>
               <div style={{ position: "relative", flex: 1 }}>
                 {/* A diferencia del resto del formulario cuando isSynced, esta
@@ -371,7 +407,7 @@ export default function TransactionForm({
                     "pendiente" hasta que la cargues acá. */}
                 <input style={{ ...styles.input, width: "100%", paddingRight: 50 }} value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} onBlur={() => touch("exchangeRate")} placeholder="1.00" inputMode="decimal" />
                 <span style={{ position: "absolute", top: "50%", right: 13, transform: "translateY(-50%)", fontFamily: "system-ui, sans-serif", fontSize: 14, fontWeight: 600, color: "#544A3C", pointerEvents: "none" }}>
-                  {rateFlipped ? settings.main_currency : currency}
+                  {rateFlipped ? accountCurrency : currency}
                 </span>
               </div>
               <button
@@ -395,7 +431,7 @@ export default function TransactionForm({
 
         {needsRate && validAmount && validRate && (
           <p style={{ ...styles.muted, padding: 0, fontSize: 12.5, margin: 0 }}>
-            {money(numericAmount, currency)} equivalen a {money(numericAmount / canonicalRate, settings.main_currency)}.
+            {money(numericAmount, currency)} equivalen a {money(numericAmount / canonicalRate, accountCurrency)}.
           </p>
         )}
 
@@ -463,7 +499,11 @@ export default function TransactionForm({
             label="A"
             required
             error={touched.toAccountId
-              ? (!toAccountId ? "Este campo es obligatorio." : (toAccountId === accountId ? 'No puede ser la misma cuenta que "De".' : ""))
+              ? (!toAccountId
+                  ? "Este campo es obligatorio."
+                  : toAccountId === accountId
+                    ? 'No puede ser la misma cuenta que "De".'
+                    : (accounts.find((a) => a.id === toAccountId)?.currency !== accountCurrency ? "Tiene que ser una cuenta de la misma moneda." : ""))
               : ""}
           >
             <PickerField
@@ -477,7 +517,11 @@ export default function TransactionForm({
                 .filter((g) => !g.deleted && (g.system_key !== "split_ledger" || isSynced))
                 .map((g) => ({
                   label: g.name,
-                  items: accounts.filter((a) => a.group_id === g.id && a.id !== accountId && ((!a.hidden && !a.deleted) || a.id === toAccountId)).map((a) => ({ value: a.id, label: a.name, icon: a.icon, deleted: a.deleted })),
+                  // Entre monedas distintas no se puede transferir (ver
+                  // PENDIENTES.md sección B) — se filtra acá, salvo que sea
+                  // la cuenta ya elegida (igual que ocultas/eliminadas, para
+                  // no perder la selección al editar algo viejo).
+                  items: accounts.filter((a) => a.group_id === g.id && a.id !== accountId && (a.currency === accountCurrency || a.id === toAccountId) && ((!a.hidden && !a.deleted) || a.id === toAccountId)).map((a) => ({ value: a.id, label: a.name, icon: a.icon, deleted: a.deleted })),
                 }))
                 .filter((g) => g.items.length > 0)}
             />

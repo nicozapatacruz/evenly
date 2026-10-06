@@ -46,7 +46,7 @@ export default function EstadisticasTab({ userId, settings, categories, viewMont
   const swipeHandlers = useMonthSwipe(viewMonth, setViewMonth);
   const slide = useMonthSlide(viewMonth);
 
-  const { incomeTotals, expenseTotals, incomeLoading, expenseLoading, monthTxCount } = useStatsCategoryTotals(userId, viewMonth, filters);
+  const { incomeTotals, expenseTotals, incomeLoading, expenseLoading, monthTxCount } = useStatsCategoryTotals(userId, viewMonth, filters, settings.main_currency);
   const totals = type === "income" ? incomeTotals : expenseTotals;
   const loading = type === "income" ? incomeLoading : expenseLoading;
   const incomeSum = useMemo(() => incomeTotals.reduce((s, t) => s + t.total, 0), [incomeTotals]);

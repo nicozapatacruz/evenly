@@ -77,13 +77,18 @@ function CategoryTimelineChart({ totals, viewMonth, setViewMonth, color, setting
 // para saltar entre meses sin volver atrás.
 export default function CategoryDrillDownScreen({ userId, settings, accounts, categories, slLinks, type, categoryId, categoryName, categoryIcon, viewMonth, setViewMonth, onBack, onNewTransaction, onEditTransaction }) {
   const { transactions: monthTx, loading: loadingMonth } = useMonthTransactions(userId, viewMonth);
-  const { totals, loading: loadingTimeline } = useCategoryTimeline(userId, type, categoryId);
+  const { totals, loading: loadingTimeline } = useCategoryTimeline(userId, type, categoryId, settings.main_currency);
   const swipeHandlers = useMonthSwipe(viewMonth, setViewMonth);
   const slide = useMonthSlide(viewMonth);
 
   const categoryTx = monthTx.filter((t) => t.type === type && (categoryId ? t.category_id === categoryId : !t.category_id));
   const color = type === "income" ? "#3B6E62" : "#B0473A";
-  const monthTotal = categoryTx.reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+  // Parche de continuidad hasta la Fase 2 (ver MULTI_CURRENCY_PLAN.md) —
+  // mismo motivo que useCategoryTimeline arriba: "Total del mes" solo suma
+  // las cuentas de tu moneda principal, para no blendear monedas distintas.
+  const monthTotal = categoryTx
+    .filter((t) => (accounts.find((a) => a.id === t.account_id)?.currency || settings.main_currency) === settings.main_currency)
+    .reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
 
   return (
     <div style={{ ...styles.screen, display: "flex", flexDirection: "column" }}>

@@ -25,6 +25,7 @@ export function TransactionDayGroups({ transactions, settings, accounts, categor
   const accountName = (id) => accounts.find((a) => a.id === id)?.name || "—";
   const accountIcon = (id) => accounts.find((a) => a.id === id)?.icon;
   const accountDeleted = (id) => !!accounts.find((a) => a.id === id)?.deleted;
+  const accountCurrency = (id) => accounts.find((a) => a.id === id)?.currency || settings.main_currency;
   const categoryIcon = (id) => categories.find((c) => c.id === id)?.icon;
   const categoryDeleted = (id) => !!categories.find((c) => c.id === id)?.deleted;
 
@@ -90,12 +91,17 @@ export function TransactionDayGroups({ transactions, settings, accounts, categor
     <>
       {byDay.map(([dayKey, txs]) => {
         const d = new Date(dayKey + "T12:00:00");
+        // Sin perspectiva de cuenta (Transacciones/drill-down, puede cruzar
+        // varias cuentas): parche de continuidad hasta la Fase 2, ver nota
+        // igual en DiarioTab.jsx — solo suma cuentas de tu moneda principal,
+        // para no blendear monedas distintas en un solo número. Con
+        // perspectiva (extracto de UNA cuenta) no aplica, ya es una sola.
         const dayIncome = perspectiveAccountId
           ? txs.reduce((s, t) => { const c = contribution(t); return c > 0 ? s + c : s; }, 0)
-          : txs.filter((t) => t.type === "income").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+          : txs.filter((t) => t.type === "income" && accountCurrency(t.account_id) === settings.main_currency).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
         const dayExpense = perspectiveAccountId
           ? txs.reduce((s, t) => { const c = contribution(t); return c < 0 ? s - c : s; }, 0)
-          : txs.filter((t) => t.type === "expense").reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+          : txs.filter((t) => t.type === "expense" && accountCurrency(t.account_id) === settings.main_currency).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
         return (
           <div key={dayKey} style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
             <div
@@ -179,8 +185,14 @@ export function TransactionDayGroups({ transactions, settings, accounts, categor
                       }}>
                         {money(t.amount, t.currency)}
                       </span>
-                      {t.currency !== settings.main_currency && (
-                        <span style={{ fontSize: 11, color: "#6B6355" }}>= {money(t.amount_main, settings.main_currency)}</span>
+                      {/* `amount_main` está en la moneda de la CUENTA de esta
+                          fila (restricción dura, ver PENDIENTES.md sección B),
+                          no en una principal global — comparar/mostrar contra
+                          esa, no contra settings.main_currency (que en una
+                          lista con cuentas de varias monedas puede ser
+                          cualquiera de ellas, o ninguna). */}
+                      {t.currency !== accountCurrency(t.account_id) && (
+                        <span style={{ fontSize: 11, color: "#6B6355" }}>= {money(t.amount_main, accountCurrency(t.account_id))}</span>
                       )}
                       {runningBalances?.has(t.id) && (
                         <span style={{ fontSize: 11, color: "#6B6355" }}>{money(runningBalances.get(t.id), settings.main_currency)}</span>

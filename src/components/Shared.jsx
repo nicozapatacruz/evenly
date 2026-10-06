@@ -25,7 +25,7 @@ export function SplitLedgerIcon({ size = 18, color = "#ba5331", style }) {
 // switch dentro de una caja con el mismo estilo que un input. Componentizado
 // a propósito: ya se desalineó dos veces por copiarlo a mano (uno quedó en
 // negrilla por error, otro heredó la negrilla del label sin querer).
-export function ToggleField({ label, description, checked, onChange, disabled }) {
+export function ToggleField({ label, description, checked, onChange, disabled, error }) {
   return (
     <label style={styles.label}>
       {label}
@@ -40,6 +40,7 @@ export function ToggleField({ label, description, checked, onChange, disabled })
           <span style={{ position: "absolute", top: 3, left: checked ? 21 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.15s" }} />
         </button>
       </div>
+      {error && <span style={{ fontSize: 12, fontWeight: 400, color: "#B0473A" }}>{error}</span>}
     </label>
   );
 }
@@ -430,7 +431,7 @@ export function Footer({ children }) {
 // una lista plana sin encabezados (ej. categorías, que no se agrupan).
 let pickerInstanceCounter = 0;
 
-export function PickerField({ value, onChange, groups, placeholder = "Elegir", onClear, onBlur, disabled = false }) {
+export function PickerField({ value, onChange, groups, placeholder = "Elegir", onClear, onBlur, disabled = false, emptyMessage = "No hay opciones para elegir." }) {
   const [open, setOpen] = useState(false);
   const idRef = useRef(null);
   if (idRef.current === null) idRef.current = ++pickerInstanceCounter;
@@ -515,6 +516,11 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", o
       </div>
       {open && (
         <div style={{ border: "1px solid #DDD2BE", borderTop: "none", borderRadius: "0 0 10px 10px", background: "#fff", overflow: "hidden" }}>
+          {groups.length === 0 && (
+            <p style={{ margin: 0, padding: "14px 10px", fontSize: 13, color: "#A89A87", fontFamily: "system-ui, sans-serif", textAlign: "center", background: "#F5F1E8" }}>
+              {emptyMessage}
+            </p>
+          )}
           {groups.map((g) => (
             <div key={g.label || "flat"}>
               {g.label && (

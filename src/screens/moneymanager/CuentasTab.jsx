@@ -7,7 +7,7 @@ import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
 import { RootHeader, TopBar, ConfirmInline, Footer, Field } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
-import { accountBalance, groupBalance, computeCreditCardBalance, disableAutoPayForDeletedAccounts, useCreditCardActivity } from "../../lib/moneyManagerData.js";
+import { accountBalance, computeCreditCardBalance, disableAutoPayForDeletedAccounts, useCreditCardActivity } from "../../lib/moneyManagerData.js";
 import AccountDetailScreen from "./AccountDetailScreen.jsx";
 import AccountActivityScreen from "./AccountActivityScreen.jsx";
 import TransactionForm from "./TransactionForm.jsx";
@@ -105,9 +105,27 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
   }
 
   const balances = accounts.filter((a) => !a.deleted).map((a) => ({ account: a, balance: accountBalance(a.id, accountTotals) }));
-  const capital = balances.filter((b) => b.balance > 0).reduce((s, b) => s + b.balance, 0);
-  const debt = balances.filter((b) => b.balance < 0).reduce((s, b) => s + b.balance, 0);
+  // Capital/deuda ya no se suman a una sola moneda — cada cuenta tiene la
+  // suya fija (ver PENDIENTES.md sección B), así que se agrupan por moneda y
+  // se muestra una línea por cada una presente (una sola si, como es lo
+  // normal, todas tus cuentas comparten moneda).
+  const totalsByCurrency = [...new Set(balances.map((b) => b.account.currency))]
+    .map((currency) => {
+      const subset = balances.filter((b) => b.account.currency === currency);
+      const capital = subset.filter((b) => b.balance > 0).reduce((s, b) => s + b.balance, 0);
+      const debt = subset.filter((b) => b.balance < 0).reduce((s, b) => s + b.balance, 0);
+      return { currency, capital, debt, balance: capital + debt };
+    })
+    .sort((a, b) => (a.currency === settings.main_currency ? -1 : b.currency === settings.main_currency ? 1 : 0));
   const activeGroups = groups.filter((g) => !g.deleted);
+
+  // Saldo de un conjunto de cuentas, agrupado por moneda — para subtotales
+  // de grupo (una línea por moneda en vez de sumarlas entre sí).
+  const balancesByCurrency = (accountList) => {
+    const byCurrency = new Map();
+    for (const a of accountList) byCurrency.set(a.currency, (byCurrency.get(a.currency) || 0) + accountBalance(a.id, accountTotals));
+    return [...byCurrency.entries()].map(([currency, total]) => ({ currency, total }));
+  };
 
   // Solo tiene sentido mostrar una cuenta eliminada acá si alguna vez tuvo
   // movimientos (si nunca tuvo transacciones, no hay ningún total que
@@ -130,20 +148,22 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
         }
       />
       <div style={{ ...styles.form, paddingTop: 12, gap: 8 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", textAlign: "center", padding: "0 4px 8px" }}>
-          <div style={{ flex: 1 }}>
-            <p style={{ ...styles.muted, padding: 0, fontSize: 12 }}>Capital</p>
-            <p style={{ margin: "2px 0 0", fontWeight: 700, color: balanceColor(capital) }}>{money(capital, settings.main_currency)}</p>
+        {totalsByCurrency.map(({ currency, capital, debt, balance }) => (
+          <div key={currency} style={{ display: "flex", justifyContent: "space-between", textAlign: "center", padding: "0 4px 8px" }}>
+            <div style={{ flex: 1 }}>
+              <p style={{ ...styles.muted, padding: 0, fontSize: 12 }}>Capital{totalsByCurrency.length > 1 ? ` (${currency})` : ""}</p>
+              <p style={{ margin: "2px 0 0", fontWeight: 700, color: balanceColor(capital) }}>{money(capital, currency)}</p>
+            </div>
+            <div style={{ flex: 1 }}>
+              <p style={{ ...styles.muted, padding: 0, fontSize: 12 }}>A deber</p>
+              <p style={{ margin: "2px 0 0", fontWeight: 700, color: balanceColor(debt) }}>{money(debt, currency)}</p>
+            </div>
+            <div style={{ flex: 1 }}>
+              <p style={{ ...styles.muted, padding: 0, fontSize: 12 }}>Balance</p>
+              <p style={{ margin: "2px 0 0", fontWeight: 700 }}>{money(balance, currency)}</p>
+            </div>
           </div>
-          <div style={{ flex: 1 }}>
-            <p style={{ ...styles.muted, padding: 0, fontSize: 12 }}>A deber</p>
-            <p style={{ margin: "2px 0 0", fontWeight: 700, color: balanceColor(debt) }}>{money(debt, settings.main_currency)}</p>
-          </div>
-          <div style={{ flex: 1 }}>
-            <p style={{ ...styles.muted, padding: 0, fontSize: 12 }}>Balance</p>
-            <p style={{ margin: "2px 0 0", fontWeight: 700 }}>{money(capital + debt, settings.main_currency)}</p>
-          </div>
-        </div>
+        ))}
 
         {activeGroups.length === 0 && (
           <div style={styles.emptyState}>
@@ -156,7 +176,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
           const groupAccounts = accounts.filter((a) => a.group_id === g.id && !a.deleted);
           if (groupAccounts.length === 0) return null;
           const visibleAccounts = groupAccounts.filter((a) => !a.hidden);
-          const gBalance = groupBalance(g.id, accounts, accountTotals);
+          const gBalances = balancesByCurrency(groupAccounts);
           // Línea divisoria (mismo borde que el header) antes del grupo
           // "Split Ledger" — para que se note que no es un grupo común, es
           // el reflejo de tus grupos compartidos vinculados.
@@ -167,7 +187,11 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
               <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
               <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "#FAF7F2", borderBottom: visibleAccounts.length ? "1px solid #F0EBE2" : "none" }}>
                 <span style={{ fontWeight: 700, fontSize: 13.5, fontFamily: "system-ui, sans-serif" }}>{g.name}</span>
-                <span style={{ fontWeight: 700, fontSize: 13.5, fontFamily: "system-ui, sans-serif", color: balanceColor(gBalance) }}>{money(gBalance, settings.main_currency)}</span>
+                <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+                  {gBalances.map(({ currency, total }) => (
+                    <span key={currency} style={{ fontWeight: 700, fontSize: 13.5, fontFamily: "system-ui, sans-serif", color: balanceColor(total) }}>{money(total, currency)}</span>
+                  ))}
+                </span>
               </div>
               {visibleAccounts.map((a) => {
                 const cc = a.is_credit_card ? computeCreditCardBalance(a.id, ccTx, a.statement_day || 1) : null;
@@ -183,11 +207,11 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
                     </span>
                     {cc ? (
                       <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0 }}>
-                        <span style={{ color: balanceColor(cc.actual) }}>{money(cc.actual, settings.main_currency)}</span>
-                        <span style={{ fontSize: 11, color: "#6B6355" }}>A pagar: {money(cc.pasado, settings.main_currency)}</span>
+                        <span style={{ color: balanceColor(cc.actual) }}>{money(cc.actual, a.currency)}</span>
+                        <span style={{ fontSize: 11, color: "#6B6355" }}>A pagar: {money(cc.pasado, a.currency)}</span>
                       </span>
                     ) : (
-                      <span style={{ color: balanceColor(accountBalance(a.id, accountTotals)), flexShrink: 0 }}>{money(accountBalance(a.id, accountTotals), settings.main_currency)}</span>
+                      <span style={{ color: balanceColor(accountBalance(a.id, accountTotals)), flexShrink: 0 }}>{money(accountBalance(a.id, accountTotals), a.currency)}</span>
                     )}
                   </div>
                 );
@@ -211,12 +235,16 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
             {deletedOpen && (
               <div style={{ border: "1px solid #DDD2BE", borderTop: "none", borderRadius: "0 0 10px 10px", padding: "12px", display: "flex", flexDirection: "column", gap: 8, background: "#fff" }}>
                 {deletedByGroup.map(({ group, items }) => {
-                  const groupTotal = items.reduce((s, a) => s + accountBalance(a.id, accountTotals), 0);
+                  const groupTotals = balancesByCurrency(items);
                   return (
                   <div key={group.id} style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: "#FAF7F2", borderBottom: "1px solid #F0EBE2" }}>
                       <span style={{ fontWeight: 700, fontSize: 13.5, fontFamily: "system-ui, sans-serif" }}>{group.name}</span>
-                      <span style={{ fontWeight: 700, fontSize: 13.5, fontFamily: "system-ui, sans-serif", color: balanceColor(groupTotal) }}>{money(groupTotal, settings.main_currency)}</span>
+                      <span style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+                        {groupTotals.map(({ currency, total }) => (
+                          <span key={currency} style={{ fontWeight: 700, fontSize: 13.5, fontFamily: "system-ui, sans-serif", color: balanceColor(total) }}>{money(total, currency)}</span>
+                        ))}
+                      </span>
                     </div>
                     {items.map((a) => (
                       <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14, opacity: 0.6 }}>
@@ -224,7 +252,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
                           {a.icon && <span style={{ fontSize: 16, lineHeight: 1 }}>{a.icon}</span>}
                           {a.name}
                         </span>
-                        <span style={{ color: balanceColor(accountBalance(a.id, accountTotals)), flexShrink: 0 }}>{money(accountBalance(a.id, accountTotals), settings.main_currency)}</span>
+                        <span style={{ color: balanceColor(accountBalance(a.id, accountTotals)), flexShrink: 0 }}>{money(accountBalance(a.id, accountTotals), a.currency)}</span>
                       </div>
                     ))}
                   </div>

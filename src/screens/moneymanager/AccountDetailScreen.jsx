@@ -22,9 +22,15 @@ export default function AccountDetailScreen({ session, account = null, groups, a
   const [groupId, setGroupId] = useState(account?.group_id || defaultGroupId || groups[0]?.id || "");
   const [name, setName] = useState(account?.name || "");
   const [icon, setIcon] = useState(account?.icon || "");
-  // Fija para siempre al crear la cuenta — no se vuelve a pedir ni se puede
-  // cambiar después (ver PENDIENTES.md sección B, versión acotada).
+  // Restricción dura (ver PENDIENTES.md sección B): toda transacción de esta
+  // cuenta queda en esta moneda. Editable mientras la cuenta no tenga
+  // movimientos todavía (ver `hasTransactions` más abajo) — después queda
+  // fija, para no invalidar el `amount_main` ya calculado de lo existente.
   const [currency, setCurrency] = useState(account?.currency || settings.main_currency);
+  // Proxy de "tiene movimientos": la vista agregada (`accountTotals`) solo
+  // trae una fila por cuenta que aparezca en mm_transactions — una cuenta
+  // sin ningún movimiento todavía no tiene fila ahí.
+  const hasTransactions = !!account && accountTotals.some((t) => t.account_id === account.id);
   const [isCreditCard, setIsCreditCard] = useState(account?.is_credit_card || false);
   const [paymentAccountId, setPaymentAccountId] = useState(account?.payment_account_id || "");
   const [statementDay, setStatementDay] = useState(account?.statement_day || 1);
@@ -58,21 +64,42 @@ export default function AccountDetailScreen({ session, account = null, groups, a
   // prendido — ahí sí es obligatoria, porque el job no tiene de dónde sacar
   // la plata sin ella.
   const paymentAccountRequired = isCreditCard && autoPay && !paymentAccountId;
+  // La tarjeta y su cuenta de pago tienen que ser de la misma moneda — el
+  // pago automático mueve el mismo monto de una a otra, sin convertir nada
+  // (ver PENDIENTES.md sección B). Si ya había una cuenta de pago elegida y
+  // acá arriba cambiás la moneda de la tarjeta, queda en conflicto: hay que
+  // quitarla primero, no se resuelve solo.
+  const paymentAccountCurrencyMismatch = isCreditCard && !!paymentAccountId
+    && accounts.find((a) => a.id === paymentAccountId)?.currency !== currency;
+  // Si esta cuenta ya es la cuenta de pago de otra tarjeta, no se puede
+  // convertir en tarjeta ella misma — mismo motivo que ya impide elegir una
+  // tarjeta como cuenta de pago en el selector de abajo ("no tiene sentido
+  // pagar una tarjeta con otra"). Hay que cambiarle la cuenta de pago a esa
+  // otra tarjeta primero.
+  const dependentPaymentCards = account
+    ? accounts.filter((a) => a.payment_account_id === account.id && a.is_credit_card && !a.deleted)
+    : [];
+  const becomingCardConflict = isCreditCard && dependentPaymentCards.length > 0;
   // Cuenta pseudo de un grupo vinculado de Split Ledger — se desvincula
   // desde ahí, no se edita/borra acá (rompería la referencia del vínculo).
   const isSystemAccount = !!account && groups.find((g) => g.id === account.group_id)?.system_key === "split_ledger";
-  const canSave = isDirty && !nameRequired && !!groupId && !paymentAccountRequired && !isSystemAccount;
+  const canSave = isDirty && !nameRequired && !!groupId && !paymentAccountRequired && !paymentAccountCurrencyMismatch && !becomingCardConflict && !isSystemAccount;
 
   // Mismo criterio que el selector de cuentas de TransactionForm: agrupado
   // por grupo de cuentas, sin ocultas/eliminadas (salvo que sea la ya
   // elegida, para no perder la selección) — y sin otras tarjetas de crédito,
-  // porque no tiene sentido pagar una tarjeta con otra.
+  // porque no tiene sentido pagar una tarjeta con otra. Tampoco se muestran
+  // cuentas de otra moneda a la de esta tarjeta — salvo la ya elegida, para
+  // que el conflicto de arriba se pueda ver y resolver, no desaparezca solo.
   const paymentAccountGroups = groups
-    .filter((g) => !g.deleted)
+    // El grupo "Split Ledger" (auto-creado al vincular un grupo compartido)
+    // es puramente informativo — esas cuentas nunca se eligen a mano en
+    // ningún lado (ver TransactionForm), tampoco acá como cuenta de pago.
+    .filter((g) => !g.deleted && g.system_key !== "split_ledger")
     .map((g) => ({
       label: g.name,
       items: accounts
-        .filter((a) => a.group_id === g.id && (!account || a.id !== account.id) && !a.is_credit_card && ((!a.hidden && !a.deleted) || a.id === paymentAccountId))
+        .filter((a) => a.group_id === g.id && (!account || a.id !== account.id) && !a.is_credit_card && (a.currency === currency || a.id === paymentAccountId) && ((!a.hidden && !a.deleted) || a.id === paymentAccountId))
         .map((a) => ({ value: a.id, label: a.name, icon: a.icon, deleted: a.deleted })),
     }))
     .filter((g) => g.items.length > 0);
@@ -186,27 +213,32 @@ export default function AccountDetailScreen({ session, account = null, groups, a
           </p>
         )}
 
-        <Field label="Moneda">
-          <select style={styles.input} value={currency} onChange={(e) => setCurrency(e.target.value)}>
+        <Field label="Moneda" info={hasTransactions ? "Esta cuenta ya tiene movimientos asociados. No se puede cambiar la moneda." : undefined}>
+          <select style={{ ...styles.input, opacity: hasTransactions ? 0.6 : 1 }} value={currency} onChange={(e) => setCurrency(e.target.value)} disabled={hasTransactions}>
             {CURRENCY_LIST.map((c) => <option key={c} value={c}>{c} ({CURRENCIES[c].symbol})</option>)}
           </select>
         </Field>
-        {account && currency !== account.currency && (
-          <p style={{ ...styles.muted, padding: 0, marginTop: -8, color: "#B0473A" }}>
-            Es solo una etiqueta: cambiarla no convierte ningún monto ya registrado ni futuro, solo identifica en qué moneda está esta cuenta.
-          </p>
-        )}
 
         <ToggleField
           label="Tarjeta de crédito"
           description="Los gastos se reflejan como saldo a pagar según un ciclo de facturación."
           checked={isCreditCard}
           onChange={setIsCreditCard}
+          error={becomingCardConflict
+            ? `Es la cuenta de pago de ${dependentPaymentCards.map((c) => `"${c.name}"`).join(", ")}. Cambiale la cuenta de pago a ${dependentPaymentCards.length > 1 ? "esas tarjetas" : "esa tarjeta"} antes de convertir esta en tarjeta.`
+            : ""}
         />
 
         {isCreditCard && (
           <>
-            <Field label="Cuenta de pago" info="Cuenta de la cual se pagará esta tarjeta de crédito." required={autoPay} error={touched.paymentAccountId && paymentAccountRequired ? "Este campo es obligatorio." : ""}>
+            <Field
+              label="Cuenta de pago"
+              info="Cuenta de la cual se pagará esta tarjeta de crédito."
+              required={autoPay}
+              error={paymentAccountCurrencyMismatch
+                ? "La cuenta de pago asociada está en otra moneda. Para cambiar la moneda de la tarjeta debés quitar la cuenta asociada primero y luego asociar una en la misma moneda."
+                : (touched.paymentAccountId && paymentAccountRequired ? "Este campo es obligatorio." : "")}
+            >
               <PickerField
                 value={paymentAccountId}
                 onChange={setPaymentAccountId}
@@ -214,6 +246,7 @@ export default function AccountDetailScreen({ session, account = null, groups, a
                 onBlur={() => touch("paymentAccountId")}
                 placeholder="Elegí una cuenta"
                 groups={paymentAccountGroups}
+                emptyMessage="No hay cuentas en esa moneda para elegir."
               />
             </Field>
             {accounts.find((a) => a.id === paymentAccountId)?.deleted && (

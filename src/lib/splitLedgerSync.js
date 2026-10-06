@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient.js";
+import { fetchAllRows } from "./moneyManagerData.js";
 
 /* =========================================================================
    SINCRONIZACIÓN SPLIT LEDGER → MONEY MANAGER — reconciliación completa del
@@ -48,16 +49,24 @@ async function loadLinkContext(link, userId) {
   // Desde que se vinculó (por created_at, no por la fecha propia del gasto —
   // "nada retroactivo" es sobre cuándo se CARGÓ el dato, no sobre qué fecha
   // tiene; un gasto cargado hoy con fecha de ayer sí sincroniza).
-  const [{ data: expenses }, { data: payments }] = await Promise.all([
-    supabase.from("expenses")
+  // fetchAllRows (no un .select liso): un grupo vinculado desde hace mucho,
+  // con actividad muy alta, podría superar el límite de 1000 filas que
+  // PostgREST aplica por defecto a cualquier consulta sin paginar (ver el
+  // comentario de fetchAllRows en moneyManagerData.js) — acá el orden no
+  // afecta la reconciliación (es un diff por id, no algo secuencial), así
+  // que paginar por id no cambia el resultado, solo lo hace seguro.
+  const [expenses, payments] = await Promise.all([
+    fetchAllRows((from, to) => supabase.from("expenses")
       .select("id, description, amount, currency, date, payers, shares, deleted, created_at")
-      .eq("group_id", link.group_id).gte("created_at", link.linked_since),
-    supabase.from("payments")
+      .eq("group_id", link.group_id).gte("created_at", link.linked_since)
+      .order("id", { ascending: true }).range(from, to)),
+    fetchAllRows((from, to) => supabase.from("payments")
       .select("id, from_member_id, to_member_id, amount, currency, date, note, deleted, created_at")
-      .eq("group_id", link.group_id).gte("created_at", link.linked_since),
+      .eq("group_id", link.group_id).gte("created_at", link.linked_since)
+      .order("id", { ascending: true }).range(from, to)),
   ]);
 
-  return { groupName: group.name, memberId: member.id, expenses: expenses || [], payments: payments || [] };
+  return { groupName: group.name, memberId: member.id, expenses, payments };
 }
 
 // ¿Tiene esta fila alguna parte para mí? La moneda ya NO decide si se

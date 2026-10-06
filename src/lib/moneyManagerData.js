@@ -406,7 +406,13 @@ export function useAccountMonthTotals(userId, accountId) {
 // useMonthTransactions + agregación en el cliente en vez de esta vista) evita
 // pedir datos que no se van a usar — ver la nota de enabled en
 // useMonthTransactions, mismo criterio.
-export function useCategoryMonthTotals(userId, viewMonth, type, enabled = true) {
+// `mainCurrency`: parche mínimo mientras Estadísticas no tiene (todavía) un
+// selector de moneda propio (ver PENDIENTES.md sección B/C, Fase 2) — la
+// vista ya trae `currency` por fila (agrupada por la moneda de CADA cuenta,
+// no blendeada), así que acá nos quedamos solo con las de tu moneda
+// principal para no mezclar números de monedas distintas en una sola torta.
+// Si usás una sola moneda (el caso normal hoy) esto no cambia nada visible.
+export function useCategoryMonthTotals(userId, viewMonth, type, mainCurrency, enabled = true) {
   const year = viewMonth.getFullYear();
   const month = viewMonth.getMonth() + 1;
   const [totals, setTotals] = useState([]);
@@ -426,10 +432,11 @@ export function useCategoryMonthTotals(userId, viewMonth, type, enabled = true) 
       .eq("user_id", userId)
       .eq("type", type)
       .eq("year", year)
-      .eq("month", month);
+      .eq("month", month)
+      .eq("currency", mainCurrency);
     setTotals(data || []);
     setLoading(false);
-  }, [userId, year, month, type, enabled]);
+  }, [userId, year, month, type, enabled, mainCurrency]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -439,6 +446,11 @@ export function useCategoryMonthTotals(userId, viewMonth, type, enabled = true) 
 // Agrega transacciones ya traídas (crudo) por categoría — mismo shape
 // {category_id, total} que devuelve mm_category_month_totals, para que
 // quien consuma el resultado no tenga que saber de dónde vino el dato.
+// NOTA (Fase 1 de multi-moneda, ver PENDIENTES.md sección B): a diferencia
+// de useCategoryMonthTotals, este camino (usado cuando hay filtros activos)
+// todavía NO filtra por moneda — blendea amount_main de cuentas de
+// distinta moneda si las hay. Gap conocido, queda para la Fase 2 junto con
+// el resto del rediseño de Estadísticas/Buscador.
 function aggregateByCategory(transactions, type) {
   const map = new Map();
   for (const t of transactions) {
@@ -456,10 +468,10 @@ function aggregateByCategory(transactions, type) {
 // y agrega acá — cada camino deshabilita el que no usa, para no pedir datos
 // de más en ningún caso. `monthTxCount` se expone para distinguir "no hay
 // nada este mes" de "el filtro no dejó nada" en la UI.
-export function useStatsCategoryTotals(userId, viewMonth, filters) {
+export function useStatsCategoryTotals(userId, viewMonth, filters, mainCurrency) {
   const filtering = hasActiveFilters(filters);
-  const { totals: incomeAgg, loading: incomeAggLoading } = useCategoryMonthTotals(userId, viewMonth, "income", !filtering);
-  const { totals: expenseAgg, loading: expenseAggLoading } = useCategoryMonthTotals(userId, viewMonth, "expense", !filtering);
+  const { totals: incomeAgg, loading: incomeAggLoading } = useCategoryMonthTotals(userId, viewMonth, "income", mainCurrency, !filtering);
+  const { totals: expenseAgg, loading: expenseAggLoading } = useCategoryMonthTotals(userId, viewMonth, "expense", mainCurrency, !filtering);
   const { transactions: monthTx, loading: monthTxLoading } = useMonthTransactions(userId, viewMonth, filtering);
   const filteredTx = useMemo(() => (filtering ? monthTx.filter((t) => matchesFilters(t, filters)) : monthTx), [monthTx, filtering, filters]);
 
@@ -478,19 +490,20 @@ export function useStatsCategoryTotals(userId, viewMonth, filters) {
 // mes, no hace falta acotar por rango) y el componente arma la ventana de
 // meses a mostrar alrededor del mes elegido. `categoryId` puede ser null
 // ("Sin categoría").
-export function useCategoryTimeline(userId, type, categoryId) {
+// `mainCurrency`: mismo parche mínimo que useCategoryMonthTotals — ver nota ahí.
+export function useCategoryTimeline(userId, type, categoryId, mainCurrency) {
   const [totals, setTotals] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     if (!userId) { setLoading(false); return; }
     setLoading(true);
-    let query = supabase.from("mm_category_month_totals").select("*").eq("user_id", userId).eq("type", type);
+    let query = supabase.from("mm_category_month_totals").select("*").eq("user_id", userId).eq("type", type).eq("currency", mainCurrency);
     query = categoryId ? query.eq("category_id", categoryId) : query.is("category_id", null);
     const { data } = await query;
     setTotals(data || []);
     setLoading(false);
-  }, [userId, type, categoryId]);
+  }, [userId, type, categoryId, mainCurrency]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -567,6 +580,28 @@ export async function searchTransactions(userId, filters) {
   return data || [];
 }
 
+// PostgREST limita cada consulta a 1000 filas por defecto — para una cuenta
+// con más historial que eso (cualquier cuenta usada activamente durante
+// varios años), un `.select` sin paginar trae una porción ARBITRARIA (sin
+// `.order`, ni siquiera se sabe cuál) y descarta el resto en silencio, sin
+// ningún error. Bug real encontrado 2026-10-06: una tarjeta/cuenta con más
+// de 1000 movimientos calculaba su saldo con datos incompletos. Esta
+// función pagina con `.range()` hasta traer todo — `buildQuery(from, to)`
+// tiene que devolver la MISMA consulta cada vez, solo cambiando el rango.
+export async function fetchAllRows(buildQuery) {
+  const pageSize = 1000;
+  let all = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await buildQuery(from, from + pageSize - 1);
+    if (error) throw error;
+    all = all.concat(data || []);
+    if (!data || data.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+}
+
 // Transacciones relevantes para calcular "saldo a pagar"/"restante" de las
 // tarjetas de crédito — una sola consulta acotada a las cuentas que son
 // tarjeta (no toda la tabla), sin límite de fecha (el balde "pasado" no
@@ -580,13 +615,20 @@ export function useCreditCardActivity(userId, creditCardIds) {
     if (!userId || !idsKey) { setTransactions([]); setLoading(false); return; }
     setLoading(true);
     const idList = idsKey;
-    const { data } = await supabase
-      .from("mm_transactions")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("deleted", false)
-      .or(`account_id.in.(${idList}),to_account_id.in.(${idList})`);
-    setTransactions(data || []);
+    try {
+      const data = await fetchAllRows((from, to) => supabase
+        .from("mm_transactions")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("deleted", false)
+        .or(`account_id.in.(${idList}),to_account_id.in.(${idList})`)
+        .order("id", { ascending: true })
+        .range(from, to));
+      setTransactions(data);
+    } catch (e) {
+      console.error("useCreditCardActivity: no se pudo traer el historial completo", e);
+      setTransactions([]);
+    }
     setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, idsKey]);
@@ -691,21 +733,23 @@ async function runCreditCardAutoPay(userId) {
   );
   if (cards.length === 0) return;
 
-  const { data: settings } = await supabase.from("mm_settings").select("main_currency").eq("user_id", userId).maybeSingle();
-  const mainCurrency = settings?.main_currency || DEFAULT_SETTINGS.main_currency;
-
   for (const card of cards) {
-    const { data: tx } = await supabase
+    // fetchAllRows (no un .select liso) — ver su comentario arriba, el
+    // pago automático necesita el historial COMPLETO de la tarjeta para
+    // calcular bien cuánto transferir, no una porción truncada a 1000.
+    const tx = await fetchAllRows((from, to) => supabase
       .from("mm_transactions")
       .select("*")
       .eq("user_id", userId)
       .eq("deleted", false)
-      .or(`account_id.eq.${card.id},to_account_id.eq.${card.id}`);
+      .or(`account_id.eq.${card.id},to_account_id.eq.${card.id}`)
+      .order("id", { ascending: true })
+      .range(from, to));
     // Copia mutable: cada pago generado en una vuelta del while tiene que
     // "verse" en la vuelta siguiente (si no, el ciclo 2 vuelve a contar como
     // pendiente lo que el ciclo 1 ya pagó, porque computeCreditCardBalance
     // mira todo el historial de una, no incrementalmente).
-    const transactions = [...(tx || [])];
+    const transactions = [...tx];
 
     let current = card.next_payment_date;
     let next = new Date(current);
@@ -727,9 +771,12 @@ async function runCreditCardAutoPay(userId) {
       const { pasado } = computeCreditCardBalance(card.id, transactions, card.statement_day, next);
       if (pasado < -0.004) {
         const amount = -pasado;
+        // Tarjeta y cuenta de pago son siempre la misma moneda (ver
+        // AccountDetailScreen, lo valida al guardar) — se mueve el mismo
+        // monto en ambas puntas, sin ninguna conversión de por medio.
         const paymentTx = {
           user_id: userId, type: "transfer", account_id: card.payment_account_id, to_account_id: card.id,
-          category_id: null, currency: mainCurrency, amount, exchange_rate: null, amount_main: amount,
+          category_id: null, currency: card.currency, amount, exchange_rate: null, amount_main: amount,
           title: "Pago automático", memo: null, date: next.toISOString(),
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         };
@@ -794,7 +841,7 @@ export function usePendingRateTransactions(userId) {
     setLoading(true);
     const { data: settingsRow } = await supabase.from("mm_settings").select("main_currency").eq("user_id", userId).maybeSingle();
     const mainCurrency = settingsRow?.main_currency || "EUR";
-    const { data } = await supabase
+    const data = await fetchAllRows((from, to) => supabase
       .from("mm_transactions")
       .select("*")
       .eq("user_id", userId)
@@ -802,8 +849,12 @@ export function usePendingRateTransactions(userId) {
       .not("sl_link_id", "is", null)
       .is("exchange_rate", null)
       .neq("currency", mainCurrency)
-      .order("date", { ascending: true });
-    setTransactions(data || []);
+      .order("id", { ascending: true })
+      .range(from, to));
+    // La paginación ordena por id (requisito de fetchAllRows); se reordena acá
+    // por fecha, que es el orden real que necesita la pantalla.
+    data.sort((a, b) => new Date(a.date) - new Date(b.date));
+    setTransactions(data);
     setLoading(false);
   }, [userId]);
 
@@ -812,18 +863,12 @@ export function usePendingRateTransactions(userId) {
   return { transactions, loading, reload: load };
 }
 
-// accountTotals: una fila por cuenta (vista mm_account_totals), ya sumada y
-// convertida a la moneda principal del lado del servidor (suma `amount_main`,
-// no `amount`) — acá no hay más conversión que hacer.
+// accountTotals: una fila por cuenta (vista mm_account_totals), ya sumada
+// del lado del servidor (suma `amount_main`, no `amount`) — acá no hay más
+// conversión que hacer. Restricción dura (ver PENDIENTES.md sección B): como
+// toda transacción de una cuenta queda en SU moneda, este total ya está en
+// la moneda de esa cuenta (`accounts.find(a => a.id === accountId).currency`),
+// no en una principal global.
 export function accountBalance(accountId, accountTotals) {
   return accountTotals.find((t) => t.account_id === accountId)?.total || 0;
-}
-
-export function groupBalance(groupId, accounts, accountTotals) {
-  // Oculta sigue sumando (solo se le esconde la fila individual) — eliminada
-  // no: ya no es una cuenta activa, aunque siga en memoria para poder
-  // mostrar su nombre en transacciones viejas.
-  return accounts
-    .filter((a) => a.group_id === groupId && !a.deleted)
-    .reduce((sum, a) => sum + accountBalance(a.id, accountTotals), 0);
 }

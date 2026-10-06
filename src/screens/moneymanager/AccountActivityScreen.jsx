@@ -34,6 +34,14 @@ export default function AccountActivityScreen({
   tab, setTab, viewMonth, setViewMonth, onBack, onNewTransaction, onEditTransaction,
 }) {
   const { totals, loading: loadingTotals } = useAccountMonthTotals(userId, accountId);
+  // Restricción dura (ver PENDIENTES.md sección B): esta pantalla siempre
+  // está acotada a UNA cuenta, así que está siempre en SU moneda, nunca en
+  // la principal global. En vez de tocar cada `settings.main_currency` de
+  // los 3 sub-tabs de abajo (y de TransactionDayGroups, que también recibe
+  // `settings`), se les pasa esta versión ya "pisada" con la moneda real de
+  // la cuenta — ningún otro cambio hace falta ahí.
+  const accountCurrency = accounts.find((a) => a.id === accountId)?.currency || settings.main_currency;
+  const accountSettings = { ...settings, main_currency: accountCurrency };
 
   return (
     <div style={{ ...styles.screen, display: "flex", flexDirection: "column" }}>
@@ -60,18 +68,18 @@ export default function AccountActivityScreen({
         </div>
       ) : tab === "diario" ? (
         <DiarioSubTab
-          userId={userId} settings={settings} accounts={accounts} categories={categories} slLinks={slLinks}
+          userId={userId} settings={accountSettings} accounts={accounts} categories={categories} slLinks={slLinks}
           accountId={accountId} totals={totals} viewMonth={viewMonth} setViewMonth={setViewMonth}
           onNewTransaction={onNewTransaction} onEditTransaction={onEditTransaction}
         />
       ) : tab === "mensual" ? (
         <MensualSubTab
-          totals={totals} settings={settings} viewMonth={viewMonth} setViewMonth={setViewMonth}
+          totals={totals} settings={accountSettings} viewMonth={viewMonth} setViewMonth={setViewMonth}
           onOpenMonth={(year, month) => { setViewMonth(new Date(year, month - 1, 1)); setTab("diario"); }}
         />
       ) : (
         <AnualSubTab
-          totals={totals} settings={settings}
+          totals={totals} settings={accountSettings}
           onOpenYear={(year) => { setViewMonth(new Date(year, viewMonth.getMonth(), 1)); setTab("mensual"); }}
         />
       )}

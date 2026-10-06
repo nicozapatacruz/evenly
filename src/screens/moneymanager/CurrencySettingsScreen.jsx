@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Menu, X } from "lucide-react";
+import { Menu, Plus, X } from "lucide-react";
 import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -60,7 +60,7 @@ export default function CurrencySettingsScreen({ session, settings, reload, show
     <div style={styles.screen}>
       <TopBar title="Ajustes de moneda" onBack={onBack} />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        <Field label="Moneda principal" info="Es la moneda por defecto de las cuentas.">
+        <Field label="Moneda principal" info="Es la moneda por defecto sugerida al crear una cuenta nueva. No afecta a las cuentas que ya existen.">
           <select style={styles.input} value={mainCurrency} onChange={(e) => setMainCurrency(e.target.value)}>
             {CURRENCY_LIST.map((c) => <option key={c} value={c}>{c} ({CURRENCIES[c].symbol})</option>)}
           </select>
@@ -95,14 +95,24 @@ export default function CurrencySettingsScreen({ session, settings, reload, show
           </DndContext>
 
           {availableToAdd.length > 0 && (
-            <select
-              style={{ ...styles.input, marginTop: 8 }}
-              value=""
-              onChange={(e) => { if (e.target.value) setOtherCurrencies((prev) => [...prev, e.target.value]); }}
-            >
-              <option value="" disabled hidden>+ Agregar moneda</option>
-              {availableToAdd.map((c) => <option key={c} value={c}>{c} ({CURRENCIES[c].symbol})</option>)}
-            </select>
+            // Mismo botón visual que "Nueva categoría" (ícono real + texto, no
+            // un "+" de texto plano) — un <select> nativo no puede renderizar
+            // un ícono dentro de su opción elegida, así que el <select> de
+            // verdad queda transparente encima, capturando el click.
+            <div style={{ position: "relative", marginTop: 8 }}>
+              <div style={{ ...styles.btnDashed, width: "100%" }}>
+                <Plus size={16} /> Agregar moneda
+              </div>
+              <select
+                aria-label="Agregar moneda"
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, cursor: "pointer" }}
+                value=""
+                onChange={(e) => { if (e.target.value) setOtherCurrencies((prev) => [...prev, e.target.value]); }}
+              >
+                <option value="" disabled hidden>Agregar moneda</option>
+                {availableToAdd.map((c) => <option key={c} value={c}>{c} ({CURRENCIES[c].symbol})</option>)}
+              </select>
+            </div>
           )}
         </div>
       </div>

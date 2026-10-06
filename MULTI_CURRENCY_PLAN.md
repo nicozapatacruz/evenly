@@ -206,6 +206,19 @@ movimiento. Queda igual como validación de respaldo, no se simplificó.
 - Transferencias entre monedas distintas (con `to_amount` propio) — idea
   futura si hace falta, no en el alcance actual (ver `PENDIENTES.md`
   sección C).
+- **Idea de Nicolas (2026-10-06) para el selector de moneda de los
+  totales**: en vez de un `<select>` tradicional, un toggle de botones (uno
+  por moneda) para elegir qué moneda ver en un total — el mismo patrón en
+  Transacciones, Estadísticas y Buscador de arriba. Las opciones salen de
+  las monedas que de verdad tienen cuentas (no la lista fija de 9), en el
+  mismo orden que "Otras monedas" de `CurrencySettingsScreen.jsx`
+  (principal primero). Si hay más de 5 monedas en uso, los primeros 4
+  botones quedan fijos y el 5to se reemplaza por un selector (flecha hacia
+  abajo) con el resto de las opciones — al elegir una del desplegable, esa
+  pasa a ocupar el 5to botón (no se agrega un 6to), empujando a la que
+  estaba ahí de vuelta adentro del desplegable. Sin diseñar en detalle
+  (cómo se ve el botón-desplegable, qué pasa si hay exactamente 5), queda
+  para cuando se encare esta fase.
 
 ## Verificación (Fase 1)
 

@@ -71,6 +71,36 @@ la edición de moneda en cuanto la cuenta ya tiene al menos un movimiento
 (`AccountDetailScreen.jsx`, `hasTransactions`) — antes de eso, sigue
 editable sin restricción.
 
+**Decisión revisada (2026-10-06)**: convertir una cuenta con movimientos en
+tarjeta de crédito (o viceversa) es técnicamente posible sin corromper
+datos (es solo agrupación/visualización, `amount_main` no cambia de
+significado), pero no tiene sentido real de negocio — una cuenta de
+ahorros con historial no se "convierte" en una tarjeta de crédito. Se
+bloqueó el toggle "Tarjeta de crédito" con el mismo criterio que la
+moneda: una vez que la cuenta tiene algún movimiento, queda fijo (no se
+puede pasar de cuenta normal a tarjeta ni de tarjeta a cuenta normal).
+Antes de eso, sigue editable sin restricción. La validación de conflicto
+con la cuenta de pago de otra tarjeta (`becomingCardConflict`) sigue
+existiendo para el caso límite de una cuenta SIN movimientos propios que
+ya es la cuenta de pago de otra tarjeta.
+
+**Aclaración (2026-10-06)**: el bloqueo de movimientos de arriba no es solo
+para cuentas normales, también aplica a tarjetas — `hasTransactions` no
+distingue `is_credit_card`, y `mm_account_totals` ya cuenta los movimientos
+de una cuenta sea origen o destino de una transferencia (confirmado al
+construir el vínculo con Split Ledger, ver `SPLIT_MONEY_LINK_PLAN.md`,
+sección M0). Una tarjeta que ya tuvo un gasto, o que solo recibió un pago,
+queda con "Moneda" y "Tarjeta de crédito" bloqueados igual que cualquier
+otra cuenta, sin que hiciera falta ningún cambio de código para esto.
+
+Como consecuencia, el error de "cuenta de pago en otra moneda" (más
+arriba) en la práctica solo se puede disparar durante el SETUP de una
+tarjeta (sin movimientos todavía, moneda editable) — una vez que la
+tarjeta tiene movimientos, su moneda ya quedó fija por el bloqueo, y el
+selector de "Cuenta de pago" ya filtra solo cuentas de esa misma moneda,
+así que normalmente nunca se llega a ese conflicto después del primer
+movimiento. Queda igual como validación de respaldo, no se simplificó.
+
 ## Fase 1 — Cuentas (resuelta 2026-10-06)
 
 - [x] **SQL**: `mm_category_month_totals` agrupa ahora también por la
@@ -192,7 +222,7 @@ Con `npm run dev`:
    pago" solo deja elegir cuentas de su misma moneda.
 5. Con una tarjeta ya con cuenta de pago asignada, intentar cambiarle la
    moneda a la tarjeta → debe bloquear el guardado con el mensaje de error.
-6. Abrir una cuenta que ya tenga movimientos → el selector de moneda debe
-   estar bloqueado.
+6. Abrir una cuenta que ya tenga movimientos → el selector de moneda y el
+   toggle "Tarjeta de crédito" deben estar bloqueados.
 7. Confirmar (con un usuario de una sola moneda, el caso normal hoy) que
    nada visible cambió — mismos números que antes, en todos lados.

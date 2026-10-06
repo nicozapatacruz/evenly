@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Camera, Check, ChevronLeft, ChevronRight, Info, Trash2, User, X } from "lucide-react";
+import { ArrowLeft, Ban, Camera, Check, ChevronLeft, ChevronRight, Info, Trash2, User, X } from "lucide-react";
 import { styles } from "../lib/styles.js";
 import { ICON_OPTIONS } from "../lib/moneyManagerData.js";
 
@@ -25,16 +25,21 @@ export function SplitLedgerIcon({ size = 18, color = "#ba5331", style }) {
 // switch dentro de una caja con el mismo estilo que un input. Componentizado
 // a propósito: ya se desalineó dos veces por copiarlo a mano (uno quedó en
 // negrilla por error, otro heredó la negrilla del label sin querer).
-export function ToggleField({ label, description, checked, onChange, disabled, error }) {
+export function ToggleField({ label, description, checked, onChange, disabled, error, info, infoBlocked }) {
   return (
     <label style={styles.label}>
-      {label}
+      {info ? (
+        <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          {label}
+          <InfoTooltip text={info} blocked={infoBlocked} />
+        </span>
+      ) : label}
       <div style={{ ...styles.input, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, fontWeight: 400, padding: "7px 13px" }}>
         <span style={{ fontSize: 13, color: "#6B6355", lineHeight: 1.4 }}>{description}</span>
         <button
           onClick={() => onChange(!checked)}
           disabled={disabled}
-          style={{ width: 44, height: 26, borderRadius: 13, border: "none", background: checked ? "#C75D3B" : "#D9CFC1", position: "relative", cursor: "pointer", flexShrink: 0, opacity: disabled ? 0.6 : 1 }}
+          style={{ width: 44, height: 26, borderRadius: 13, border: "none", background: checked ? "#C75D3B" : "#D9CFC1", position: "relative", cursor: disabled ? "default" : "pointer", flexShrink: 0, opacity: disabled ? 0.6 : 1 }}
           aria-label={label}
         >
           <span style={{ position: "absolute", top: 3, left: checked ? 21 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.15s" }} />
@@ -52,7 +57,10 @@ export function ToggleField({ label, description, checked, onChange, disabled, e
 // PickerField).
 let infoTooltipInstanceCounter = 0;
 
-export function InfoTooltip({ text }) {
+// `blocked`: para texto que explica por qué algo está deshabilitado (no un
+// dato de más), usa el ícono de "prohibido" en vez del de información, para
+// no confundir "esto es un dato" con "esto no se puede hacer".
+export function InfoTooltip({ text, blocked }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const idRef = useRef(null);
@@ -83,10 +91,10 @@ export function InfoTooltip({ text }) {
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
-        style={{ background: "none", border: "none", padding: 0, display: "flex", color: "#4A6FA5", cursor: "pointer" }}
-        aria-label="Más información"
+        style={{ background: "none", border: "none", padding: 0, display: "flex", color: blocked ? "#B0473A" : "#4A6FA5", cursor: "pointer" }}
+        aria-label={blocked ? "Por qué está deshabilitado" : "Más información"}
       >
-        <Info size={14} />
+        {blocked ? <Ban size={14} /> : <Info size={14} />}
       </button>
       {open && (
         <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, width: 210, background: "#2B2620", color: "#fff", fontSize: 12, fontWeight: 400, fontFamily: "system-ui, sans-serif", padding: "8px 10px", borderRadius: 8, lineHeight: 1.4, zIndex: 20 }}>
@@ -105,7 +113,7 @@ export function InfoTooltip({ text }) {
 // `required` agrega el asterisco junto al label; `error` (solo se muestra si
 // se pasa un string no vacío — el llamador decide cuándo, típicamente en
 // blur o al intentar guardar) agrega el texto de ayuda en rojo debajo.
-export function Field({ label, info, required, error, style, children }) {
+export function Field({ label, info, infoBlocked, required, error, style, children }) {
   // Siempre "div", nunca <label>: un <label> reenvía el click a su primer
   // control "labelable" interno aunque el click haya caído en un elemento
   // con pointer-events:none (ej. el título de grupo o una celda vacía de
@@ -127,7 +135,7 @@ export function Field({ label, info, required, error, style, children }) {
       {info ? (
         <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
           {labelContent}
-          <InfoTooltip text={info} />
+          <InfoTooltip text={info} blocked={infoBlocked} />
         </span>
       ) : labelContent}
       {children}

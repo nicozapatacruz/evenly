@@ -213,7 +213,7 @@ export default function AccountDetailScreen({ session, account = null, groups, a
           </p>
         )}
 
-        <Field label="Moneda" info={hasTransactions ? "Esta cuenta ya tiene movimientos asociados. No se puede cambiar la moneda." : undefined}>
+        <Field label="Moneda" info={hasTransactions ? "Esta cuenta ya tiene movimientos asociados. No se puede cambiar la moneda." : undefined} infoBlocked={hasTransactions}>
           <select style={{ ...styles.input, opacity: hasTransactions ? 0.6 : 1 }} value={currency} onChange={(e) => setCurrency(e.target.value)} disabled={hasTransactions}>
             {CURRENCY_LIST.map((c) => <option key={c} value={c}>{c} ({CURRENCIES[c].symbol})</option>)}
           </select>
@@ -224,6 +224,9 @@ export default function AccountDetailScreen({ session, account = null, groups, a
           description="Los gastos se reflejan como saldo a pagar según un ciclo de facturación."
           checked={isCreditCard}
           onChange={setIsCreditCard}
+          disabled={hasTransactions}
+          info={hasTransactions ? "Esta cuenta ya tiene movimientos asociados. No se puede convertir en tarjeta de crédito." : undefined}
+          infoBlocked={hasTransactions}
           error={becomingCardConflict
             ? `Es la cuenta de pago de ${dependentPaymentCards.map((c) => `"${c.name}"`).join(", ")}. Cambiale la cuenta de pago a ${dependentPaymentCards.length > 1 ? "esas tarjetas" : "esa tarjeta"} antes de convertir esta en tarjeta.`
             : ""}

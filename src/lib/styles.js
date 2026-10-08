@@ -206,7 +206,7 @@ export const styles = {
   },
   pairRow: { display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, background: "#fff", border: "1px solid #ECE3D3" },
   expenseCard: { margin: "0 20px", padding: "11px 12px", borderRadius: 12, background: "#fff", border: "1px solid #ECE3D3", display: "flex", alignItems: "center", gap: 12, fontFamily: "system-ui, sans-serif", textAlign: "left", width: "calc(100% - 40px)" },
-  paymentCard: { margin: "0 20px", padding: "11px 12px", borderRadius: 12, background: "#F3EFE5", border: "1px dashed #D9CFC1", display: "flex", alignItems: "center", gap: 12, fontFamily: "system-ui, sans-serif" },
+  paymentCard: { margin: "0 20px", padding: "11px 12px", borderRadius: 12, background: "#F3EFE5", border: "1px dashed #D9CFC1", display: "flex", alignItems: "center", gap: 12, fontFamily: "system-ui, sans-serif", textAlign: "left", width: "calc(100% - 40px)" },
   expenseIcon: { width: 36, height: 36, minWidth: 36, borderRadius: "50%", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" },
   expenseTitle: { margin: 0, fontSize: 14, fontWeight: 600, fontFamily: "'Iowan Old Style', Georgia, serif", color: "#2B2620" },
   expenseSub: { margin: "2px 0 0", fontSize: 11.5, color: "#6B6355" },

@@ -107,6 +107,7 @@ export default function SplitLedgerTab({
           onAddExpense={() => setView({ screen: "newExpense", groupId: activeGroup.id })}
           onOpenExpense={(expenseId) => setView({ screen: "expenseDetail", groupId: activeGroup.id, expenseId })}
           onSettleUp={(prefill) => setView({ screen: "settleUp", groupId: activeGroup.id, prefill })}
+          onOpenPayment={(paymentId) => setView({ screen: "paymentDetail", groupId: activeGroup.id, paymentId })}
           onEditGroup={() => setView({ screen: "editGroup", groupId: activeGroup.id })}
           onSoftDeleteExpense={async (expenseId) => {
             try {
@@ -126,6 +127,15 @@ export default function SplitLedgerTab({
           expenseId={view.expenseId}
           onBack={() => setView({ screen: "group", groupId: activeGroup.id })}
           onEdit={(expenseId) => setView({ screen: "newExpense", groupId: activeGroup.id, expenseId })}
+        />
+      )}
+
+      {view.screen === "paymentDetail" && activeGroup && (
+        <PaymentDetail
+          group={activeGroup}
+          paymentId={view.paymentId}
+          onBack={onBackOverride || (() => setView({ screen: "group", groupId: activeGroup.id }))}
+          onEdit={(paymentId) => setView({ screen: "settleUp", groupId: activeGroup.id, paymentId })}
         />
       )}
 
@@ -172,11 +182,21 @@ export default function SplitLedgerTab({
               }
               await reloadGroup(groupId);
               await moneyManager?.reload();
-              setView(
-                exists
-                  ? { screen: "expenseDetail", groupId, expenseId: expense.id }
-                  : { screen: "group", groupId }
-              );
+              // Si llegamos acá por "Ver original" desde una transacción
+              // sincronizada (onBackOverride todavía activo porque no nos
+              // movimos de pantalla), guardar nos manda derecho de vuelta a
+              // Money Manager — no tiene sentido pasar por el detalle del
+              // gasto en el medio cuando el usuario ya terminó lo que vino a
+              // hacer acá.
+              if (onBackOverride) {
+                onBackOverride();
+              } else {
+                setView(
+                  exists
+                    ? { screen: "expenseDetail", groupId, expenseId: expense.id }
+                    : { screen: "group", groupId }
+                );
+              }
               return savedId;
             } catch (e) { showError(`No se pudo guardar el gasto: ${e?.message || e}`); }
           }}
@@ -196,24 +216,61 @@ export default function SplitLedgerTab({
       {view.screen === "settleUp" && activeGroup && (
         <SettleUp
           group={activeGroup}
+          paymentId={view.paymentId}
           prefill={view.prefill}
-          onCancel={() => setView({ screen: "group", groupId: activeGroup.id })}
+          session={session}
+          moneyManager={moneyManager}
+          onCancel={onBackOverride || (() => setView(
+            view.paymentId
+              ? { screen: "paymentDetail", groupId: activeGroup.id, paymentId: view.paymentId }
+              : { screen: "group", groupId: activeGroup.id }
+          ))}
           onSave={async (payment) => {
+            const payload = {
+              group_id: activeGroup.id,
+              from_member_id: payment.from,
+              to_member_id: payment.to,
+              amount: payment.amount,
+              currency: payment.currency,
+              date: new Date(payment.date).toISOString(),
+              note: payment.note || null,
+            };
             try {
-              const { error } = await supabase.from("payments").insert({
-                group_id: activeGroup.id,
-                from_member_id: payment.from,
-                to_member_id: payment.to,
-                amount: payment.amount,
-                currency: payment.currency,
-                date: new Date(payment.date).toISOString(),
-                note: payment.note || null,
-              });
+              let savedId = payment.id;
+              if (payment.id) {
+                const { error } = await supabase.from("payments").update(payload).eq("id", payment.id);
+                if (error) throw error;
+              } else {
+                const { data, error } = await supabase.from("payments").insert(payload).select("id").single();
+                if (error) throw error;
+                savedId = data.id;
+              }
+              await reloadGroup(activeGroup.id);
+              await moneyManager?.reload();
+              // Mismo criterio que al guardar un gasto: si vinimos por "Ver
+              // original", volver manda derecho a Money Manager en vez de
+              // pasar por el detalle del pago.
+              if (onBackOverride) {
+                onBackOverride();
+              } else {
+                setView(
+                  payment.id
+                    ? { screen: "paymentDetail", groupId: activeGroup.id, paymentId: payment.id }
+                    : { screen: "group", groupId: activeGroup.id }
+                );
+              }
+              return savedId;
+            } catch (e) { showError(`No se pudo registrar el pago: ${e?.message || e}`); }
+          }}
+          onDelete={async (paymentId) => {
+            try {
+              const { error } = await supabase.from("payments").delete().eq("id", paymentId);
               if (error) throw error;
               await reloadGroup(activeGroup.id);
               await moneyManager?.reload();
               setView({ screen: "group", groupId: activeGroup.id });
-            } catch (e) { showError(`No se pudo registrar el pago: ${e?.message || e}`); }
+              showInfo("Pago eliminado.");
+            } catch (e) { showError(`No se pudo borrar el pago: ${e?.message || e}`); }
           }}
         />
       )}
@@ -260,7 +317,15 @@ export default function SplitLedgerTab({
                 if (error) throw error;
               }
               await reloadGroup(activeGroup.id);
-              setView({ screen: "group", groupId: activeGroup.id });
+              // Mismo criterio que al guardar un gasto/pago: si vinimos por
+              // un deep link (ej. desde la cuenta pseudo "Split Ledger" en
+              // Cuentas), guardar manda derecho de vuelta ahí en vez de a la
+              // pantalla de grupo.
+              if (onBackOverride) {
+                onBackOverride();
+              } else {
+                setView({ screen: "group", groupId: activeGroup.id });
+              }
             } catch (e) { showError(`No se pudo guardar el grupo: ${e?.message || e}`); }
           }}
           onDeleteGroup={async () => {
@@ -1071,7 +1136,7 @@ function SortableCategoryRow({ cat, onEditIcon, onChangeLabel, onRemove, draggab
    GROUP VIEW
    ========================================================================= */
 
-function GroupView({ group, onBack, onAddExpense, onOpenExpense, onSettleUp, onEditGroup, onSoftDeleteExpense }) {
+function GroupView({ group, onBack, onAddExpense, onOpenExpense, onOpenPayment, onSettleUp, onEditGroup, onSoftDeleteExpense }) {
   const [tab, setTab] = useState("activity"); // activity | balances | individual
   const [selectedMember, setSelectedMember] = useState(group.members[0]?.id || null);
   const { members, expenses, payments = [] } = group;
@@ -1366,7 +1431,7 @@ function GroupView({ group, onBack, onAddExpense, onOpenExpense, onSettleUp, onE
               }
               const p = row.data;
               return (
-                <div key={p.id} style={styles.paymentCard}>
+                <button key={p.id} style={styles.paymentCard} onClick={() => onOpenPayment(p.id)}>
                   {/* Fecha */}
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 32, gap: 1 }}>
                     <span style={{ fontSize: 15, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#3B6E62", lineHeight: 1 }}>
@@ -1383,7 +1448,8 @@ function GroupView({ group, onBack, onAddExpense, onOpenExpense, onSettleUp, onE
                   <span style={{ fontWeight: 700, fontSize: 14, color: "#3B6E62", fontFamily: "system-ui, sans-serif", flexShrink: 0 }}>
                     {money(p.amount, p.currency)}
                   </span>
-                </div>
+                  <ChevronRight size={16} color="#C9BBA0" />
+                </button>
               );
             });
           })()}
@@ -2143,39 +2209,161 @@ function NewExpense({ group, groups, defaultGroupId, expenseId, onCancel, onSave
 }
 
 /* =========================================================================
+   PAYMENT DETAIL (solo lectura — se abre al tocar la tarjeta de un pago,
+   mismo patrón que ExpenseDetail para ser consistentes)
+   ========================================================================= */
+
+function PaymentDetail({ group, paymentId, onBack, onEdit }) {
+  const { members } = group;
+  const p = group.payments.find((x) => x.id === paymentId);
+
+  if (!p) {
+    return (
+      <div style={styles.screen}>
+        <TopBar title="Pago" onBack={onBack} />
+        <p style={{ ...styles.muted, paddingTop: 12 }}>Este pago ya no existe.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={styles.screen}>
+      <TopBar
+        title="Detalle del pago"
+        onBack={onBack}
+        right={
+          <button
+            onClick={() => onEdit(p.id)}
+            style={{ display: "flex", alignItems: "center", gap: 5, border: "none", background: "transparent", color: "#C75D3B", fontWeight: 700, fontSize: 13.5, fontFamily: "system-ui, sans-serif", padding: "6px 4px" }}
+          >
+            <Pencil size={15} /> Editar
+          </button>
+        }
+      />
+
+      <div style={styles.form}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ ...styles.expenseIcon, width: 48, height: 48, minWidth: 48, background: "#3B6E62" }}>
+            <HandCoins size={22} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ margin: 0, fontSize: 19, fontWeight: 700, fontFamily: "'Iowan Old Style', Georgia, serif" }}>
+              {nameOf(members, p.from)} le pagó a {nameOf(members, p.to)}
+            </p>
+            <p style={{ margin: "2px 0 0", fontSize: 13, color: "#6B6355", fontFamily: "system-ui, sans-serif" }}>
+              {fmtDate(p.date || p.createdAt)}
+            </p>
+          </div>
+        </div>
+
+        <p style={{ margin: 0, fontSize: 32, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#2B2620" }}>
+          {money(p.amount, p.currency)}
+        </p>
+
+        {p.note && (
+          <div>
+            <p style={{ ...styles.label, marginBottom: 4 }}>Nota</p>
+            <p style={{ ...styles.muted, padding: 0, margin: 0 }}>{p.note}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================================
    SETTLE UP (registrar pago directo entre dos personas)
    ========================================================================= */
 
-function SettleUp({ group, prefill, onCancel, onSave }) {
+function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, session, moneyManager }) {
   const { members, baseCurrency } = group;
-  const [from, setFrom] = useState(prefill?.from || members[0]?.id || "");
-  const [to, setTo] = useState(prefill?.to || members[1]?.id || "");
-  const [amount, setAmount] = useState(prefill?.amount ? String(prefill.amount.toFixed(2)) : "");
-  const [currency, setCurrency] = useState(prefill?.currency || baseCurrency);
-  const [date, setDate] = useState(todayInputValue());
-  const [note, setNote] = useState("");
+  const existing = paymentId ? group.payments.find((p) => p.id === paymentId) : null;
+  const myMemberId = members.find((m) => m.linkedUserId === session?.userId)?.id;
+
+  const [from, setFrom] = useState(existing?.from || prefill?.from || members[0]?.id || "");
+  const [to, setTo] = useState(existing?.to || prefill?.to || members[1]?.id || "");
+  const [amount, setAmount] = useState(existing ? String(existing.amount) : (prefill?.amount ? String(prefill.amount.toFixed(2)) : ""));
+  const [currency, setCurrency] = useState(existing?.currency || prefill?.currency || baseCurrency);
+  const [date, setDate] = useState(existing ? dateInputValue(existing.date) : todayInputValue());
+  const [note, setNote] = useState(existing?.note || "");
   const [saving, setSaving] = useState(false);
   const [amountTouched, setAmountTouched] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Mi Money Manager — mismo mecanismo que en el gasto (ExpenseForm): si este
+  // pago me involucra (lo pago yo o lo recibo yo), elegís de qué cuenta mía
+  // sale/entra, y esa elección se fija para siempre en sl_mm_expense_choices
+  // (antes esto no existía para pagos, solo para gastos — ver
+  // MULTI_CURRENCY_PLAN.md / conversación 2026-10-08).
+  const activeLink = moneyManager?.slLinks?.find((l) => l.active && l.group_id === group.id && l.user_id === session?.userId);
+  const [mmAccountId, setMmAccountId] = useState("");
+  const [touched, setTouched] = useState({});
+  const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
+  const savedMmChoiceRef = useRef(null);
+
+  const isFrom = from === myMemberId;
+  const isTo = to === myMemberId;
+  const mmInvolved = !!(activeLink && myMemberId && (isFrom || isTo));
+
+  useEffect(() => {
+    if (!activeLink) return;
+    let cancelled = false;
+    savedMmChoiceRef.current = null;
+    (async () => {
+      let choice = null;
+      if (existing) {
+        const { data } = await supabase
+          .from("sl_mm_expense_choices")
+          .select("account_id")
+          .eq("link_id", activeLink.id).eq("source_kind", "payment").eq("source_id", existing.id)
+          .maybeSingle();
+        choice = data;
+      }
+      if (cancelled) return;
+      savedMmChoiceRef.current = choice || {};
+      setMmAccountId(choice?.account_id || (isFrom ? activeLink.default_own_account_id : activeLink.default_other_account_id));
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLink?.id, existing?.id]);
+
+  useEffect(() => {
+    if (!activeLink || touched.mmAccountId) return;
+    if (savedMmChoiceRef.current?.account_id) return;
+    setMmAccountId(isFrom ? activeLink.default_own_account_id : activeLink.default_other_account_id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFrom, activeLink?.id]);
 
   const numericAmount = parseAmountInput(amount || "");
   const validAmount = !isNaN(numericAmount) && numericAmount > 0;
   // from/to siempre vienen preseleccionados (arrancan en los primeros 2 miembros) y
   // "¿Quién recibe?" ya excluye a quien es "¿Quién paga?" — así que lo único que de
-  // verdad puede faltar acá es el monto.
-  const canSave = !!from && !!to && from !== to && validAmount;
+  // verdad puede faltar acá es el monto (y la cuenta, si este pago me involucra).
+  const canSave = !!from && !!to && from !== to && validAmount && (!mmInvolved || !!mmAccountId);
 
   const handleSave = async () => {
     if (saving) return;
-    if (!canSave) { setAmountTouched(true); return; }
+    if (!canSave) { setAmountTouched(true); touch("mmAccountId"); return; }
     setSaving(true);
     try {
-      await onSave({
+      const savedId = await onSave({
+        id: existing?.id,
         from, to,
         amount: numericAmount,
         currency,
         date: new Date(date + "T12:00:00").getTime(),
         note: note.trim(),
       });
+      // Se fija la cuenta elegida para ESTE pago puntual — la reconciliación
+      // nunca la vuelve a recalcular sola (ver splitLedgerSync.js).
+      if (mmInvolved && savedId) {
+        const finalId = existing?.id || savedId;
+        await supabase.from("sl_mm_expense_choices").upsert(
+          { link_id: activeLink.id, source_kind: "payment", source_id: finalId, account_id: mmAccountId },
+          { onConflict: "link_id,source_kind,source_id" }
+        );
+        await moneyManager.reload();
+      }
     } finally {
       setSaving(false);
     }
@@ -2183,7 +2371,22 @@ function SettleUp({ group, prefill, onCancel, onSave }) {
 
   return (
     <div style={styles.screen}>
-      <TopBar title="Registrar un pago" onBack={onCancel} />
+      <TopBar
+        title={existing ? "Editar pago" : "Registrar un pago"}
+        onBack={onCancel}
+        right={existing && (
+          <button style={styles.iconBtnGhost} onClick={() => setConfirmDelete(true)} aria-label="Borrar pago"><Trash2 size={17} /></button>
+        )}
+      />
+      {confirmDelete && (
+        <ConfirmInline
+          message="¿Borrar este pago?"
+          confirmLabel="Borrar"
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() => onDelete(existing.id)}
+          style={{ margin: "6px 20px 12px", borderRadius: 12, borderTop: "1px solid #EBC9BA" }}
+        />
+      )}
       <div style={{ ...styles.form, paddingBottom: 100 }}>
         <p style={{ ...styles.muted, padding: 0 }}>Esto no mueve dinero — solo anota que el pago ya se hizo fuera de la app, para saldar el balance.</p>
 
@@ -2224,11 +2427,34 @@ function SettleUp({ group, prefill, onCancel, onSave }) {
           <input style={styles.input} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Transferencia, efectivo…" />
         </Field>
 
+        {mmInvolved && (
+          <Field label="Cuenta" required error={touched.mmAccountId && !mmAccountId ? "Este campo es obligatorio." : ""}>
+            <div style={{ position: "relative" }}>
+              <PickerField
+                value={mmAccountId}
+                onChange={setMmAccountId}
+                onBlur={() => touch("mmAccountId")}
+                placeholder="Elegí una cuenta"
+                groups={moneyManager.groups
+                  .filter((g) => !g.deleted && g.system_key !== "split_ledger")
+                  .map((g) => ({
+                    label: g.name,
+                    items: moneyManager.accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
+                  }))
+                  .filter((g) => g.items.length > 0)}
+              />
+              <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", display: "flex", pointerEvents: "none" }} title="Viene de/va a Money Manager">
+                <SplitLedgerIcon size={26} />
+              </span>
+            </div>
+          </Field>
+        )}
+
       </div>
       <Footer>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
         <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }} onClick={handleSave} disabled={saving}>
-          {saving ? "Registrando…" : "Registrar pago"}
+          {saving ? "Guardando…" : (existing ? "Guardar" : "Registrar pago")}
         </button>
       </Footer>
     </div>

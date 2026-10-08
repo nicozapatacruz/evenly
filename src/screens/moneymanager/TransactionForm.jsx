@@ -46,8 +46,7 @@ export default function TransactionForm({
   // aplicar: la copia es una transacción independiente, no sincronizada.
   const isSynced = !isCopyMode && !!editingTransaction?.sl_link_id;
   // De dónde volver en Split Ledger — `sl_link_id` es el vínculo, no el
-  // grupo directamente. Un pago no tiene pantalla de edición propia ahí
-  // (openSplitLedgerExpense lo resuelve llevando al grupo nomás).
+  // grupo directamente.
   const splitGroupId = isSynced ? slLinks?.find((l) => l.id === editingTransaction.sl_link_id)?.group_id : null;
 
   // prefillBookmark solo aplica cuando no hay editingTransaction (un

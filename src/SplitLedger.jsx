@@ -713,46 +713,55 @@ function AppShell({ session, onLogout, refreshProfile }) {
   // transacción sincronizada → Split Ledger; Estadísticas → Buscador) — para
   // que el botón de volver de ESA pantalla puntual (no cualquier otra)
   // regrese ahí en vez de a la navegación interna normal de la pestaña de
-  // destino. Se borra solo apenas la pantalla cambia a otra distinta a la de
-  // destino — si el usuario sigue navegando por su cuenta ahí, un "atrás"
-  // posterior ya no debería saltar afuera. Dos pares (uno por pestaña de
-  // destino) porque cada uno mira el `view` de una pestaña distinta.
-  const [splitLedgerReturn, setSplitLedgerReturn] = useState(null); // { tab, screen }
+  // destino. `screens` (no un solo `screen`) porque la pantalla de destino a
+  // veces navega a OTRA transitoriamente como parte de la misma tarea (ej.
+  // "Editar grupo" → "Invitar" → volver; Buscador → editar una transacción
+  // de un resultado → volver) — bug real encontrado 2026-10-08: con un solo
+  // `screen`, esa navegación transitoria borraba el override antes de que el
+  // usuario terminara, y un "atrás" posterior ya no volvía a la pestaña de
+  // origen. Se borra solo cuando la pantalla cambia a una que NO está en esta
+  // lista — ahí sí asumimos que el usuario se fue a navegar por su cuenta.
+  // Dos pares (uno por pestaña de destino) porque cada uno mira el `view` de
+  // una pestaña distinta.
+  const [splitLedgerReturn, setSplitLedgerReturn] = useState(null); // { tab, screens }
   useEffect(() => {
-    setSplitLedgerReturn((r) => (r && r.screen !== splitLedgerView.screen ? null : r));
+    setSplitLedgerReturn((r) => (r && !r.screens.includes(splitLedgerView.screen) ? null : r));
   }, [splitLedgerView.screen]);
-  const deepLinkBack = splitLedgerReturn && splitLedgerReturn.screen === splitLedgerView.screen
+  const deepLinkBack = splitLedgerReturn && splitLedgerReturn.screens.includes(splitLedgerView.screen)
     ? () => { setActiveTab(splitLedgerReturn.tab); setSplitLedgerReturn(null); }
     : null;
 
-  const [ledgerReturn, setLedgerReturn] = useState(null); // { tab, screen }
+  const [ledgerReturn, setLedgerReturn] = useState(null); // { tab, screens }
   useEffect(() => {
-    setLedgerReturn((r) => (r && r.screen !== ledgerView.screen ? null : r));
+    setLedgerReturn((r) => (r && !r.screens.includes(ledgerView.screen) ? null : r));
   }, [ledgerView.screen]);
-  const ledgerDeepLinkBack = ledgerReturn && ledgerReturn.screen === ledgerView.screen
+  const ledgerDeepLinkBack = ledgerReturn && ledgerReturn.screens.includes(ledgerView.screen)
     ? () => { setActiveTab(ledgerReturn.tab); setLedgerReturn(null); }
     : null;
 
   // Punto único para saltar a Split Ledger desde otra pestaña, marcando de
-  // dónde volver — mirar `deepLinkBack` arriba.
-  const goToSplitLedger = useCallback((screen, extra = {}) => {
-    setSplitLedgerReturn({ tab: activeTab, screen });
+  // dónde volver — mirar `deepLinkBack` arriba. `alsoScreens`: otras
+  // pantallas que cuentan como "la misma tarea" (ver comentario de arriba).
+  const goToSplitLedger = useCallback((screen, extra = {}, alsoScreens = []) => {
+    setSplitLedgerReturn({ tab: activeTab, screens: [screen, ...alsoScreens] });
     setActiveTab("splitledger");
     setSplitLedgerView({ screen, ...extra });
   }, [activeTab]);
 
   // Usado por la cuenta pseudo "Split Ledger" en Cuentas/Config — su flecha
   // no edita una cuenta real, lleva derecho a "Editar grupo" en Split Ledger.
-  const openSplitLedgerGroup = useCallback((groupId) => goToSplitLedger("editGroup", { groupId }), [goToSplitLedger]);
+  // "inviteScreen" cuenta como la misma tarea (se navega ahí y se vuelve sin
+  // perder el hilo de "estoy editando este grupo").
+  const openSplitLedgerGroup = useCallback((groupId) => goToSplitLedger("editGroup", { groupId }, ["inviteScreen"]), [goToSplitLedger]);
 
-  // Usado por TransactionForm en una transacción sincronizada — lleva al
-  // gasto/pago de origen. Un pago no tiene pantalla de edición propia en
-  // Split Ledger (ver GroupView, ahí se ve pero no se abre) — en ese caso
-  // lleva al grupo nomás, no a un editor que no existe.
+  // Usado por TransactionForm en una transacción sincronizada — lleva
+  // directo a editar el gasto/pago de origen (mismo criterio para los dos
+  // desde que los pagos también tienen su propia pantalla de edición, ver
+  // SPLIT_MONEY_LINK_PLAN.md).
   const openSplitLedgerExpense = useCallback((groupId, sourceKind, sourceId) => {
     goToSplitLedger(
-      sourceKind === "expense" ? "newExpense" : "group",
-      sourceKind === "expense" ? { groupId, expenseId: sourceId } : { groupId }
+      sourceKind === "expense" ? "newExpense" : "settleUp",
+      sourceKind === "expense" ? { groupId, expenseId: sourceId } : { groupId, paymentId: sourceId }
     );
   }, [goToSplitLedger]);
 
@@ -871,7 +880,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           filters={diarioFilters}
           onOpenFilters={() => setStatsView({ screen: "filters" })}
           onClearFilters={() => setDiarioFilters(EMPTY_FILTERS)}
-          onOpenSearch={() => { setLedgerReturn({ tab: "stats", screen: "search" }); setActiveTab("ledger"); setLedgerView({ screen: "search" }); }}
+          onOpenSearch={() => { setLedgerReturn({ tab: "stats", screens: ["search", "editTransaction"] }); setActiveTab("ledger"); setLedgerView({ screen: "search" }); }}
         />
       )}
 

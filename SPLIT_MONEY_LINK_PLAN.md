@@ -379,3 +379,95 @@ Con `npm run dev` (después de correr el SQL de cada paso):
 6. Confirmar que ninguna transferencia Presté/Me-prestaron aparece en
    Transacciones, Buscador ni Estadísticas, pero sí en los extractos de
    ambas cuentas.
+
+## Hueco encontrado y resuelto (2026-10-08): pagos sin forma de editar la cuenta
+
+El esquema ya soportaba `sl_mm_expense_choices.source_kind = 'payment'` y
+`computeDesiredTransactions` ya leía esa elección para los pagos — pero
+nunca se construyó ninguna UI para escribirla. Los gastos sí tenían
+("Editar gasto" → campo "Cuenta"), los pagos no: "Registrar un pago" no
+tenía ningún campo de cuenta, y los pagos ni siquiera eran clickeables en
+el historial del grupo (no existía ninguna pantalla de edición). Resultado:
+la cuenta real usada por un pago quedaba fija para siempre en
+`default_other_account_id`, sin forma de corregirla ni desde Split Ledger
+(no existía el campo) ni desde Money Manager (el picker de cuenta de una
+transferencia sincronizada está bloqueado a propósito, ver
+`AccountDetailScreen`/`TransactionForm`).
+
+Encontrado por Nicolas al notar que, en una transferencia de Money Manager
+sincronizada desde un pago, no podía cambiar su propio lado (aunque el lado
+de la cuenta pseudo de Split Ledger sí debía quedar bloqueado). Decisión:
+en vez de desbloquear ese campo en Money Manager (inconsistente con cómo ya
+funcionan los gastos), se construyó el camino que faltaba en Split Ledger,
+en paridad con "Editar gasto":
+
+- Los pagos ahora son clickeables en el historial del grupo (antes eran un
+  `<div>` sin interacción) y abren `PaymentDetail`, una pantalla de solo
+  lectura nueva con botón "Editar" — mismo patrón de 2 pasos que
+  `ExpenseDetail`/"Editar gasto", para ser consistentes (primera versión de
+  este cambio iba directo a editar, sin el paso de detalle; Nicolas pidió
+  la paridad completa).
+- Desde ahí, "Editar" abre `SettleUp` en modo edición (`paymentId`), con
+  borrado (ícono de tacho + confirmación, igual que "Editar gasto").
+- `SettleUp` gana el mismo campo "Cuenta" que `ExpenseForm` (visible solo
+  si el pago te involucra, como pagador o como receptor), con el mismo
+  mecanismo de sugerencia (`isFrom` en vez de `iPay`) y el mismo upsert a
+  `sl_mm_expense_choices` con `source_kind: 'payment'` al guardar.
+- "Registrar un pago" (crear uno nuevo) gana el mismo campo, para que se
+  pueda elegir la cuenta desde el principio, no solo al editar después.
+- Sin cambios en `splitLedgerSync.js` ni en Money Manager — la
+  reconciliación y el bloqueo del picker ya estaban listos para esto, solo
+  faltaba la UI para escribir la elección.
+- **"Ver original" no funcionaba para pagos** (botón en la transacción
+  sincronizada de Money Manager): `openSplitLedgerExpense` en
+  `SplitLedger.jsx` tenía código viejo de cuando los pagos no tenían
+  pantalla de edición propia, así que para `sourceKind === "payment"`
+  siempre mandaba al grupo nomás, nunca al pago en sí. Corregido para que
+  mande directo a `SettleUp` (edición), igual que ya hacía con gastos
+  (directo a `newExpense`, sin pasar por el detalle).
+- **Bug de navegación encontrado al usar "Ver original" y guardar**: el
+  mecanismo de "volver a la pestaña de origen" (`splitLedgerReturn`,
+  `deepLinkBack`) se borra solo apenas la pantalla cambia a una distinta
+  de la que se registró como destino. Pero guardar un gasto/pago
+  deep-linkeado navega de la pantalla de edición (`newExpense`/`settleUp`,
+  el destino registrado) al detalle (`expenseDetail`/`paymentDetail`) — una
+  pantalla DISTINTA — así que para cuando el usuario llegaba ahí y tocaba
+  "atrás", el override ya se había perdido y lo mandaba a la navegación
+  normal de Split Ledger (el grupo) en vez de de vuelta a Money Manager.
+  Corregido: si `onBackOverride` sigue activo en el momento de guardar
+  (todavía no nos movimos de pantalla), guardar manda derecho de vuelta a
+  Money Manager, sin pasar por el detalle intermedio.
+- **Auditoría completa de este bug (2026-10-08)**, a pedido de Nicolas
+  ("cómo miramos eso para que no pase en todas partes"): el mismo patrón
+  (navegar a una pantalla DISTINTA a la registrada como destino, de paso o
+  a propósito, pierde el override) también se daba en:
+  - **"Editar grupo" → "Invitar" → volver**: la pantalla de invitar es una
+    parada intermedia normal de la misma tarea, no debería perder el
+    hilo. Arreglado generalizando `splitLedgerReturn`/`ledgerReturn` de un
+    solo `screen` a una lista `screens` (pantallas que cuentan como "la
+    misma tarea") — `openSplitLedgerGroup` ahora declara
+    `["editGroup", "inviteScreen"]`.
+  - **"Editar grupo" → Guardar**: mismo caso que gasto/pago, navegaba a
+    "group" (una pantalla distinta a "editGroup") perdiendo el override.
+    Mismo arreglo: si `onBackOverride` sigue activo al guardar, vuelve
+    directo a Money Manager.
+  - **Estadísticas → Buscador → abrir una transacción de un resultado →
+    volver**: abrir un resultado navega a "editTransaction", distinto de
+    "search" (el destino registrado), perdiendo el override aunque el
+    usuario siga buscando. Arreglado agregando "editTransaction" a la
+    lista de pantallas de ese deep link — a diferencia de los casos de
+    arriba, acá NO se usó el atajo de "guardar vuelve directo": terminar
+    de editar un resultado del buscador te devuelve al buscador mismo
+    (seguís con la tarea de buscar), no afuera de Split Ledger.
+  - **Caso encontrado pero dejado sin resolver, de menor severidad**: Config
+    → "tus grupos" → abrir un grupo (pantalla "group", no "editGroup") →
+    navegar dentro de ese grupo (un gasto, un pago, "Editar grupo") y
+    volver → "atrás" ya no vuelve a Config, cae en el Home de Split Ledger.
+    No es un caso de quedar varado (el usuario sigue pudiendo navegar
+    normalmente desde ahí, con la barra de pestañas visible de nuevo), y
+    arreglarlo bien requeriría distinguir "esta pantalla es el destino
+    PRINCIPAL del deep link" de "esta pantalla es una parada dentro de
+    otro deep link más amplio" (ej. "Editar grupo" ya no debería hacer el
+    atajo de "guardar vuelve directo" si se llegó ahí navegando dentro de
+    un grupo en vez de por el acceso directo a editarlo) — cambio más
+    invasivo, no se hizo sin que Nicolas lo pida explícitamente.

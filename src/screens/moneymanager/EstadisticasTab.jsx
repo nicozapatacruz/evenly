@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Search, SlidersHorizontal } from "lucide-react";
 import { styles } from "../../lib/styles.js";
-import { RootHeader, MonthNav, TodayButton, FiltersActiveBanner, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
+import { RootHeader, MonthNav, TodayButton, FiltersActiveBanner, HeaderMenu, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
-import { useStatsCategoryTotals } from "../../lib/moneyManagerData.js";
+import { useStatsCategoryTotals, currenciesInUse } from "../../lib/moneyManagerData.js";
 import { hasActiveFilters } from "../../lib/filterHelpers.js";
 
 const MONTH_LABEL = (d) => d.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
@@ -34,7 +34,7 @@ function arcPath(cx, cy, r, startAngle, endAngle) {
   return `M ${cx} ${cy} L ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 0 ${end.x} ${end.y} Z`;
 }
 
-export default function EstadisticasTab({ userId, settings, categories, viewMonth, setViewMonth, onDrillDown, filters, onOpenFilters, onClearFilters, onOpenSearch }) {
+export default function EstadisticasTab({ userId, settings, accounts, categories, viewMonth, setViewMonth, onDrillDown, filters, onOpenFilters, onClearFilters, onOpenSearch }) {
   const [type, setType] = useState("expense");
   const [selectedKey, setSelectedKey] = useState(null);
   const filtering = hasActiveFilters(filters);
@@ -46,7 +46,13 @@ export default function EstadisticasTab({ userId, settings, categories, viewMont
   const swipeHandlers = useMonthSwipe(viewMonth, setViewMonth);
   const slide = useMonthSlide(viewMonth);
 
-  const { incomeTotals, expenseTotals, incomeLoading, expenseLoading, monthTxCount } = useStatsCategoryTotals(userId, viewMonth, filters, settings.main_currency);
+  // Fase 2 de multi-moneda (ver MULTI_CURRENCY_PLAN.md): la torta mezclaría
+  // categorías de monedas distintas en un solo número si no elegís con
+  // cuál mirarla. Sin persistir, arranca en la principal.
+  const [currency, setCurrency] = useState(settings.main_currency);
+  const currencies = currenciesInUse(accounts, settings);
+
+  const { incomeTotals, expenseTotals, incomeLoading, expenseLoading, monthTxCount } = useStatsCategoryTotals(userId, viewMonth, filters, currency, accounts);
   const totals = type === "income" ? incomeTotals : expenseTotals;
   const loading = type === "income" ? incomeLoading : expenseLoading;
   const incomeSum = useMemo(() => incomeTotals.reduce((s, t) => s + t.total, 0), [incomeTotals]);
@@ -89,10 +95,13 @@ export default function EstadisticasTab({ userId, settings, categories, viewMont
           right={
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <TodayButton viewMonth={viewMonth} setViewMonth={setViewMonth} />
-              <button style={{ ...styles.iconBtnGhost, position: "relative" }} onClick={onOpenFilters} aria-label="Filtros">
-                <SlidersHorizontal size={19} />
-                {filtering && <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: "#C75D3B" }} />}
-              </button>
+              <HeaderMenu
+                trigger={<><SlidersHorizontal size={19} />{filtering && <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: "#C75D3B" }} />}</>}
+                items={[{ icon: <SlidersHorizontal size={16} color="#6B6355" />, label: "Filtros", onClick: onOpenFilters, badge: filtering }]}
+                currencies={currencies}
+                currency={currency}
+                onChangeCurrency={setCurrency}
+              />
               <button style={styles.iconBtnGhost} onClick={onOpenSearch} aria-label="Buscar">
                 <Search size={19} />
               </button>
@@ -107,14 +116,14 @@ export default function EstadisticasTab({ userId, settings, categories, viewMont
               onClick={() => setType("income")}
             >
               <span>Ingresos</span>
-              <span style={{ color: type === "income" ? "#fff" : "#3B6E62" }}>{money(incomeSum, settings.main_currency)}</span>
+              <span style={{ color: type === "income" ? "#fff" : "#3B6E62" }}>{money(incomeSum, currency)}</span>
             </button>
             <button
               style={{ ...(type === "expense" ? styles.tabActive : styles.tab), display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "7px 0" }}
               onClick={() => setType("expense")}
             >
               <span>Gastos</span>
-              <span style={{ color: type === "expense" ? "#fff" : "#B0473A" }}>{money(expenseSum, settings.main_currency)}</span>
+              <span style={{ color: type === "expense" ? "#fff" : "#B0473A" }}>{money(expenseSum, currency)}</span>
             </button>
           </div>
         </div>
@@ -176,7 +185,7 @@ export default function EstadisticasTab({ userId, settings, categories, viewMont
                 return (
                   <div
                     key={key}
-                    onClick={(e) => { e.stopPropagation(); onDrillDown({ categoryId: a.categoryId || null, categoryName: a.name, categoryIcon: a.icon, type }); }}
+                    onClick={(e) => { e.stopPropagation(); onDrillDown({ categoryId: a.categoryId || null, categoryName: a.name, categoryIcon: a.icon, type, currency }); }}
                     style={{
                       display: "flex", alignItems: "center", gap: 10, padding: "8px 4px", borderBottom: "1px solid #F0EBE2",
                       background: isSelected ? "#F3EFE5" : "transparent", borderRadius: isSelected ? 8 : 0, cursor: "pointer",
@@ -186,7 +195,7 @@ export default function EstadisticasTab({ userId, settings, categories, viewMont
                     <span style={{ width: 18, minWidth: 18, fontSize: 15, textAlign: "center", lineHeight: 1 }}>{a.icon || ""}</span>
                     <span style={{ flex: 1, fontSize: 14, fontFamily: "system-ui, sans-serif", minWidth: 0 }}>{a.name}</span>
                     <span style={{ fontSize: 12.5, color: "#6B6355", fontFamily: "system-ui, sans-serif", minWidth: 38, textAlign: "right" }}>{Math.round(a.pct * 100)}%</span>
-                    <span style={{ fontSize: 14, fontWeight: 600, fontFamily: "system-ui, sans-serif", minWidth: 76, textAlign: "right" }}>{money(a.amount, settings.main_currency)}</span>
+                    <span style={{ fontSize: 14, fontWeight: 600, fontFamily: "system-ui, sans-serif", minWidth: 76, textAlign: "right" }}>{money(a.amount, currency)}</span>
                   </div>
                 );
               })}

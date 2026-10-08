@@ -1,9 +1,9 @@
-import React from "react";
+import React, { useState } from "react";
 import { Plus, Search, SlidersHorizontal, Star } from "lucide-react";
 import { styles } from "../../lib/styles.js";
-import { RootHeader, MonthNav, TodayButton, FiltersActiveBanner, PendingRateBanner, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
+import { RootHeader, MonthNav, TodayButton, FiltersActiveBanner, PendingRateBanner, HeaderMenu, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
-import { useMonthTransactions, usePendingRateTransactions } from "../../lib/moneyManagerData.js";
+import { useMonthTransactions, usePendingRateTransactions, currenciesInUse } from "../../lib/moneyManagerData.js";
 import { hasActiveFilters, matchesFilters } from "../../lib/filterHelpers.js";
 import { TransactionDayGroups } from "./TransactionDayGroups.jsx";
 
@@ -26,16 +26,16 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
   // dependiera de lo que esta pantalla ya cargó. Ver usePendingRateTransactions.
   const { transactions: pendingRateTx } = usePendingRateTransactions(userId);
 
-  // Parche de continuidad hasta la Fase 2 (ver MULTI_CURRENCY_PLAN.md): este
-  // resumen suma transacciones de TODAS las cuentas del mes en un solo
-  // número — si hay cuentas de monedas distintas, blendearía valores que ya
-  // no están en la misma moneda (amount_main ahora es "en la moneda de SU
-  // cuenta", no en una principal global). Hasta que haya un selector de
-  // moneda acá (Fase 2), nos quedamos solo con las cuentas de tu moneda
-  // principal — no muestra todo, pero lo que muestra es correcto.
-  const isMainCurrencyTx = (t) => (accounts.find((a) => a.id === t.account_id)?.currency || settings.main_currency) === settings.main_currency;
-  const monthIncome = filtered.filter((t) => t.type === "income" && isMainCurrencyTx(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
-  const monthExpense = filtered.filter((t) => t.type === "expense" && isMainCurrencyTx(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+  // Fase 2 de multi-moneda (ver MULTI_CURRENCY_PLAN.md): el resumen del mes
+  // junta transacciones de todas las cuentas en un solo número, así que
+  // elegís con cuál moneda mirarlo — nunca se mezclan dos monedas en un
+  // mismo total. Sin persistir: cada vez que se abre esta pantalla arranca
+  // en la principal, igual que el mes mostrado.
+  const [currency, setCurrency] = useState(settings.main_currency);
+  const currencies = currenciesInUse(accounts, settings);
+  const isSelectedCurrencyTx = (t) => (accounts.find((a) => a.id === t.account_id)?.currency || settings.main_currency) === currency;
+  const monthIncome = filtered.filter((t) => t.type === "income" && isSelectedCurrencyTx(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+  const monthExpense = filtered.filter((t) => t.type === "expense" && isSelectedCurrencyTx(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
 
   return (
     <div style={{ ...styles.screen, display: "flex", flexDirection: "column" }}>
@@ -45,13 +45,16 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
           right={
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <TodayButton viewMonth={viewMonth} setViewMonth={setViewMonth} />
-              <button style={{ ...styles.iconBtnGhost, position: "relative" }} onClick={onOpenFilters} aria-label="Filtros">
-                <SlidersHorizontal size={19} />
-                {hasActiveFilters(filters) && <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: "#C75D3B" }} />}
-              </button>
-              <button style={styles.iconBtnGhost} onClick={onOpenBookmarks} aria-label="Marcadores">
-                <Star size={19} />
-              </button>
+              <HeaderMenu
+                trigger={<><SlidersHorizontal size={19} />{hasActiveFilters(filters) && <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: "#C75D3B" }} />}</>}
+                items={[
+                  { icon: <SlidersHorizontal size={16} color="#6B6355" />, label: "Filtros", onClick: onOpenFilters, badge: hasActiveFilters(filters) },
+                  { icon: <Star size={16} color="#6B6355" />, label: "Favoritos", onClick: onOpenBookmarks },
+                ]}
+                currencies={currencies}
+                currency={currency}
+                onChangeCurrency={setCurrency}
+              />
               <button style={styles.iconBtnGhost} onClick={onOpenSearch} aria-label="Buscar">
                 <Search size={19} />
               </button>
@@ -63,15 +66,15 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
           <div style={{ display: "flex", justifyContent: "space-between", textAlign: "center", padding: "0 4px" }}>
             <div style={{ flex: 1 }}>
               <p style={{ ...styles.muted, padding: 0, margin: 0, fontSize: 12 }}>Ingresos</p>
-              <p style={{ margin: "2px 0 0", fontWeight: 700, color: "#3B6E62" }}>{money(monthIncome, settings.main_currency)}</p>
+              <p style={{ margin: "2px 0 0", fontWeight: 700, color: "#3B6E62" }}>{money(monthIncome, currency)}</p>
             </div>
             <div style={{ flex: 1 }}>
               <p style={{ ...styles.muted, padding: 0, margin: 0, fontSize: 12 }}>Gastos</p>
-              <p style={{ margin: "2px 0 0", fontWeight: 700, color: "#B0473A" }}>{money(monthExpense, settings.main_currency)}</p>
+              <p style={{ margin: "2px 0 0", fontWeight: 700, color: "#B0473A" }}>{money(monthExpense, currency)}</p>
             </div>
             <div style={{ flex: 1 }}>
               <p style={{ ...styles.muted, padding: 0, margin: 0, fontSize: 12 }}>Balance</p>
-              <p style={{ margin: "2px 0 0", fontWeight: 700 }}>{money(monthIncome - monthExpense, settings.main_currency)}</p>
+              <p style={{ margin: "2px 0 0", fontWeight: 700 }}>{money(monthIncome - monthExpense, currency)}</p>
             </div>
           </div>
         </div>
@@ -113,7 +116,7 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
           ) : (
             <TransactionDayGroups
               transactions={filtered}
-              settings={settings}
+              settings={{ ...settings, main_currency: currency }}
               accounts={accounts}
               categories={categories}
               slLinks={slLinks}

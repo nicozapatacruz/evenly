@@ -582,6 +582,74 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", o
   );
 }
 
+// Agrupa acciones del header (Filtros/Favoritos/etc.) + el selector de
+// moneda (Fase 2 de multi-moneda, ver MULTI_CURRENCY_PLAN.md) en un solo
+// ícono con popover, en vez de un ícono por acción — un header mobile no
+// tiene lugar para 5 íconos sueltos. `trigger` es el contenido del botón
+// cerrado (ícono(s) + badge, lo arma cada pantalla). `items` son acciones
+// de una sola fila: [{ icon, label, onClick, badge }]. `currencies` (si
+// hay más de una) agrega una sección "Moneda" al final con un check en la
+// elegida — si `items` viene vacío, el popover es solo esa sección.
+// Mismo mecanismo de click-afuera-cierra + evento global "mm-picker-open"
+// que ya usa PickerField (un solo popover abierto a la vez en toda la app).
+export function HeaderMenu({ trigger, items = [], currencies = [], currency, onChangeCurrency }) {
+  const [open, setOpen] = useState(false);
+  const idRef = useRef(null);
+  if (idRef.current === null) idRef.current = ++pickerInstanceCounter;
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (open) window.dispatchEvent(new CustomEvent("mm-picker-open", { detail: idRef.current }));
+  }, [open]);
+  useEffect(() => {
+    const onOtherOpen = (e) => { if (e.detail !== idRef.current) setOpen(false); };
+    window.addEventListener("mm-picker-open", onOtherOpen);
+    return () => window.removeEventListener("mm-picker-open", onOtherOpen);
+  }, []);
+  useEffect(() => {
+    if (!open) return;
+    const onClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("click", onClickOutside);
+    return () => document.removeEventListener("click", onClickOutside);
+  }, [open]);
+
+  const menuRowStyle = { display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 14px", border: "none", background: "none", textAlign: "left", fontSize: 13.5, fontFamily: "system-ui, sans-serif", color: "#2B2620", cursor: "pointer" };
+  const showCurrencies = currencies.length > 1;
+
+  return (
+    <div ref={containerRef} style={{ position: "relative" }}>
+      <button style={{ ...styles.iconBtnGhost, position: "relative" }} onClick={() => setOpen((o) => !o)} aria-label="Más opciones">
+        {trigger}
+      </button>
+      {open && (
+        <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 4, minWidth: 180, background: "#fff", border: "1px solid #ECE3D3", borderRadius: 10, boxShadow: "0 6px 16px rgba(0,0,0,0.1)", zIndex: 20, overflow: "hidden" }}>
+          {items.map((item) => (
+            <button key={item.label} style={menuRowStyle} onClick={() => { setOpen(false); item.onClick(); }}>
+              {item.icon}
+              {item.label}
+              {item.badge && <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#C75D3B", marginLeft: "auto" }} />}
+            </button>
+          ))}
+          {showCurrencies && (
+            <>
+              {items.length > 0 && <div style={{ margin: "2px 0", borderTop: "1px solid #F0EBE2" }} />}
+              <p style={{ margin: 0, padding: "8px 14px 2px", fontSize: 11, fontWeight: 700, color: "#A89A87", textTransform: "uppercase", letterSpacing: "0.04em" }}>Moneda</p>
+              {currencies.map((c) => (
+                <button key={c} style={menuRowStyle} onClick={() => { setOpen(false); onChangeCurrency(c); }}>
+                  <span style={{ width: 16, display: "flex", justifyContent: "center" }}>{c === currency && <Check size={14} color="#C75D3B" />}</span>
+                  {c}
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Misma base visual que PickerField (grilla agrupada de 3 columnas) pero de
 // selección múltiple — pensado para los filtros del Buscador (cuenta,
 // categoría). Diferencias clave: tocar un ítem lo prende/apaga sin cerrar el

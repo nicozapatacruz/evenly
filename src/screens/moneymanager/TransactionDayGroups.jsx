@@ -116,7 +116,12 @@ export function TransactionDayGroups({ transactions, settings, accounts, categor
             </div>
             {txs.map((t) => {
               const badge = splitBadge(t);
-              const pending = isRatePending(t, settings.main_currency);
+              // Compara contra la moneda de SU CUENTA (no settings.main_currency):
+              // amount_main se convierte a la moneda de la cuenta, no a una
+              // principal global (ver PENDIENTES.md sección B) — y así este
+              // chequeo queda inmune a que settings.main_currency esté "pisado"
+              // con la moneda elegida en el selector de Fase 2.
+              const pending = isRatePending(t, accountCurrency(t.account_id));
               return (
               <div
                 key={t.id}

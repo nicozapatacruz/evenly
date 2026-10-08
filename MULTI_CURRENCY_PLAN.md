@@ -191,34 +191,84 @@ movimiento. Queda igual como validación de respaldo, no se simplificó.
   en `splitLedgerSync.js` (el diff completo de `expenses`/`payments` de
   un grupo vinculado de Split Ledger).
 
-## Fase 2 — pendiente, sin diseñar en detalle
+## Fase 2 — Transacciones, Estadísticas, Buscador (resuelta 2026-10-08)
 
-- **Transacciones (Diario)**: el resumen de ingresos/gastos del día/mes
-  solo cuenta tu moneda principal por ahora (ver parche de continuidad
-  arriba) — falta el selector de moneda de verdad.
-- **Estadísticas**: la torta de categorías necesita un selector de moneda
-  arriba (decidido con Nicolas: mismo patrón que las pestañas
-  Diario/Mensual/Anual del extracto de cuenta) para cuando una categoría
-  tiene gastos en más de una moneda el mismo mes. De paso, resolver el gap
-  de `aggregateByCategory` mencionado arriba.
-- **Buscador**: el renglón de totales (ingreso/gasto/transferencia) de los
-  resultados de búsqueda tiene el mismo problema que Estadísticas.
-- Transferencias entre monedas distintas (con `to_amount` propio) — idea
-  futura si hace falta, no en el alcance actual (ver `PENDIENTES.md`
-  sección C).
-- **Idea de Nicolas (2026-10-06) para el selector de moneda de los
-  totales**: en vez de un `<select>` tradicional, un toggle de botones (uno
-  por moneda) para elegir qué moneda ver en un total — el mismo patrón en
-  Transacciones, Estadísticas y Buscador de arriba. Las opciones salen de
-  las monedas que de verdad tienen cuentas (no la lista fija de 9), en el
-  mismo orden que "Otras monedas" de `CurrencySettingsScreen.jsx`
-  (principal primero). Si hay más de 5 monedas en uso, los primeros 4
-  botones quedan fijos y el 5to se reemplaza por un selector (flecha hacia
-  abajo) con el resto de las opciones — al elegir una del desplegable, esa
-  pasa a ocupar el 5to botón (no se agrega un 6to), empujando a la que
-  estaba ahí de vuelta adentro del desplegable. Sin diseñar en detalle
-  (cómo se ve el botón-desplegable, qué pasa si hay exactamente 5), queda
-  para cuando se encare esta fase.
+Reemplaza el parche de continuidad de arriba por un selector de moneda de
+verdad en las 4 pantallas que lo necesitaban. La moneda elegida NO se
+persiste — cada vez que se abre la pantalla arranca en la principal, mismo
+criterio que el mes mostrado en estas mismas pantallas.
+
+**Diseño revisado en el camino (2026-10-08)**: la primera versión era un
+toggle de botones horizontal (uno por moneda) debajo del resumen de cada
+pantalla — ocupaba una fila entera y, en Transacciones, hubiera sido un
+5to ícono suelto en el header (Hoy/Filtros/Favoritos/Buscar/Moneda).
+Nicolas pidió agrupar en vez de sumar íconos: **`HeaderMenu`** (nuevo
+componente en `Shared.jsx`, reemplaza al `CurrencyToggle` original que se
+borró) es un solo ícono con un popover (mismo click-afuera-cierra +
+evento `"mm-picker-open"` que ya usa `PickerField`) que agrupa acciones
+del header (`items`: Filtros, Favoritos) más una sección "Moneda" al
+final (lista de monedas en uso, con check en la elegida) — en vez de un
+engranaje (da a entender "config de la app") o los 3 puntitos (ya
+significan "Config" en la barra de pestañas de abajo), reusa el ícono que
+ya tenía "Filtros" (`SlidersHorizontal`) como disparador del grupo entero.
+- [x] **`currenciesInUse(accounts, settings)`** — nuevo helper en
+  `moneyManagerData.js`: monedas que de verdad tienen al menos una cuenta
+  no borrada, principal primero, después "Otras monedas" en orden, y al
+  final cualquier moneda en uso que no estuviera en ninguna de las dos.
+- [x] **`DiarioTab.jsx`**: el ícono de Filtros + el de Favoritos ahora
+  viven agrupados en un solo `HeaderMenu` (header bajó de 4 íconos propios
+  a 2: el grupo + Buscar, más Hoy aparte), con la sección "Moneda" al
+  final del popover. El resumen de ingreso/gasto del día/mes usa esa
+  moneda; a `TransactionDayGroups` se le pasa `settings` "pisado" con ella
+  (mismo truco que `AccountActivityScreen` en Fase 1) — cero cambios
+  adicionales en ese archivo para el resumen.
+- [x] **`EstadisticasTab.jsx`**: gana el prop `accounts` (no lo recibía).
+  Mismo `HeaderMenu`, con un solo ítem (Filtros) + la sección Moneda.
+  `useStatsCategoryTotals` pasa a recibir la moneda elegida + `accounts`.
+  Al entrar a un drill-down, la moneda elegida viaja en el payload.
+- [x] **`CategoryDrillDownScreen.jsx`**: no tiene Filtros/Favoritos para
+  agrupar, así que acá `HeaderMenu` se usa solo (sin `items`) con el
+  símbolo de la moneda elegida como disparador (ej. "€", sin código ni
+  flechita — más compacto y consistente con cómo ya se muestran los
+  montos en toda la app), en el TopBar. Arranca con la moneda que traía
+  Estadísticas, pero es independiente (se puede cambiar acá sin afectar
+  la pantalla de origen). "Total del mes" y `useCategoryTimeline` usan
+  esa moneda; a `TransactionDayGroups` se le pasa `settings` pisado,
+  igual que en Diario.
+- [x] **`AccountActivityScreen.jsx` confirmado sin cambios**: siempre está
+  acotado a una sola cuenta, que ya tiene moneda fija por Fase 1 — no hay
+  nada entre qué elegir ahí, un selector no aplicaría.
+- [x] **`CuentasTab.jsx`**: el resumen de arriba (Capital/A deber/Balance)
+  ya no repite los 3 títulos por cada moneda — se muestran una sola vez,
+  y cada moneda es una fila compacta de números (el símbolo de `money()`
+  ya identifica de cuál es, sin texto "(EUR)"/"(COP)" extra). Decidido no
+  convertirlo en selector como las demás pantallas: acá las monedas son
+  saldos reales que existen a la vez, no "la misma data vista con otro
+  lente" — tiene sentido seguir viéndolas todas juntas.
+- [x] **Gap de `aggregateByCategory` resuelto**: ya filtra por la moneda
+  de la cuenta de cada transacción (recibe `accounts`+`mainCurrency` como
+  parámetros nuevos), mismo criterio que `useCategoryMonthTotals` del lado
+  del servidor — antes blendeaba monedas distintas cuando había filtros
+  activos en Estadísticas.
+- [x] **`SearchScreen.jsx`**: el ícono de Filtros pasa a ser un `HeaderMenu`
+  con un ítem (Filtros) + la sección Moneda; a `SearchResults` se le pasa
+  `settings` pisado con la moneda elegida (mismo truco). No hizo falta
+  tocar `searchTransactions` (la query al servidor) — el filtro sigue
+  siendo client-side, como ya era.
+- [x] **Bug encontrado armando esta fase, no relacionado al selector en
+  sí**: `isRatePending` comparaba la moneda de una transacción contra
+  `settings.main_currency` (la principal GLOBAL) en vez de contra la
+  moneda de SU CUENTA — desde la Fase 1, `amount_main` se convierte a la
+  moneda de la cuenta, no a una principal global, así que ese chequeo
+  podía marcar como "pendiente de tasa" una transacción que no lo estaba
+  (o al revés) en cuanto hubiera más de una cuenta en juego. Si no se
+  arreglaba, además, el selector de moneda nuevo hacía que ese error
+  cambiara según qué moneda estuvieras mirando. Corregido en
+  `TransactionDayGroups.jsx` y `SearchScreen.jsx` (los 2 lugares que la
+  usan) para que compare contra la moneda de la cuenta de cada fila.
+- Transferencias entre monedas distintas (con `to_amount` propio) — sigue
+  como idea futura si hace falta, no en el alcance actual (ver
+  `PENDIENTES.md` sección C).
 
 ## Verificación (Fase 1)
 
@@ -239,3 +289,27 @@ Con `npm run dev`:
    toggle "Tarjeta de crédito" deben estar bloqueados.
 7. Confirmar (con un usuario de una sola moneda, el caso normal hoy) que
    nada visible cambió — mismos números que antes, en todos lados.
+
+## Verificación (Fase 2)
+
+Con `npm run dev`, usando al menos 2 cuentas en monedas distintas:
+
+1. Con una sola moneda en uso: confirmar que no aparece ningún selector en
+   Transacciones, Estadísticas, un drill-down ni Buscador, y los números
+   no cambian (como antes de esta fase).
+2. Transacciones: cambiar de moneda en el toggle cambia el resumen de
+   ingreso/gasto del mes Y de cada día visible, sin tocar qué
+   transacciones se listan.
+3. Estadísticas: cambiar de moneda cambia la torta/lista de categorías;
+   entrar a un drill-down arranca en esa misma moneda, y se puede cambiar
+   ahí independientemente sin afectar Estadísticas.
+4. Activar un filtro en Estadísticas (fuerza el camino de
+   `aggregateByCategory`) y confirmar que los totales por categoría siguen
+   respetando la moneda elegida.
+5. Buscador: cambiar de moneda cambia el renglón de totales sin afectar
+   qué resultados aparecen.
+6. Con una transacción sincronizada de Split Ledger pendiente de tasa:
+   confirmar que el aviso "Pendiente tasa de cambio" se sigue viendo igual
+   sin importar qué moneda esté elegida en el selector (no depende de eso).
+7. (Si es viable armar datos de prueba) con 6+ monedas en uso, confirmar
+   el mecanismo de los 4 botones fijos + 5to con desplegable.

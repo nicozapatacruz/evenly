@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Search as SearchIcon, SlidersHorizontal, Trash2, Divide, AlertCircle } from "lucide-react";
 import { styles } from "../../lib/styles.js";
-import { TopBar } from "../../components/Shared.jsx";
+import { TopBar, HeaderMenu } from "../../components/Shared.jsx";
 import { money, dateInputValueInZone, measureTextWidth } from "../../lib/helpers.jsx";
-import { useRecentNoteTitles, searchTransactions, isRatePending } from "../../lib/moneyManagerData.js";
+import { useRecentNoteTitles, searchTransactions, isRatePending, currenciesInUse } from "../../lib/moneyManagerData.js";
 import { EMPTY_FILTERS, hasActiveFilters } from "../../lib/filterHelpers.js";
 import { FiltersPanel } from "./FiltersPanel.jsx";
 
@@ -32,7 +32,10 @@ function SearchResultRow({ t, accounts, categories, slLinks, settings, dateColWi
   // de la cuenta pseudo del vínculo, no de `memo` (libre, editable).
   const link = t.sl_link_id && slLinks?.find((l) => l.id === t.sl_link_id);
   const badge = link && accounts.find((a) => a.id === link.pseudo_account_id);
-  const pending = isRatePending(t, settings.main_currency);
+  // Compara contra la moneda de SU CUENTA, no settings.main_currency — mismo
+  // motivo que TransactionDayGroups.jsx (amount_main se convierte a la
+  // moneda de la cuenta, no a una principal global).
+  const pending = isRatePending(t, account?.currency || settings.main_currency);
 
   const accountLabel = (a) => a && (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 3, ...(a.deleted ? { textDecoration: "line-through", color: "#B0473A" } : null) }}>
@@ -104,13 +107,14 @@ function SearchResultRow({ t, accounts, categories, slLinks, settings, dateColWi
 }
 
 function SearchResults({ results, settings, accounts, categories, slLinks, onEditTransaction }) {
-  // Parche de continuidad hasta la Fase 2 (ver MULTI_CURRENCY_PLAN.md) — los
-  // resultados pueden venir de cuentas de monedas distintas, así que estos
-  // totales solo suman las de tu moneda principal por ahora.
-  const isMainCurrencyTx = (t) => (accounts.find((a) => a.id === t.account_id)?.currency || settings.main_currency) === settings.main_currency;
-  const income = results.filter((t) => t.type === "income" && isMainCurrencyTx(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
-  const expense = results.filter((t) => t.type === "expense" && isMainCurrencyTx(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
-  const transfer = results.filter((t) => t.type === "transfer" && isMainCurrencyTx(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+  // Fase 2 de multi-moneda (ver MULTI_CURRENCY_PLAN.md): los resultados
+  // pueden venir de cuentas de monedas distintas, así que estos totales
+  // solo suman la moneda elegida en el selector — `settings` ya viene
+  // "pisado" con esa moneda desde SearchScreen, como settings.main_currency.
+  const isSelectedCurrencyTx = (t) => (accounts.find((a) => a.id === t.account_id)?.currency || settings.main_currency) === settings.main_currency;
+  const income = results.filter((t) => t.type === "income" && isSelectedCurrencyTx(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+  const expense = results.filter((t) => t.type === "expense" && isSelectedCurrencyTx(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+  const transfer = results.filter((t) => t.type === "transfer" && isSelectedCurrencyTx(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
   // Ancho fijo = el de la fecha (siempre "dd/mm/yyyy", mismo ancho) — la
   // categoría se achica con elipsis si no entra, nunca empuja la columna.
   const dateColWidth = useMemo(() => Math.ceil(measureTextWidth("00/00/0000", DATE_COL_FONT)), []);
@@ -169,6 +173,12 @@ export default function SearchScreen({
   const [noteDismissed, setNoteDismissed] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [draft, setDraft] = useState(filters);
+
+  // Fase 2 de multi-moneda (ver MULTI_CURRENCY_PLAN.md): el renglón de
+  // totales mezclaría monedas distintas en un solo número si no elegís con
+  // cuál mirarlo. Sin persistir, arranca en la principal.
+  const [currency, setCurrency] = useState(settings.main_currency);
+  const currencies = currenciesInUse(accounts, settings);
 
   const recentNoteTitles = useRecentNoteTitles(session.userId);
   const noteSuggestions = query.trim()
@@ -239,10 +249,13 @@ export default function SearchScreen({
         title="Buscar"
         onBack={onBack}
         right={
-          <button style={{ ...styles.iconBtnGhost, position: "relative" }} onClick={openFilters} aria-label="Filtros">
-            <SlidersHorizontal size={19} />
-            {hasActiveFilters(filters) && <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: "#C75D3B" }} />}
-          </button>
+          <HeaderMenu
+            trigger={<><SlidersHorizontal size={19} />{hasActiveFilters(filters) && <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: "#C75D3B" }} />}</>}
+            items={[{ icon: <SlidersHorizontal size={16} color="#6B6355" />, label: "Filtros", onClick: openFilters, badge: hasActiveFilters(filters) }]}
+            currencies={currencies}
+            currency={currency}
+            onChangeCurrency={setCurrency}
+          />
         }
       />
       <div style={{ padding: "10px 20px", borderBottom: "1px solid #ECE3D3" }}>
@@ -293,7 +306,7 @@ export default function SearchScreen({
         ) : (
           <SearchResults
             results={results}
-            settings={settings}
+            settings={{ ...settings, main_currency: currency }}
             accounts={accounts}
             categories={categories}
             slLinks={slLinks}

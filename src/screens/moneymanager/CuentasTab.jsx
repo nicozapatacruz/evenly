@@ -148,22 +148,25 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
         }
       />
       <div style={{ ...styles.form, paddingTop: 12, gap: 8 }}>
-        {totalsByCurrency.map(({ currency, capital, debt, balance }) => (
-          <div key={currency} style={{ display: "flex", justifyContent: "space-between", textAlign: "center", padding: "0 4px 8px" }}>
-            <div style={{ flex: 1 }}>
-              <p style={{ ...styles.muted, padding: 0, fontSize: 12 }}>Capital{totalsByCurrency.length > 1 ? ` (${currency})` : ""}</p>
-              <p style={{ margin: "2px 0 0", fontWeight: 700, color: balanceColor(capital) }}>{money(capital, currency)}</p>
+        {totalsByCurrency.length > 0 && (
+          <div style={{ padding: "0 4px 8px" }}>
+            {/* Encabezados una sola vez (no por moneda) — cada fila de abajo
+                ya se identifica sola por el símbolo de `money()`, no hace
+                falta repetir "(EUR)"/"(COP)" al lado de cada título. */}
+            <div style={{ display: "flex", justifyContent: "space-between", textAlign: "center" }}>
+              <p style={{ ...styles.muted, flex: 1, padding: 0, fontSize: 12 }}>Capital</p>
+              <p style={{ ...styles.muted, flex: 1, padding: 0, fontSize: 12 }}>A deber</p>
+              <p style={{ ...styles.muted, flex: 1, padding: 0, fontSize: 12 }}>Balance</p>
             </div>
-            <div style={{ flex: 1 }}>
-              <p style={{ ...styles.muted, padding: 0, fontSize: 12 }}>A deber</p>
-              <p style={{ margin: "2px 0 0", fontWeight: 700, color: balanceColor(debt) }}>{money(debt, currency)}</p>
-            </div>
-            <div style={{ flex: 1 }}>
-              <p style={{ ...styles.muted, padding: 0, fontSize: 12 }}>Balance</p>
-              <p style={{ margin: "2px 0 0", fontWeight: 700 }}>{money(balance, currency)}</p>
-            </div>
+            {totalsByCurrency.map(({ currency, capital, debt, balance }) => (
+              <div key={currency} style={{ display: "flex", justifyContent: "space-between", textAlign: "center" }}>
+                <p style={{ flex: 1, margin: "2px 0 0", fontWeight: 700, color: balanceColor(capital) }}>{money(capital, currency)}</p>
+                <p style={{ flex: 1, margin: "2px 0 0", fontWeight: 700, color: balanceColor(debt) }}>{money(debt, currency)}</p>
+                <p style={{ flex: 1, margin: "2px 0 0", fontWeight: 700 }}>{money(balance, currency)}</p>
+              </div>
+            ))}
           </div>
-        ))}
+        )}
 
         {activeGroups.length === 0 && (
           <div style={styles.emptyState}>

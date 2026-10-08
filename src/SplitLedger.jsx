@@ -873,6 +873,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
         <EstadisticasTab
           userId={session.userId}
           settings={moneyManager.settings}
+          accounts={moneyManager.accounts}
           categories={moneyManager.categories}
           viewMonth={ledgerMonth}
           setViewMonth={setLedgerMonth}
@@ -906,6 +907,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           categoryId={statsView.categoryId}
           categoryName={statsView.categoryName}
           categoryIcon={statsView.categoryIcon}
+          initialCurrency={statsView.currency}
           viewMonth={ledgerMonth}
           setViewMonth={setLedgerMonth}
           onBack={() => setStatsView({ screen: "list" })}

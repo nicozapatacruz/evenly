@@ -406,12 +406,11 @@ export function useAccountMonthTotals(userId, accountId) {
 // useMonthTransactions + agregación en el cliente en vez de esta vista) evita
 // pedir datos que no se van a usar — ver la nota de enabled en
 // useMonthTransactions, mismo criterio.
-// `mainCurrency`: parche mínimo mientras Estadísticas no tiene (todavía) un
-// selector de moneda propio (ver PENDIENTES.md sección B/C, Fase 2) — la
-// vista ya trae `currency` por fila (agrupada por la moneda de CADA cuenta,
-// no blendeada), así que acá nos quedamos solo con las de tu moneda
-// principal para no mezclar números de monedas distintas en una sola torta.
-// Si usás una sola moneda (el caso normal hoy) esto no cambia nada visible.
+// `mainCurrency`: la moneda elegida en el selector de Estadísticas (Fase 2 de
+// multi-moneda, ver MULTI_CURRENCY_PLAN.md) — la vista ya trae `currency`
+// por fila (agrupada por la moneda de CADA cuenta, no blendeada), así que
+// acá nos quedamos solo con las de esa moneda para no mezclar números de
+// monedas distintas en una sola torta.
 export function useCategoryMonthTotals(userId, viewMonth, type, mainCurrency, enabled = true) {
   const year = viewMonth.getFullYear();
   const month = viewMonth.getMonth() + 1;
@@ -446,15 +445,14 @@ export function useCategoryMonthTotals(userId, viewMonth, type, mainCurrency, en
 // Agrega transacciones ya traídas (crudo) por categoría — mismo shape
 // {category_id, total} que devuelve mm_category_month_totals, para que
 // quien consuma el resultado no tenga que saber de dónde vino el dato.
-// NOTA (Fase 1 de multi-moneda, ver PENDIENTES.md sección B): a diferencia
-// de useCategoryMonthTotals, este camino (usado cuando hay filtros activos)
-// todavía NO filtra por moneda — blendea amount_main de cuentas de
-// distinta moneda si las hay. Gap conocido, queda para la Fase 2 junto con
-// el resto del rediseño de Estadísticas/Buscador.
-function aggregateByCategory(transactions, type) {
+// Filtra por la moneda de la cuenta de cada transacción (mismo criterio
+// que useCategoryMonthTotals del lado del servidor) — Fase 2 de
+// multi-moneda, ver MULTI_CURRENCY_PLAN.md.
+function aggregateByCategory(transactions, type, accounts, mainCurrency) {
   const map = new Map();
   for (const t of transactions) {
     if (t.type !== type) continue;
+    if (accounts.find((a) => a.id === t.account_id)?.currency !== mainCurrency) continue;
     const amount = t.amount_main ?? t.amount;
     map.set(t.category_id, (map.get(t.category_id) || 0) + amount);
   }
@@ -468,15 +466,15 @@ function aggregateByCategory(transactions, type) {
 // y agrega acá — cada camino deshabilita el que no usa, para no pedir datos
 // de más en ningún caso. `monthTxCount` se expone para distinguir "no hay
 // nada este mes" de "el filtro no dejó nada" en la UI.
-export function useStatsCategoryTotals(userId, viewMonth, filters, mainCurrency) {
+export function useStatsCategoryTotals(userId, viewMonth, filters, mainCurrency, accounts) {
   const filtering = hasActiveFilters(filters);
   const { totals: incomeAgg, loading: incomeAggLoading } = useCategoryMonthTotals(userId, viewMonth, "income", mainCurrency, !filtering);
   const { totals: expenseAgg, loading: expenseAggLoading } = useCategoryMonthTotals(userId, viewMonth, "expense", mainCurrency, !filtering);
   const { transactions: monthTx, loading: monthTxLoading } = useMonthTransactions(userId, viewMonth, filtering);
   const filteredTx = useMemo(() => (filtering ? monthTx.filter((t) => matchesFilters(t, filters)) : monthTx), [monthTx, filtering, filters]);
 
-  const incomeTotals = filtering ? aggregateByCategory(filteredTx, "income") : incomeAgg;
-  const expenseTotals = filtering ? aggregateByCategory(filteredTx, "expense") : expenseAgg;
+  const incomeTotals = filtering ? aggregateByCategory(filteredTx, "income", accounts, mainCurrency) : incomeAgg;
+  const expenseTotals = filtering ? aggregateByCategory(filteredTx, "expense", accounts, mainCurrency) : expenseAgg;
   // Separado por tipo (no combinado) — así el que mira "Gastos" no se queda
   // esperando a que termine "Ingreso" si ese todavía no llegó, y viceversa.
   const incomeLoading = filtering ? monthTxLoading : incomeAggLoading;
@@ -490,7 +488,8 @@ export function useStatsCategoryTotals(userId, viewMonth, filters, mainCurrency)
 // mes, no hace falta acotar por rango) y el componente arma la ventana de
 // meses a mostrar alrededor del mes elegido. `categoryId` puede ser null
 // ("Sin categoría").
-// `mainCurrency`: mismo parche mínimo que useCategoryMonthTotals — ver nota ahí.
+// `mainCurrency`: la moneda elegida en el drill-down (arranca en la que
+// estaba elegida en Estadísticas, ver nota en useCategoryMonthTotals).
 export function useCategoryTimeline(userId, type, categoryId, mainCurrency) {
   const [totals, setTotals] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -871,4 +870,18 @@ export function usePendingRateTransactions(userId) {
 // no en una principal global.
 export function accountBalance(accountId, accountTotals) {
   return accountTotals.find((t) => t.account_id === accountId)?.total || 0;
+}
+
+// Monedas que de verdad tienen al menos una cuenta (no borrada) — para
+// armar las opciones de un selector de moneda (Fase 2 de multi-moneda, ver
+// MULTI_CURRENCY_PLAN.md), no las 9 fijas de CURRENCY_LIST. Orden: la
+// principal primero (si está en uso), después "Otras monedas" de Ajustes en
+// ese orden, y al final cualquier moneda en uso que no estuviera en
+// ninguna de las dos (cuenta en una moneda que después se sacó de "Otras
+// monedas").
+export function currenciesInUse(accounts, settings) {
+  const used = new Set(accounts.filter((a) => !a.deleted).map((a) => a.currency));
+  const preferred = [settings.main_currency, ...(settings.other_currencies || [])].filter((c) => used.has(c));
+  const extra = [...used].filter((c) => !preferred.includes(c));
+  return [...preferred, ...extra];
 }

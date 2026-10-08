@@ -1,8 +1,8 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { styles } from "../../lib/styles.js";
-import { TopBar, MonthNav, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
-import { money } from "../../lib/helpers.jsx";
-import { useMonthTransactions, useCategoryTimeline } from "../../lib/moneyManagerData.js";
+import { TopBar, MonthNav, HeaderMenu, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
+import { money, CURRENCIES } from "../../lib/helpers.jsx";
+import { useMonthTransactions, useCategoryTimeline, currenciesInUse } from "../../lib/moneyManagerData.js";
 import { TransactionDayGroups } from "./TransactionDayGroups.jsx";
 
 const MONTH_SHORT = (year, month) => new Date(year, month - 1, 1).toLocaleDateString("es-ES", { month: "short" }).replace(".", "");
@@ -75,19 +75,22 @@ function CategoryTimelineChart({ totals, viewMonth, setViewMonth, color, setting
 // lista) — misma estructura visual que Transacciones (lista agrupada por
 // día), pero filtrada a esta categoría/mes, con una línea de tiempo arriba
 // para saltar entre meses sin volver atrás.
-export default function CategoryDrillDownScreen({ userId, settings, accounts, categories, slLinks, type, categoryId, categoryName, categoryIcon, viewMonth, setViewMonth, onBack, onNewTransaction, onEditTransaction }) {
+export default function CategoryDrillDownScreen({ userId, settings, accounts, categories, slLinks, type, categoryId, categoryName, categoryIcon, initialCurrency, viewMonth, setViewMonth, onBack, onNewTransaction, onEditTransaction }) {
+  // Fase 2 de multi-moneda (ver MULTI_CURRENCY_PLAN.md): arranca en la
+  // moneda que ya estaba elegida en Estadísticas, pero es libre de
+  // cambiarse acá, independiente — no se persiste.
+  const [currency, setCurrency] = useState(initialCurrency || settings.main_currency);
+  const currencies = currenciesInUse(accounts, settings);
+
   const { transactions: monthTx, loading: loadingMonth } = useMonthTransactions(userId, viewMonth);
-  const { totals, loading: loadingTimeline } = useCategoryTimeline(userId, type, categoryId, settings.main_currency);
+  const { totals, loading: loadingTimeline } = useCategoryTimeline(userId, type, categoryId, currency);
   const swipeHandlers = useMonthSwipe(viewMonth, setViewMonth);
   const slide = useMonthSlide(viewMonth);
 
   const categoryTx = monthTx.filter((t) => t.type === type && (categoryId ? t.category_id === categoryId : !t.category_id));
   const color = type === "income" ? "#3B6E62" : "#B0473A";
-  // Parche de continuidad hasta la Fase 2 (ver MULTI_CURRENCY_PLAN.md) —
-  // mismo motivo que useCategoryTimeline arriba: "Total del mes" solo suma
-  // las cuentas de tu moneda principal, para no blendear monedas distintas.
   const monthTotal = categoryTx
-    .filter((t) => (accounts.find((a) => a.id === t.account_id)?.currency || settings.main_currency) === settings.main_currency)
+    .filter((t) => (accounts.find((a) => a.id === t.account_id)?.currency || settings.main_currency) === currency)
     .reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
 
   return (
@@ -96,13 +99,21 @@ export default function CategoryDrillDownScreen({ userId, settings, accounts, ca
         <TopBar
           title={<span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>{categoryIcon && <span>{categoryIcon}</span>} {categoryName}</span>}
           onBack={onBack}
+          right={currencies.length > 1 && (
+            <HeaderMenu
+              trigger={<span style={{ fontSize: 20, fontWeight: 700, color: "#6B6355" }}>{CURRENCIES[currency]?.symbol || currency}</span>}
+              currencies={currencies}
+              currency={currency}
+              onChangeCurrency={setCurrency}
+            />
+          )}
         />
         <div style={{ ...styles.subHeader }} {...swipeHandlers}>
           <MonthNav viewMonth={viewMonth} setViewMonth={setViewMonth} />
         </div>
         {!loadingTimeline && (
           <div style={{ padding: "4px 14px 0" }}>
-            <CategoryTimelineChart totals={totals} viewMonth={viewMonth} setViewMonth={setViewMonth} color={color} settings={settings} />
+            <CategoryTimelineChart totals={totals} viewMonth={viewMonth} setViewMonth={setViewMonth} color={color} settings={{ ...settings, main_currency: currency }} />
           </div>
         )}
       </div>
@@ -119,11 +130,11 @@ export default function CategoryDrillDownScreen({ userId, settings, accounts, ca
         ) : (
           <>
             <p style={{ ...styles.muted, padding: 0, margin: "0 0 4px", textAlign: "right" }}>
-              Total del mes: <strong style={{ color }}>{money(monthTotal, settings.main_currency)}</strong>
+              Total del mes: <strong style={{ color }}>{money(monthTotal, currency)}</strong>
             </p>
             <TransactionDayGroups
               transactions={categoryTx}
-              settings={settings}
+              settings={{ ...settings, main_currency: currency }}
               accounts={accounts}
               categories={categories}
               slLinks={slLinks}

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { styles } from "../../lib/styles.js";
-import { TopBar, MonthNav, HeaderMenu, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
+import { TopBar, MonthNav, HeaderMenu, EmptyState, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
 import { money, CURRENCIES } from "../../lib/helpers.jsx";
 import { useMonthTransactions, useCategoryTimeline, currenciesInUse } from "../../lib/moneyManagerData.js";
 import { TransactionDayGroups } from "./TransactionDayGroups.jsx";
@@ -119,14 +119,11 @@ export default function CategoryDrillDownScreen({ userId, settings, accounts, ca
       </div>
       <div key={slide.key} className={slide.className} style={{ ...styles.form, flex: 1, paddingTop: 12, paddingBottom: 100 }} {...swipeHandlers}>
         {loadingMonth ? (
-          <div style={styles.emptyState}>
-            <p style={styles.emptyTitle}>Cargando…</p>
-          </div>
+          <EmptyState title="Cargando…" />
         ) : categoryTx.length === 0 ? (
-          <div style={styles.emptyState}>
-            <p style={styles.emptyTitle}>Nada registrado este mes</p>
-            <p style={{ ...styles.muted, padding: 0 }}>{categoryName} de {MONTH_SHORT(viewMonth.getFullYear(), viewMonth.getMonth() + 1)} va a aparecer acá.</p>
-          </div>
+          <EmptyState title="Nada registrado este mes">
+            {categoryName} de {MONTH_SHORT(viewMonth.getFullYear(), viewMonth.getMonth() + 1)} va a aparecer acá.
+          </EmptyState>
         ) : (
           <>
             <p style={{ ...styles.muted, padding: 0, margin: "0 0 4px", textAlign: "right" }}>

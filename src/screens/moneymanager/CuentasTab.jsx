@@ -5,7 +5,7 @@ import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } 
 import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
-import { RootHeader, TopBar, ConfirmInline, Footer, Field } from "../../components/Shared.jsx";
+import { RootHeader, TopBar, ConfirmInline, Footer, Field, EmptyState } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
 import { accountBalance, computeCreditCardBalance, disableAutoPayForDeletedAccounts, useCreditCardActivity } from "../../lib/moneyManagerData.js";
 import AccountDetailScreen from "./AccountDetailScreen.jsx";
@@ -169,10 +169,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
         )}
 
         {activeGroups.length === 0 && (
-          <div style={styles.emptyState}>
-            <p style={styles.emptyTitle}>Todavía no tenés cuentas</p>
-            <p style={{ ...styles.muted, padding: 0 }}>Tocá el lápiz arriba para crear tu primer grupo de cuentas.</p>
-          </div>
+          <EmptyState title="Todavía no tenés cuentas">Tocá el lápiz arriba para crear tu primer grupo de cuentas.</EmptyState>
         )}
 
         {activeGroups.map((g) => {
@@ -261,7 +258,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
                   </div>
                   );
                 })}
-                <p style={{ ...styles.muted, padding: 0 }}>Las cuentas eliminadas no suman al balance general.</p>
+                <p style={{ ...styles.muted, padding: "0 10px" }}>Las cuentas eliminadas no suman al balance general.</p>
               </div>
             )}
           </div>
@@ -619,7 +616,7 @@ export function ManageAllAccounts({ session, groups, accounts, accountTotals, se
       <div style={{ ...styles.form, paddingBottom: 100 }}>
         {groups.filter((g) => !g.deleted && accounts.some((a) => a.group_id === g.id && !a.deleted)).map((g) => (
           <div key={g.id}>
-            <p style={styles.label}>{g.name}</p>
+            <p style={{ ...styles.label, marginBottom: 12 }}>{g.name}</p>
             <AccountGroupEditor
               group={g}
               accounts={accounts}

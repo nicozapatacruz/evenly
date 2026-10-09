@@ -199,7 +199,7 @@ export default function ConfigScreen({
       {section === "moneymanager" && (
         <div style={{ ...styles.form, paddingTop: 12 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-            <p style={styles.label}>Categorías/Cuentas</p>
+            <p style={{ ...styles.label, marginBottom: 12 }}>Categorías/Cuentas</p>
             <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
               <MenuRow label="Categorías de ingreso" onClick={() => setMoneyManagerScreen("categoriesIncome")} />
               <MenuRow label="Categorías de gasto" onClick={() => setMoneyManagerScreen("categoriesExpense")} />
@@ -209,7 +209,7 @@ export default function ConfigScreen({
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-            <p style={styles.label}>Transacciones</p>
+            <p style={{ ...styles.label, marginBottom: 12 }}>Transacciones</p>
             <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
               <MenuRow label="Detalles del período" onClick={() => setMoneyManagerScreen("period")} />
               <MenuRow label="Transacciones repetidas" onClick={() => setMoneyManagerScreen("recurring")} last />
@@ -217,7 +217,7 @@ export default function ConfigScreen({
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-            <p style={styles.label}>Ajustes</p>
+            <p style={{ ...styles.label, marginBottom: 12 }}>Ajustes</p>
             <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
               <MenuRow label="Ajustes de moneda" onClick={() => setMoneyManagerScreen("currency")} />
               <MenuRow label="Respaldo" badge="Próximamente" />
@@ -565,7 +565,7 @@ function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onO
         El botón de "+" en Split Ledger crea el gasto directo en este grupo.
       </p>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <p style={styles.label}>Tus grupos ({(groups || []).length})</p>
 
         {/* Invitaciones pendientes */}

@@ -30,6 +30,14 @@ export const globalCss = `
     box-shadow: inset 0 0 0 2px #C75D3B;
   }
   button { font-family: inherit; cursor: pointer; color: inherit; }
+  /* El navegador le pone a cualquier <p> sin margen explícito un default de
+     1em (relativo a su propio font-size) — eso se sumaba al gap del
+     contenedor flex en vez de superponerse, duplicando el espacio en varios
+     lugares (ver MULTI_CURRENCY_PLAN.md/conversación 2026-10-08). Reseteado
+     acá una sola vez en vez de "margin:0" repetido a mano en cada <p> nuevo
+     — los que ya necesitan una separación la siguen poniendo a mano
+     (ej. marginBottom:12 entre un título y su contenido).*/
+  p { margin: 0; }
   select { appearance: none; -webkit-appearance: none; background-image: none; }
   /* iOS Safari ignora font-size/height inline en <input type="date">; hay que
      anular su apariencia nativa o el campo sale gigante en mobile. */

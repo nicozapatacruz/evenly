@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Plus, Search, SlidersHorizontal, Star } from "lucide-react";
 import { styles } from "../../lib/styles.js";
-import { RootHeader, MonthNav, TodayButton, FiltersActiveBanner, PendingRateBanner, HeaderMenu, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
+import { RootHeader, MonthNav, TodayButton, FiltersActiveBanner, PendingRateBanner, HeaderMenu, EmptyState, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
 import { useMonthTransactions, usePendingRateTransactions, currenciesInUse } from "../../lib/moneyManagerData.js";
 import { hasActiveFilters, matchesFilters } from "../../lib/filterHelpers.js";
@@ -103,16 +103,11 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {hasActiveFilters(filters) && <div style={{ marginBottom: 4 }}><FiltersActiveBanner onOpen={onOpenFilters} onClear={onClearFilters} /></div>}
           {loading ? (
-            <div style={styles.emptyState}>
-              <p style={styles.emptyTitle}>Cargando transacciones…</p>
-            </div>
+            <EmptyState title="Cargando transacciones…" />
           ) : filtered.length === 0 ? (
-            <div style={styles.emptyState}>
-              <p style={styles.emptyTitle}>{monthTx.length === 0 ? "Nada registrado este mes" : "Nada coincide con el filtro"}</p>
-              <p style={{ ...styles.muted, padding: 0 }}>
-                {monthTx.length === 0 ? 'Tocá el "+" de abajo para anotar un ingreso, gasto o transferencia.' : "Probá cambiando los filtros."}
-              </p>
-            </div>
+            <EmptyState title={monthTx.length === 0 ? "Nada registrado este mes" : "Nada coincide con el filtro"}>
+              {monthTx.length === 0 ? 'Tocá el "+" de abajo para anotar un ingreso, gasto o transferencia.' : "Probá cambiando los filtros."}
+            </EmptyState>
           ) : (
             <TransactionDayGroups
               transactions={filtered}

@@ -67,8 +67,8 @@ export default function CurrencySettingsScreen({ session, settings, reload, show
         </Field>
 
         <div>
-          <p style={styles.label}>Otras monedas</p>
-          <p style={{ ...styles.muted, padding: 0, marginTop: -6, marginBottom: 8 }}>
+          <p style={{ ...styles.label, marginBottom: 6 }}>Otras monedas</p>
+          <p style={{ ...styles.muted, padding: 0, marginBottom: 6 }}>
             Aparecen en ese orden en el selector de moneda de cada transacción.
           </p>
           {otherCurrencies.length === 0 && (

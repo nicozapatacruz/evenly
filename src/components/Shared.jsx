@@ -592,6 +592,20 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", o
 // elegida — si `items` viene vacío, el popover es solo esa sección.
 // Mismo mecanismo de click-afuera-cierra + evento global "mm-picker-open"
 // que ya usa PickerField (un solo popover abierto a la vez en toda la app).
+// Mismo patrón repetido en cargando/sin resultados/nada registrado en toda
+// la app: ícono opcional, título siempre, subtítulo opcional. El subtítulo
+// va con padding:0 porque styles.emptyState ya trae su propio padding
+// horizontal; sumarle el "0 20px" de styles.muted lo dejaría con el doble.
+export function EmptyState({ icon, title, children }) {
+  return (
+    <div style={styles.emptyState}>
+      {icon && <div style={styles.emptyIcon}>{icon}</div>}
+      <p style={styles.emptyTitle}>{title}</p>
+      {children && <p style={{ ...styles.muted, padding: 0 }}>{children}</p>}
+    </div>
+  );
+}
+
 export function HeaderMenu({ trigger, items = [], currencies = [], currency, onChangeCurrency }) {
   const [open, setOpen] = useState(false);
   const idRef = useRef(null);

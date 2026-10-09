@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Search, SlidersHorizontal } from "lucide-react";
 import { styles } from "../../lib/styles.js";
-import { RootHeader, MonthNav, TodayButton, FiltersActiveBanner, HeaderMenu, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
+import { RootHeader, MonthNav, TodayButton, FiltersActiveBanner, HeaderMenu, EmptyState, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
 import { useStatsCategoryTotals, currenciesInUse } from "../../lib/moneyManagerData.js";
 import { hasActiveFilters } from "../../lib/filterHelpers.js";
@@ -136,16 +136,11 @@ export default function EstadisticasTab({ userId, settings, accounts, categories
         <div>
         {filtering && <div style={{ marginBottom: 12 }}><FiltersActiveBanner onOpen={onOpenFilters} onClear={onClearFilters} /></div>}
         {loading ? (
-          <div style={styles.emptyState}>
-            <p style={styles.emptyTitle}>Cargando…</p>
-          </div>
+          <EmptyState title="Cargando…" />
         ) : arcs.length === 0 ? (
-          <div style={styles.emptyState}>
-            <p style={styles.emptyTitle}>{filtering && monthTxCount > 0 ? "Nada coincide con el filtro" : "Nada registrado este mes"}</p>
-            <p style={{ ...styles.muted, padding: 0 }}>
-              {filtering && monthTxCount > 0 ? "Probá cambiando los filtros." : `${type === "income" ? "Ingresos" : "Gastos"} de ${MONTH_LABEL(viewMonth)} van a aparecer acá.`}
-            </p>
-          </div>
+          <EmptyState title={filtering && monthTxCount > 0 ? "Nada coincide con el filtro" : "Nada registrado este mes"}>
+            {filtering && monthTxCount > 0 ? "Probá cambiando los filtros." : `${type === "income" ? "Ingresos" : "Gastos"} de ${MONTH_LABEL(viewMonth)} van a aparecer acá.`}
+          </EmptyState>
         ) : (
           <div onClick={() => setSelectedKey(null)}>
             <svg viewBox="0 0 200 200" style={{ display: "block", width: 220, height: 220, margin: "8px auto" }}>

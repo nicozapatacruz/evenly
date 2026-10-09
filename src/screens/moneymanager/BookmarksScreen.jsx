@@ -4,7 +4,7 @@ import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCen
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { styles } from "../../lib/styles.js";
-import { TopBar, ConfirmInline } from "../../components/Shared.jsx";
+import { TopBar, ConfirmInline, EmptyState } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
 import { useBookmarks, createBookmark, deleteBookmark, reorderBookmarks } from "../../lib/bookmarksData.js";
 import { searchTransactions } from "../../lib/moneyManagerData.js";
@@ -81,18 +81,11 @@ export default function BookmarksScreen({ userId, accounts, categories, onBack, 
         }
       />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        {loading && (
-          <div style={styles.emptyState}>
-            <p style={styles.emptyTitle}>Cargando…</p>
-          </div>
-        )}
+        {loading && <EmptyState title="Cargando…" />}
         {!loading && grouped.length === 0 && (
-          <div style={styles.emptyState}>
-            <p style={styles.emptyTitle}>Todavía no tenés marcadores</p>
-            <p style={{ ...styles.muted, padding: 0 }}>
-              Tocá el "+" de arriba y elegí una transacción ya cargada para guardarla como atajo.
-            </p>
-          </div>
+          <EmptyState title="Todavía no tenés marcadores">
+            Tocá el "+" de arriba y elegí una transacción ya cargada para guardarla como atajo.
+          </EmptyState>
         )}
         {grouped.map(({ type, items }) => (
           <div key={type}>
@@ -247,16 +240,8 @@ function BookmarkPickerScreen({ userId, accounts, categories, onBack, onPicked, 
     <div style={styles.screen}>
       <TopBar title="Elegí una transacción" onBack={onBack} />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        {transactions === null && (
-          <div style={styles.emptyState}>
-            <p style={styles.emptyTitle}>Cargando…</p>
-          </div>
-        )}
-        {transactions?.length === 0 && (
-          <div style={styles.emptyState}>
-            <p style={styles.emptyTitle}>No hay transacciones todavía</p>
-          </div>
-        )}
+        {transactions === null && <EmptyState title="Cargando…" />}
+        {transactions?.length === 0 && <EmptyState title="No hay transacciones todavía" />}
         {transactions && transactions.length > 0 && (
           <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
             {transactions.map((t, i) => {

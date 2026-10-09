@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { styles } from "../../lib/styles.js";
-import { TopBar, MonthNav, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
+import { TopBar, MonthNav, EmptyState, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
 import { money, measureTextWidth } from "../../lib/helpers.jsx";
 import { useAccountMonthTransactions, useAccountMonthTotals } from "../../lib/moneyManagerData.js";
 import { TransactionDayGroups } from "./TransactionDayGroups.jsx";
@@ -63,9 +63,7 @@ export default function AccountActivityScreen({
       </div>
 
       {loadingTotals ? (
-        <div style={styles.emptyState}>
-          <p style={styles.emptyTitle}>Cargando…</p>
-        </div>
+        <EmptyState title="Cargando…" />
       ) : tab === "diario" ? (
         <DiarioSubTab
           userId={userId} settings={accountSettings} accounts={accounts} categories={categories} slLinks={slLinks}
@@ -160,13 +158,9 @@ function DiarioSubTab({ userId, settings, accounts, categories, slLinks, account
       </div>
       <div key={slide.key} className={slide.className} style={{ ...styles.form, flex: 1, paddingTop: 12, paddingBottom: 100 }} {...swipeHandlers}>
         {loading ? (
-          <div style={styles.emptyState}>
-            <p style={styles.emptyTitle}>Cargando…</p>
-          </div>
+          <EmptyState title="Cargando…" />
         ) : monthTx.length === 0 ? (
-          <div style={styles.emptyState}>
-            <p style={styles.emptyTitle}>Nada registrado este mes</p>
-          </div>
+          <EmptyState title="Nada registrado este mes" />
         ) : (
           <TransactionDayGroups
             transactions={monthTx}
@@ -329,9 +323,7 @@ function AnualSubTab({ totals, settings, onOpenYear }) {
       </div>
       <div style={{ ...styles.form, flex: 1, paddingTop: 12, paddingBottom: 100, display: "flex", flexDirection: "column", gap: 6 }}>
         {byYear.length === 0 ? (
-          <div style={styles.emptyState}>
-            <p style={styles.emptyTitle}>Nada registrado todavía</p>
-          </div>
+          <EmptyState title="Nada registrado todavía" />
         ) : byYear.map((y) => (
           <div
             key={y.year}

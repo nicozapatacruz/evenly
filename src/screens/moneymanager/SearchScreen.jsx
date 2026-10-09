@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Search as SearchIcon, SlidersHorizontal, Trash2, Divide, AlertCircle } from "lucide-react";
 import { styles } from "../../lib/styles.js";
-import { TopBar, HeaderMenu } from "../../components/Shared.jsx";
+import { TopBar, HeaderMenu, EmptyState } from "../../components/Shared.jsx";
 import { money, dateInputValueInZone, measureTextWidth } from "../../lib/helpers.jsx";
 import { useRecentNoteTitles, searchTransactions, isRatePending, currenciesInUse } from "../../lib/moneyManagerData.js";
 import { EMPTY_FILTERS, hasActiveFilters } from "../../lib/filterHelpers.js";
@@ -290,19 +290,11 @@ export default function SearchScreen({
 
       <div style={{ ...styles.form, flex: 1, paddingTop: 12, paddingBottom: 100 }}>
         {!hasSearched ? (
-          <div style={styles.emptyState}>
-            <p style={styles.emptyTitle}>Buscá por nota o descripción</p>
-            <p style={{ ...styles.muted, padding: 0 }}>Escribí algo y apretá Enter, o elegí una sugerencia.</p>
-          </div>
+          <EmptyState title="Buscá por nota o descripción">Escribí algo y apretá Enter, o elegí una sugerencia.</EmptyState>
         ) : loading ? (
-          <div style={styles.emptyState}>
-            <p style={styles.emptyTitle}>Buscando…</p>
-          </div>
+          <EmptyState title="Buscando…" />
         ) : results.length === 0 ? (
-          <div style={styles.emptyState}>
-            <p style={styles.emptyTitle}>Sin resultados</p>
-            <p style={{ ...styles.muted, padding: 0 }}>Probá con otro texto o revisá los filtros.</p>
-          </div>
+          <EmptyState title="Sin resultados">Probá con otro texto o revisá los filtros.</EmptyState>
         ) : (
           <SearchResults
             results={results}

@@ -9,7 +9,7 @@ import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCen
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { styles } from "../../lib/styles.js";
-import { TopBar, RootHeader, ConfirmInline, Modal, Footer, PhotoPicker, Field, ToggleField, PickerField, SplitLedgerIcon } from "../../components/Shared.jsx";
+import { TopBar, RootHeader, ConfirmInline, Modal, Footer, PhotoPicker, Field, ToggleField, PickerField, SplitLedgerIcon, EmptyState } from "../../components/Shared.jsx";
 import { linkGroupToAccount, updateLinkDefaults, unlinkGroup } from "../../lib/splitLedgerLink.js";
 import {
   uid, CURRENCIES, CURRENCY_LIST, money, parseAmountInput, ICON_KEYS, IconComp,
@@ -428,17 +428,13 @@ function Home({ groups, loading, session, moneyManager, onOpen, onNewExpense }) 
     <div style={styles.screen}>
       <RootHeader title="Tus grupos" />
 
-      {loading && <p style={{ ...styles.muted, paddingTop: 12 }}>Abriendo los grupos…</p>}
+      {loading && <EmptyState title="Abriendo los grupos…" />}
 
       {!loading && groups && groups.length === 0 && (
-        <div style={styles.emptyState}>
-          <div style={styles.emptyIcon}><Receipt size={28} strokeWidth={1.5} /></div>
-          <p style={styles.emptyTitle}>Todavía no hay ningún grupo</p>
-          <p style={styles.muted}>
-            Crea tu primer grupo desde Configuración → Split Ledger — un viaje,
-            un piso, una junta — y empieza a anotar quién paga qué.
-          </p>
-        </div>
+        <EmptyState icon={<Receipt size={28} strokeWidth={1.5} />} title="Todavía no hay ningún grupo">
+          Crea tu primer grupo desde Configuración → Split Ledger (un viaje, un
+          piso, una junta) y empieza a anotar quién paga qué.
+        </EmptyState>
       )}
 
       {!loading && groups && groups.length > 0 && (
@@ -729,13 +725,14 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
 
         {isEditing ? (
           <>
-            {/* Envueltos juntos (gap:8, no el gap:14 del form de afuera) —
-                label y lista son una sola unidad, el form entero no debería
-                separarlos como si fueran 2 secciones distintas. display:
-                "block" en el <p> — styles.label trae flexDirection:"column"
-                (pensado para un Field con label+input apilados), que acá
-                partía "Personas" y el "*" en 2 líneas en vez de una. */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {/* Envueltos juntos (gap:6, no el gap:14 del form de afuera) —
+                label, lista, campo para sumar gente e invitar son una sola
+                unidad, el form entero no debería separarlos como si fueran
+                varias secciones distintas. display:"block" en el <p> —
+                styles.label trae flexDirection:"column" (pensado para un
+                Field con label+input apilados), que acá partía "Personas" y
+                el "*" en 2 líneas en vez de una. */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <p style={{ ...styles.label, display: "block", margin: 0 }}>Personas <span style={{ color: "#B0473A" }}>*</span></p>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {members.map((m) => (
@@ -772,21 +769,22 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
                 </div>
               ))}
             </div>
-            </div>
             <div style={{ display: "flex", gap: 8 }}>
               <input style={{ ...styles.input, flex: 1 }} value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)} onBlur={() => touch("members")} placeholder="Nombre de la nueva persona" onKeyDown={(e) => e.key === "Enter" && newMemberName.trim() && addMember()} />
               <button style={{ ...styles.btnSecondarySmall, opacity: newMemberName.trim() ? 1 : 0.5 }} onClick={addMember} disabled={!newMemberName.trim()}><UserPlus size={16} /></button>
             </div>
             {touched.members && members.length < 2 && (
-              <p style={{ margin: "-4px 0 0", fontSize: 12, color: "#B0473A", fontFamily: "system-ui, sans-serif" }}>El grupo necesita al menos 2 personas.</p>
+              <p style={{ margin: 0, fontSize: 12, color: "#B0473A", fontFamily: "system-ui, sans-serif" }}>El grupo necesita al menos 2 personas.</p>
             )}
 
-            {/* Invitar personas */}
-            {group.creatorId === session?.userId && (
+            {/* Invitar personas. Si ya no queda nadie sin usuario vinculado,
+                no hay nada que invitar: el botón directamente no aparece. */}
+            {group.creatorId === session?.userId && members.some((m) => !m.linkedUserId) && (
               <button style={styles.btnSecondary} onClick={onInvite}>
-                <UserPlus size={16} /> Invitar a alguien al grupo
+                <UserPlus size={16} /> Vincular un usuario a un miembro ya creado
               </button>
             )}
+            </div>
 
             {/* ── Categorías colapsables ── mismo aspecto que "Dividido en"
                 (caja con borde, el body queda pegado y conectado abajo). */}
@@ -829,10 +827,10 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
         ) : (
           <>
             {/* Mismo motivo que "Personas" (modo editar) — label+contenido
-                envueltos juntos (gap:8) para no heredar el gap:14 del form,
+                envueltos juntos (gap:6) para no heredar el gap:14 del form,
                 y display:"block" para que "Integrantes" y el "*" no se
                 partan en 2 líneas (styles.label trae flexDirection:column). */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <p style={{ ...styles.label, display: "block", margin: 0 }}>Integrantes <span style={{ color: "#B0473A" }}>*</span></p>
 
               {/* Tú — fijo, no se puede quitar */}
@@ -1239,7 +1237,7 @@ function GroupView({ group, onBack, onAddExpense, onOpenExpense, onOpenPayment, 
               const txns = txnsByCurrency[currency];
               if (txns.length === 0) return null;
               return (
-                <div key={currency} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div key={currency} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {currencies.length > 1 && (
                     <p style={{ ...styles.label, padding: "0 20px" }}>{currency}</p>
                   )}
@@ -1317,7 +1315,7 @@ function GroupView({ group, onBack, onAddExpense, onOpenExpense, onOpenPayment, 
                   const isZero = Math.abs(bal) < 0.01;
                   const isPos = bal > 0.005;
                   return (
-                    <div key={currency} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div key={currency} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                       {/* Balance general de esta moneda */}
                       <div style={{ padding: "14px 16px", borderRadius: 12, background: isZero ? "#F3EFE5" : isPos ? "#EAF1ED" : "#FBEDE7", border: `1px solid ${isZero ? "#DDD2BE" : isPos ? "#CFE2D7" : "#EBC9BA"}` }}>
                         <p style={{ margin: 0, fontSize: 13, fontFamily: "system-ui, sans-serif", color: "#76695A" }}>
@@ -1367,7 +1365,11 @@ function GroupView({ group, onBack, onAddExpense, onOpenExpense, onOpenPayment, 
 
       {tab === "activity" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
-          {activityItems.length === 0 && <p style={styles.muted}>Aún no hay actividad registrada.</p>}
+          {activityItems.length === 0 && (
+            <EmptyState icon={<Receipt size={28} strokeWidth={1.5} />} title="Todavía no hay actividad">
+              Tocá el "+" de abajo para cargar el primer gasto del grupo.
+            </EmptyState>
+          )}
           {(() => {
             // Agrupar por mes (ya están en orden descendente por ts)
             const rows = [];
@@ -1473,7 +1475,7 @@ function ExpenseDetail({ group, expenseId, onBack, onEdit }) {
     return (
       <div style={styles.screen}>
         <TopBar title="Gasto" onBack={onBack} />
-        <p style={{ ...styles.muted, paddingTop: 12 }}>Este gasto ya no existe.</p>
+        <EmptyState icon={<Trash2 size={28} strokeWidth={1.5} />} title="Este gasto ya no existe" />
       </div>
     );
   }
@@ -1521,7 +1523,7 @@ function ExpenseDetail({ group, expenseId, onBack, onEdit }) {
 
         {/* Quién pagó */}
         <div>
-          <p style={{ ...styles.label, marginBottom: 4 }}>{payerIds.length > 1 ? "Quiénes pagaron" : "Quién pagó"}</p>
+          <p style={{ ...styles.label, marginBottom: 6 }}>{payerIds.length > 1 ? "Quiénes pagaron" : "Quién pagó"}</p>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {payerIds.map((id) => (
               <div key={id} style={styles.shareRow}>
@@ -1537,7 +1539,7 @@ function ExpenseDetail({ group, expenseId, onBack, onEdit }) {
 
         {/* Cómo se divide */}
         <div>
-          <p style={{ ...styles.label, marginBottom: 4 }}>Cómo se divide</p>
+          <p style={{ ...styles.label, marginBottom: 6 }}>Cómo se divide</p>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {shareIds.map((id) => (
               <div key={id} style={styles.shareRow}>
@@ -1557,7 +1559,7 @@ function ExpenseDetail({ group, expenseId, onBack, onEdit }) {
 
         {e.notes && (
           <div>
-            <p style={{ ...styles.label, marginBottom: 4 }}>Notas</p>
+            <p style={{ ...styles.label, marginBottom: 6 }}>Notas</p>
             <p style={{ ...styles.muted, padding: 0, margin: 0 }}>{e.notes}</p>
           </div>
         )}
@@ -1929,7 +1931,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
           <span style={{ fontSize: 12, fontWeight: 400, color: "#B0473A", marginTop: -8, fontFamily: "system-ui, sans-serif" }}>Este campo es obligatorio.</span>
         )}
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <p style={styles.label}>¿Quién pagó?</p>
           <div style={styles.splitModeRow}>
             <button style={payerMode === "single" ? styles.tabActive : styles.tab} onClick={() => setPayerMode("single")}>Una persona</button>
@@ -1969,7 +1971,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
                 </button>
               );
             })}
-            <p style={styles.muted}>
+            <p style={{ ...styles.muted, padding: "0 10px" }}>
               Suma: {money(multiPayerTotal, currency)}{validAmount ? ` / ${money(numericAmount, currency)}` : ""}
             </p>
             {validAmount && (() => {
@@ -1977,7 +1979,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
               if (Math.abs(remaining) < 0.01) return null;
               const isOver = remaining < -0.01;
               return (
-                <p style={{ ...styles.muted, marginTop: -6, fontWeight: 700, color: isOver ? "#B0473A" : "#6B6355" }}>
+                <p style={{ ...styles.muted, padding: "0 10px", marginTop: -6, fontWeight: 700, color: isOver ? "#B0473A" : "#6B6355" }}>
                   {isOver ? "Sobra" : "Falta"}: {money(Math.abs(remaining), currency)}
                 </p>
               );
@@ -2043,14 +2045,14 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
                       </button>
                     );
                   })}
-                  <p style={styles.muted}>Suma: {money(exactTotal, currency)} {validAmount ? `/ ${money(numericAmount, currency)}` : ""}</p>
+                  <p style={{ ...styles.muted, padding: "0 10px" }}>Suma: {money(exactTotal, currency)} {validAmount ? `/ ${money(numericAmount, currency)}` : ""}</p>
                   {validAmount && (() => {
                     const remaining = numericAmount - exactTotal;
                     const isExact = Math.abs(remaining) < 0.01;
                     if (isExact) return null;
                     const isOver = remaining < -0.01;
                     return (
-                      <p style={{ ...styles.muted, marginTop: -6, fontWeight: 700, color: isOver ? "#B0473A" : "#6B6355" }}>
+                      <p style={{ ...styles.muted, padding: "0 10px", marginTop: -6, fontWeight: 700, color: isOver ? "#B0473A" : "#6B6355" }}>
                         {isOver ? "Sobra" : "Falta"}: {money(Math.abs(remaining), currency)}
                       </p>
                     );
@@ -2072,13 +2074,13 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
                       </button>
                     );
                   })}
-                  <p style={styles.muted}>Suma: {percentTotal.toFixed(0)}% / 100%</p>
+                  <p style={{ ...styles.muted, padding: "0 10px" }}>Suma: {percentTotal.toFixed(0)}% / 100%</p>
                   {(() => {
                     const remaining = 100 - percentTotal;
                     if (Math.abs(remaining) < 0.5) return null;
                     const isOver = remaining < -0.5;
                     return (
-                      <p style={{ ...styles.muted, marginTop: -6, fontWeight: 700, color: isOver ? "#B0473A" : "#6B6355" }}>
+                      <p style={{ ...styles.muted, padding: "0 10px", marginTop: -6, fontWeight: 700, color: isOver ? "#B0473A" : "#6B6355" }}>
                         {isOver ? "Sobra" : "Falta"}: {Math.abs(remaining).toFixed(0)}%
                       </p>
                     );
@@ -2102,7 +2104,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
                       </button>
                     );
                   })}
-                  <p style={styles.muted}>Las "partes" son proporciones — alguien con 2 partes paga el doble que alguien con 1.</p>
+                  <p style={{ ...styles.muted, padding: "0 10px" }}>Las "partes" son proporciones: alguien con 2 partes paga el doble que alguien con 1.</p>
                   {participantIds.reduce((s, id) => s + (parseFloat(shareUnits[id] || "0") || 0), 0) <= 0 && (
                     <p style={styles.errText}>Asigna al menos una parte a alguien en el reparto.</p>
                   )}
@@ -2221,7 +2223,7 @@ function PaymentDetail({ group, paymentId, onBack, onEdit }) {
     return (
       <div style={styles.screen}>
         <TopBar title="Pago" onBack={onBack} />
-        <p style={{ ...styles.muted, paddingTop: 12 }}>Este pago ya no existe.</p>
+        <EmptyState icon={<Trash2 size={28} strokeWidth={1.5} />} title="Este pago ya no existe" />
       </div>
     );
   }
@@ -2262,7 +2264,7 @@ function PaymentDetail({ group, paymentId, onBack, onEdit }) {
 
         {p.note && (
           <div>
-            <p style={{ ...styles.label, marginBottom: 4 }}>Nota</p>
+            <p style={{ ...styles.label, marginBottom: 6 }}>Nota</p>
             <p style={{ ...styles.muted, padding: 0, margin: 0 }}>{p.note}</p>
           </div>
         )}
@@ -2390,22 +2392,34 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
       <div style={{ ...styles.form, paddingBottom: 100 }}>
         <p style={{ ...styles.muted, padding: 0 }}>Esto no mueve dinero — solo anota que el pago ya se hizo fuera de la app, para saldar el balance.</p>
 
-        <p style={styles.label}>¿Quién paga?</p>
-        <div style={styles.payerRow}>
-          {members.map((m) => (
-            <button key={m.id} onClick={() => setFrom(m.id)} style={{ ...styles.payerChip, borderColor: from === m.id ? colorFor(m.id) : "transparent", background: from === m.id ? `${colorFor(m.id)}1a` : "#FAF7F2" }}>
-              <span style={{ ...styles.avatar, background: colorFor(m.id), width: 26, height: 26, fontSize: 11 }}>{initials(m.name)}</span>{m.name}
-            </button>
-          ))}
+        {/* Envuelto en su propio flex-column gap:0 (mismo patrón que
+            ConfigScreen) para que la separación entre la pregunta y sus
+            chips sea SOLO los 4px de marginBottom (misma convención que
+            "Quiénes pagaron"/"Cómo se divide"/"Notas" en el gasto) sin
+            sumarle el gap:14 de styles.form — ese gap:14 sigue aplicando
+            entre "¿Quién paga?" y "¿Quién recibe?", como separación entre
+            preguntas distintas. Sin el div, el margen del <p> y el gap del
+            form se suman en vez de superponerse (CSS no los colapsa). */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+          <p style={{ ...styles.label, marginBottom: 6 }}>¿Quién paga?</p>
+          <div style={styles.payerRow}>
+            {members.map((m) => (
+              <button key={m.id} onClick={() => setFrom(m.id)} style={{ ...styles.payerChip, borderColor: from === m.id ? colorFor(m.id) : "transparent", background: from === m.id ? `${colorFor(m.id)}1a` : "#FAF7F2" }}>
+                <span style={{ ...styles.avatar, background: colorFor(m.id), width: 26, height: 26, fontSize: 11 }}>{initials(m.name)}</span>{m.name}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <p style={styles.label}>¿Quién recibe?</p>
-        <div style={styles.payerRow}>
-          {members.filter((m) => m.id !== from).map((m) => (
-            <button key={m.id} onClick={() => setTo(m.id)} style={{ ...styles.payerChip, borderColor: to === m.id ? colorFor(m.id) : "transparent", background: to === m.id ? `${colorFor(m.id)}1a` : "#FAF7F2" }}>
-              <span style={{ ...styles.avatar, background: colorFor(m.id), width: 26, height: 26, fontSize: 11 }}>{initials(m.name)}</span>{m.name}
-            </button>
-          ))}
+        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+          <p style={{ ...styles.label, marginBottom: 6 }}>¿Quién recibe?</p>
+          <div style={styles.payerRow}>
+            {members.filter((m) => m.id !== from).map((m) => (
+              <button key={m.id} onClick={() => setTo(m.id)} style={{ ...styles.payerChip, borderColor: to === m.id ? colorFor(m.id) : "transparent", background: to === m.id ? `${colorFor(m.id)}1a` : "#FAF7F2" }}>
+                <span style={{ ...styles.avatar, background: colorFor(m.id), width: 26, height: 26, fontSize: 11 }}>{initials(m.name)}</span>{m.name}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div style={{ display: "flex", gap: 10 }}>
@@ -2496,14 +2510,11 @@ function InviteScreen({ group, session, groupInvites = [], onBack, onSend, onCan
         </p>
 
         {/* Mismo motivo que "Personas"/"Integrantes" — label+contenido
-            envueltos juntos (gap:8) con margin:0 explícito en el <p> (si no,
+            envueltos juntos (gap:6) con margin:0 explícito en el <p> (si no,
             su margen por defecto del navegador se suma al gap). */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <p style={{ ...styles.label, display: "block", margin: 0 }}>¿A qué miembro corresponde? <span style={{ color: "#B0473A" }}>*</span></p>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {invitableMembers.length === 0 && (
-            <p style={styles.muted}>Todos los miembros ya tienen usuario vinculado.</p>
-          )}
           {invitableMembers.map(m => {
             const pending = groupInvites.find(i => i.memberId === m.id);
             const isSelected = selectedMemberId === m.id;

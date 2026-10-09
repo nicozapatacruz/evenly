@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus, Repeat, X } from "lucide-react";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
-import { ConfirmInline } from "../../components/Shared.jsx";
+import { ConfirmInline, EmptyState } from "../../components/Shared.jsx";
 import { money, fmtDate } from "../../lib/helpers.jsx";
 import { RECURRING_FREQUENCIES } from "../../lib/moneyManagerData.js";
 
@@ -42,7 +42,9 @@ export default function RecurringScreen({ accounts, recurring, reload, showError
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       {recurring.length === 0 && (
-        <p style={{ ...styles.muted, padding: 0 }}>No tenés transacciones repetidas todavía.</p>
+        <EmptyState icon={<Repeat size={28} strokeWidth={1.5} />} title="Todavía no hay transacciones repetidas">
+          Tocá "Nueva transacción repetida" para crear la primera.
+        </EmptyState>
       )}
       {recurring.map((r) => (
         <div key={r.id}>

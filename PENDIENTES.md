@@ -46,9 +46,9 @@ Lista viva de pendientes del proyecto. Reglas:
 
 ## C. Descartados (se evaluaron y se decidió no construirlos)
 
-- [ ] Sub-vistas Calendario/Mensual/Resumen/Descripción en el tab Transacciones (solo queda "Diario"). Descartado 2026-09-30.
-- [ ] Presupuestos (Budgets) y Tags. Descartado 2026-09-30 — la data real de Nicolas casi no los usaba.
-- [ ] Sub-tabs "Presupuesto" y "Nota" en Estadísticas. Descartado 2026-09-30 — el caso de uso real lo cubre el Buscador de gastos (E).
+- [x] ~~Sub-vistas Calendario/Mensual/Resumen/Descripción en el tab Transacciones (solo queda "Diario").~~ Descartado 2026-09-30.
+- [x] ~~Presupuestos (Budgets) y Tags.~~ Descartado 2026-09-30: la data real de Nicolas casi no los usaba.
+- [x] ~~Sub-tabs "Presupuesto" y "Nota" en Estadísticas.~~ Descartado 2026-09-30: el caso de uso real lo cubre el Buscador de gastos (E).
 
 ## D. Decisiones diferidas a propósito
 

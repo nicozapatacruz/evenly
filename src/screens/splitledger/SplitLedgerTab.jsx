@@ -2404,7 +2404,20 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
           <p style={{ ...styles.label, marginBottom: 6 }}>¿Quién paga?</p>
           <div style={styles.payerRow}>
             {members.map((m) => (
-              <button key={m.id} onClick={() => setFrom(m.id)} style={{ ...styles.payerChip, borderColor: from === m.id ? colorFor(m.id) : "transparent", background: from === m.id ? `${colorFor(m.id)}1a` : "#FAF7F2" }}>
+              <button
+                key={m.id}
+                onClick={() => {
+                  setFrom(m.id);
+                  // Si solo queda una persona posible para "¿Quién recibe?" (ej. un
+                  // grupo de 2), no tiene sentido pedir que la elija a mano: es la
+                  // única opción. Si no, mismo criterio de siempre (limpiar si
+                  // quedó igual al nuevo "¿Quién paga?").
+                  const remaining = members.filter((x) => x.id !== m.id);
+                  if (remaining.length === 1) setTo(remaining[0].id);
+                  else if (to === m.id) setTo("");
+                }}
+                style={{ ...styles.payerChip, borderColor: from === m.id ? colorFor(m.id) : "transparent", background: from === m.id ? `${colorFor(m.id)}1a` : "#FAF7F2" }}
+              >
                 <span style={{ ...styles.avatar, background: colorFor(m.id), width: 26, height: 26, fontSize: 11 }}>{initials(m.name)}</span>{m.name}
               </button>
             ))}

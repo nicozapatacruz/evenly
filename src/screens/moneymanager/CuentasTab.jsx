@@ -523,7 +523,7 @@ export function ManageAccounts({ session, group = null, groups, accounts, accoun
         </Field>
         {isSystemGroup && (
           <p style={{ ...styles.muted, padding: 0, marginTop: -8 }}>
-            Se crea solo al vincular un grupo de Split Ledger — se desvincula desde ahí, no se edita acá.
+            Se crea solo al vincular un grupo de Split Ledger. Se desvincula desde ahí, no se edita acá.
           </p>
         )}
         {group && showCreatedHint && (

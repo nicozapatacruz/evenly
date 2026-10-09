@@ -209,7 +209,7 @@ export default function AccountDetailScreen({ session, account = null, groups, a
         </Field>
         {isSystemAccount && (
           <p style={{ ...styles.muted, padding: 0, marginTop: -8 }}>
-            Representa un grupo vinculado de Split Ledger — se desvincula desde ahí, no se edita acá.
+            Representa un grupo vinculado de Split Ledger. Se desvincula desde ahí, no se edita acá.
           </p>
         )}
 

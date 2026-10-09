@@ -348,8 +348,8 @@ export default function TransactionForm({
         {isSynced && (
           <p style={{ ...styles.muted, padding: 0 }}>
             {needsRate
-              ? "Viene de Split Ledger, en una moneda distinta a tu principal — el monto, la cuenta, la fecha y el tipo se actualizan solos. Ingresá la tasa de cambio para que se calcule bien en tus totales."
-              : "Viene de Split Ledger — el monto, la cuenta, la fecha y el tipo se actualizan solos. Podés cambiarle la categoría o la nota."}
+              ? "Viene de Split Ledger, en una moneda distinta a tu principal. El monto, la cuenta, la fecha y el tipo se actualizan solos. Ingresá la tasa de cambio para que se calcule bien en tus totales."
+              : "Viene de Split Ledger. El monto, la cuenta, la fecha y el tipo se actualizan solos. Podés cambiarle la categoría o la nota."}
           </p>
         )}
         <div style={{ ...styles.tabRow, padding: 0, opacity: isSynced ? 0.6 : 1 }}>
@@ -655,9 +655,9 @@ function RecurringFields({ type, date, freqValue, setFreqValue, freqInterval, se
   // bisiesto — el 30 o 31 de cualquier otro mes existe todos los años igual.
   let warning = "";
   if (freq?.unit === "month" && dayOfMonth >= 29) {
-    warning = `El día ${dayOfMonth} no existe en todos los meses — cuando eso pase, se va a usar el último día real de ese mes.`;
+    warning = `El día ${dayOfMonth} no existe en todos los meses. Cuando eso pase, se va a usar el último día real de ese mes.`;
   } else if (freq?.unit === "year" && dayOfMonth === 29 && monthIndex === 1) {
-    warning = "El 29 de febrero no existe en los años no bisiestos — esos años se va a usar el 28.";
+    warning = "El 29 de febrero no existe en los años no bisiestos. Esos años se va a usar el 28.";
   }
 
   return (

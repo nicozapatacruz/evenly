@@ -718,7 +718,7 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
         </Field>
         {!isEditing && (
           <p style={{ ...styles.muted, padding: 0, marginTop: -8 }}>
-            Es la moneda que se preselecciona al crear un gasto — puedes registrar gastos en
+            Es la moneda que se preselecciona al crear un gasto. Puedes registrar gastos en
             otras monedas cuando quieras, cada una lleva su propio balance por separado.
           </p>
         )}
@@ -1021,7 +1021,7 @@ function SplitLedgerMoneyLink({
       />
       {linked && pendingBalances.length > 0 && (
         <p style={{ ...styles.muted, padding: 0, color: "#B0473A" }}>
-          Ya tenías un saldo pendiente en este grupo ({pendingBalances.map(([currency, amt]) => money(amt, currency)).join(", ")}) — no se va a reflejar en Money Manager, solo lo que pase de acá en adelante.
+          Ya tenías un saldo pendiente en este grupo ({pendingBalances.map(([currency, amt]) => money(amt, currency)).join(", ")}). No se va a reflejar en Money Manager, solo lo que pase de acá en adelante.
         </p>
       )}
       {confirmingUnlink && (
@@ -1261,7 +1261,7 @@ function GroupView({ group, onBack, onAddExpense, onOpenExpense, onOpenPayment, 
               );
             })}
             <p style={styles.simplifyNote}>
-              {allSettled ? "Sin pagos pendientes." : `Simplificado a ${totalTxnCount} pago${totalTxnCount > 1 ? "s" : ""} — el mínimo posible para saldar el grupo.`}
+              {allSettled ? "Sin pagos pendientes." : `Simplificado a ${totalTxnCount} pago${totalTxnCount > 1 ? "s" : ""}: el mínimo posible para saldar el grupo.`}
             </p>
             <button style={{ ...styles.btnSecondary, width: "calc(100% - 40px)", margin: "4px 20px 0" }} onClick={() => onSettleUp(null)}>
               <HandCoins size={16} /> Registrar un pago
@@ -2390,7 +2390,7 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
         />
       )}
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        <p style={{ ...styles.muted, padding: 0 }}>Esto no mueve dinero — solo anota que el pago ya se hizo fuera de la app, para saldar el balance.</p>
+        <p style={{ ...styles.muted, padding: 0 }}>Esto no mueve dinero. Solo anota que el pago ya se hizo fuera de la app, para saldar el balance.</p>
 
         {/* Envuelto en su propio flex-column gap:0 (mismo patrón que
             ConfigScreen) para que la separación entre la pregunta y sus

@@ -681,6 +681,24 @@ export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, 
   const idRef = useRef(null);
   if (idRef.current === null) idRef.current = ++pickerInstanceCounter;
   const containerRef = useRef(null);
+  const inputElRef = useRef(null);
+  const keypadRef = useRef(null);
+
+  // Empuja la página hacia arriba al abrir, pero SOLO lo justo para que el
+  // campo quede visible arriba del teclado fijo (igual que el teclado nativo
+  // del celular): si el campo ya estaba por encima de donde va a aparecer
+  // el teclado, no se mueve nada.
+  useEffect(() => {
+    if (!open) return;
+    const raf = requestAnimationFrame(() => {
+      const inputRect = inputElRef.current?.getBoundingClientRect();
+      const keypadRect = keypadRef.current?.getBoundingClientRect();
+      if (!inputRect || !keypadRect) return;
+      const overlap = inputRect.bottom - keypadRect.top;
+      if (overlap > 0) window.scrollBy({ top: overlap + 16, behavior: "smooth" });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [open]);
 
   // Cada vez que los tokens forman una expresión completa (termina en
   // número, no en operador colgado), se resuelve y se sube al padre: así
@@ -768,8 +786,13 @@ export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, 
   const displayValue = open ? tokens.join(" ") : (value || "");
 
   return (
-    <div ref={containerRef}>
+    // stopPropagation acá (no en cada botón del teclado): si este input
+    // vive adentro de otro elemento clickeable (ej. la fila de "Varias
+    // personas" en Split Ledger, que es un <button> entero), ningún toque
+    // acá adentro debería llegarle a ese padre.
+    <div ref={containerRef} onClick={(e) => e.stopPropagation()}>
       <input
+        ref={inputElRef}
         style={{ ...styles.input, width: "100%", boxSizing: "border-box", opacity: disabled ? 0.6 : 1, ...style }}
         value={displayValue}
         placeholder={placeholder}
@@ -785,7 +808,7 @@ export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, 
         // que styles.footer, para quedar alineado con el resto del form
         // en desktop. zIndex por encima del Footer (5) para taparlo
         // mientras se edita, igual que haría un teclado real.
-        <div style={{ position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: 0, width: "100%", maxWidth: 480, boxSizing: "border-box", background: "#FBF8F2", borderTop: "1px solid #DDD2BE", borderRadius: "16px 16px 0 0", boxShadow: "0 -4px 20px rgba(0,0,0,0.15)", padding: "10px 10px calc(10px + env(safe-area-inset-bottom))", zIndex: 15 }}>
+        <div ref={keypadRef} style={{ position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: 0, width: "100%", maxWidth: 480, boxSizing: "border-box", background: "#FBF8F2", borderTop: "1px solid #DDD2BE", borderRadius: "16px 16px 0 0", boxShadow: "0 -4px 20px rgba(0,0,0,0.15)", padding: "10px 10px calc(10px + env(safe-area-inset-bottom))", zIndex: 15 }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
             <CalculatorKeyButton label="7" onClick={() => pressDigit("7")} />
             <CalculatorKeyButton label="8" onClick={() => pressDigit("8")} />

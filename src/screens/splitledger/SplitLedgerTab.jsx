@@ -9,7 +9,7 @@ import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCen
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { styles } from "../../lib/styles.js";
-import { TopBar, RootHeader, ConfirmInline, Modal, Footer, PhotoPicker, Field, ToggleField, PickerField, SplitLedgerIcon, EmptyState } from "../../components/Shared.jsx";
+import { TopBar, RootHeader, ConfirmInline, Modal, Footer, PhotoPicker, Field, ToggleField, PickerField, SplitLedgerIcon, EmptyState, CalculatorAmountInput } from "../../components/Shared.jsx";
 import { linkGroupToAccount, updateLinkDefaults, unlinkGroup } from "../../lib/splitLedgerLink.js";
 import {
   uid, CURRENCIES, CURRENCY_LIST, money, parseAmountInput, ICON_KEYS, IconComp,
@@ -1834,7 +1834,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
 
         <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
           <Field label="Importe" required style={{ flex: 1 }}>
-            <input style={styles.input} value={amount} onChange={(e) => setAmount(e.target.value)} onBlur={() => touch("amount")} placeholder="0.00" inputMode="decimal" />
+            <CalculatorAmountInput value={amount} onChange={setAmount} onBlur={() => touch("amount")} placeholder="0.00" />
           </Field>
           <select
             style={{ ...styles.input, width: 80, flexShrink: 0, padding: "11px 6px", textAlign: "center", fontWeight: 600, color: "#544A3C" }}
@@ -1959,14 +1959,12 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
                   <span style={{ ...styles.checkbox, ...(isIn ? styles.checkboxOn : {}), flexShrink: 0 }}>{isIn && <Check size={12} color="#fff" strokeWidth={3} />}</span>
                   <span style={{ ...styles.avatar, background: colorFor(m.id) }}>{initials(m.name)}</span>
                   <span style={{ flex: 1 }}>{m.name}</span>
-                  <input
+                  <CalculatorAmountInput
                     style={styles.customInput}
                     disabled={!isIn}
                     value={payerAmounts[m.id]}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={(e) => setPayerAmounts((p) => ({ ...p, [m.id]: e.target.value }))}
+                    onChange={(v) => setPayerAmounts((p) => ({ ...p, [m.id]: v }))}
                     placeholder="0.00"
-                    inputMode="decimal"
                   />
                 </button>
               );
@@ -2041,7 +2039,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
                         <span style={{ ...styles.checkbox, ...(isIn ? styles.checkboxOn : {}), flexShrink: 0 }}>{isIn && <Check size={12} color="#fff" strokeWidth={3} />}</span>
                         <span style={{ ...styles.avatar, background: colorFor(m.id) }}>{initials(m.name)}</span>
                         <span style={{ flex: 1 }}>{m.name}</span>
-                        <input style={styles.customInput} disabled={!isIn} value={exactAmounts[m.id]} onClick={(e) => e.stopPropagation()} onChange={(e) => setExactAmounts((p) => ({ ...p, [m.id]: e.target.value }))} placeholder="0.00" inputMode="decimal" />
+                        <CalculatorAmountInput style={styles.customInput} disabled={!isIn} value={exactAmounts[m.id]} onChange={(v) => setExactAmounts((p) => ({ ...p, [m.id]: v }))} placeholder="0.00" />
                       </button>
                     );
                   })}
@@ -2424,7 +2422,7 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
 
         <div style={{ display: "flex", gap: 10 }}>
           <Field label="Importe" required error={amountTouched && !validAmount ? "Ingresá un importe válido." : ""} style={{ flex: 1.4 }}>
-            <input style={styles.input} value={amount} onChange={(e) => setAmount(e.target.value)} onBlur={() => setAmountTouched(true)} placeholder="0.00" inputMode="decimal" />
+            <CalculatorAmountInput value={amount} onChange={setAmount} onBlur={() => setAmountTouched(true)} placeholder="0.00" />
           </Field>
           <Field label="Moneda" style={{ flex: 1 }}>
             <select style={styles.input} value={currency} onChange={(e) => setCurrency(e.target.value)}>

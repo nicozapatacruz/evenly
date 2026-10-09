@@ -606,6 +606,194 @@ export function EmptyState({ icon, title, children }) {
   );
 }
 
+// Evalúa una lista de tokens alternados número/operador/número/...
+// (ej. ["12", "×", "3", "+", "5"]) respetando precedencia (× ÷ antes que
+// + −), sin pasar por eval(). Devuelve NaN si algún número no es válido.
+function evaluateCalculatorTokens(tokens) {
+  const timesAndDivide = [parseFloat(tokens[0])];
+  for (let i = 1; i < tokens.length; i += 2) {
+    const op = tokens[i];
+    const num = parseFloat(tokens[i + 1]);
+    if (op === "×" || op === "÷") {
+      const prev = timesAndDivide.pop();
+      timesAndDivide.push(op === "×" ? prev * num : prev / num);
+    } else {
+      timesAndDivide.push(op, num);
+    }
+  }
+  let result = timesAndDivide[0];
+  for (let i = 1; i < timesAndDivide.length; i += 2) {
+    result = timesAndDivide[i] === "+" ? result + timesAndDivide[i + 1] : result - timesAndDivide[i + 1];
+  }
+  return result;
+}
+
+// Redondeo a 2 decimales (mismo criterio que money()): evita que la
+// imprecisión de punto flotante de una división dejé algo como
+// "33.330000000000005" en el campo.
+const roundMoney = (n) => Math.round(n * 100) / 100;
+
+function CalculatorKeyButton({ label, onClick, accent, primary, wide }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        gridColumn: wide ? "span 2" : undefined,
+        padding: "14px 0",
+        borderRadius: 10,
+        border: "none",
+        background: primary ? "#C75D3B" : accent ? "#F0E6D6" : "#FBF8F2",
+        color: primary ? "#fff" : accent ? "#A8754A" : "#2B2620",
+        fontSize: 17,
+        fontWeight: 600,
+        fontFamily: "system-ui, sans-serif",
+        cursor: "pointer",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+// Reemplaza el <input> numérico plano de "Importe": permite escribir
+// operaciones (ej. "12×3+5") con un teclado propio en vez del teclado
+// numérico nativo, y las resuelve en el mismo campo (ver PENDIENTES.md,
+// sección A). Mientras se edita, el campo muestra la expresión completa tal
+// cual se va tecleando (no colapsa a un resultado parcial en cada símbolo);
+// "=" o cerrar el teclado (click afuera, o se abrió otro picker) resuelve
+// lo pendiente. `value`/`onChange` siguen siendo el string plano de siempre
+// (compatible con parseAmountInput), el estado de "qué se está tecleando"
+// es interno y nunca llega al padre a medias.
+export function CalculatorAmountInput({ value, onChange, onBlur, placeholder = "0.00", disabled = false, style }) {
+  const [open, setOpen] = useState(false);
+  const [tokens, setTokens] = useState([]);
+  const idRef = useRef(null);
+  if (idRef.current === null) idRef.current = ++pickerInstanceCounter;
+  const containerRef = useRef(null);
+
+  // Cada vez que los tokens forman una expresión completa (termina en
+  // número, no en operador colgado), se resuelve y se sube al padre: así
+  // el resto del formulario (ej. "equivale a" de la tasa de cambio) siempre
+  // tiene un número válido, aunque el teclado siga abierto.
+  useEffect(() => {
+    if (tokens.length === 0 || tokens.length % 2 === 0) return;
+    const result = evaluateCalculatorTokens(tokens);
+    if (!isNaN(result) && isFinite(result)) onChange(String(roundMoney(result)));
+  }, [tokens]);
+
+  useEffect(() => {
+    if (open) window.dispatchEvent(new CustomEvent("mm-picker-open", { detail: idRef.current }));
+  }, [open]);
+  useEffect(() => {
+    const onOtherOpen = (e) => { if (e.detail !== idRef.current) setOpen(false); };
+    window.addEventListener("mm-picker-open", onOtherOpen);
+    return () => window.removeEventListener("mm-picker-open", onOtherOpen);
+  }, []);
+  useEffect(() => {
+    if (!open) return;
+    const onClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("click", onClickOutside);
+    return () => document.removeEventListener("click", onClickOutside);
+  }, [open]);
+
+  // Mismo criterio que PickerField: no hay blur nativo (el teclado propio
+  // no es un <input> editable), así que "onBlur" se dispara cuando el
+  // teclado se cierra, sea por "=", click afuera, o se abrió otro picker.
+  const wasOpenRef = useRef(false);
+  useEffect(() => {
+    if (wasOpenRef.current && !open) onBlur?.();
+    wasOpenRef.current = open;
+  }, [open, onBlur]);
+
+  const openEdit = () => {
+    if (disabled) return;
+    setTokens(value ? [String(value)] : []);
+    setOpen(true);
+  };
+
+  const pressDigit = (d) => {
+    setTokens((prev) => {
+      if (prev.length === 0) return [d === "." ? "0." : d];
+      const lastIsOperator = prev.length % 2 === 0;
+      if (lastIsOperator) return [...prev, d === "." ? "0." : d];
+      const last = prev[prev.length - 1];
+      if (d === "." && last.includes(".")) return prev;
+      return [...prev.slice(0, -1), last + d];
+    });
+  };
+  const pressOperator = (op) => {
+    setTokens((prev) => {
+      if (prev.length === 0) return prev;
+      const lastIsOperator = prev.length % 2 === 0;
+      return lastIsOperator ? [...prev.slice(0, -1), op] : [...prev, op];
+    });
+  };
+  const pressBackspace = () => {
+    setTokens((prev) => {
+      if (prev.length === 0) return prev;
+      const last = prev[prev.length - 1];
+      return last.length > 1 ? [...prev.slice(0, -1), last.slice(0, -1)] : prev.slice(0, -1);
+    });
+  };
+  const pressEquals = () => {
+    setTokens((prev) => {
+      const complete = prev.length % 2 === 1 ? prev : prev.slice(0, -1);
+      if (complete.length === 0) return prev;
+      const result = evaluateCalculatorTokens(complete);
+      return !isNaN(result) && isFinite(result) ? [String(roundMoney(result))] : prev;
+    });
+  };
+
+  const displayValue = open ? tokens.join(" ") : (value || "");
+
+  return (
+    <div ref={containerRef}>
+      <input
+        style={{ ...styles.input, width: "100%", boxSizing: "border-box", opacity: disabled ? 0.6 : 1, ...style }}
+        value={displayValue}
+        placeholder={placeholder}
+        readOnly
+        disabled={disabled}
+        onFocus={openEdit}
+        onClick={openEdit}
+        inputMode="none"
+      />
+      {open && (
+        // Fijo abajo de toda la pantalla, como un teclado reemplazando al
+        // nativo (no un dropdown pegado al campo), con el mismo ancho/centrado
+        // que styles.footer, para quedar alineado con el resto del form
+        // en desktop. zIndex por encima del Footer (5) para taparlo
+        // mientras se edita, igual que haría un teclado real.
+        <div style={{ position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: 0, width: "100%", maxWidth: 480, boxSizing: "border-box", background: "#FBF8F2", borderTop: "1px solid #DDD2BE", borderRadius: "16px 16px 0 0", boxShadow: "0 -4px 20px rgba(0,0,0,0.15)", padding: "10px 10px calc(10px + env(safe-area-inset-bottom))", zIndex: 15 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+            <CalculatorKeyButton label="7" onClick={() => pressDigit("7")} />
+            <CalculatorKeyButton label="8" onClick={() => pressDigit("8")} />
+            <CalculatorKeyButton label="9" onClick={() => pressDigit("9")} />
+            <CalculatorKeyButton label="÷" accent onClick={() => pressOperator("÷")} />
+            <CalculatorKeyButton label="4" onClick={() => pressDigit("4")} />
+            <CalculatorKeyButton label="5" onClick={() => pressDigit("5")} />
+            <CalculatorKeyButton label="6" onClick={() => pressDigit("6")} />
+            <CalculatorKeyButton label="×" accent onClick={() => pressOperator("×")} />
+            <CalculatorKeyButton label="1" onClick={() => pressDigit("1")} />
+            <CalculatorKeyButton label="2" onClick={() => pressDigit("2")} />
+            <CalculatorKeyButton label="3" onClick={() => pressDigit("3")} />
+            <CalculatorKeyButton label="-" accent onClick={() => pressOperator("-")} />
+            <CalculatorKeyButton label="0" onClick={() => pressDigit("0")} />
+            <CalculatorKeyButton label="." onClick={() => pressDigit(".")} />
+            <CalculatorKeyButton label="⌫" onClick={pressBackspace} />
+            <CalculatorKeyButton label="+" accent onClick={() => pressOperator("+")} />
+            <CalculatorKeyButton label="C" onClick={() => setTokens([])} wide />
+            <CalculatorKeyButton label="=" primary wide onClick={pressEquals} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function HeaderMenu({ trigger, items = [], currencies = [], currency, onChangeCurrency }) {
   const [open, setOpen] = useState(false);
   const idRef = useRef(null);

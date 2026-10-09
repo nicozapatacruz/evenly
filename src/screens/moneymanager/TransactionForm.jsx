@@ -5,7 +5,7 @@ import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } 
 import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, Footer, ConfirmInline, IconInput, PickerField, Field, Modal } from "../../components/Shared.jsx";
+import { TopBar, Footer, ConfirmInline, IconInput, PickerField, Field, Modal, CalculatorAmountInput } from "../../components/Shared.jsx";
 import { parseAmountInput, todayInputValue, dateInputValueInZone, money, fmtDate } from "../../lib/helpers.jsx";
 import { RECURRING_FREQUENCIES, nextOccurrence, computeAmountMain, useRecentNoteTitles } from "../../lib/moneyManagerData.js";
 
@@ -370,7 +370,7 @@ export default function TransactionForm({
 
         <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
           <Field label="Importe" required style={{ flex: 1 }}>
-            <input style={{ ...styles.input, opacity: isSynced ? 0.6 : 1 }} value={amount} onChange={(e) => setAmount(e.target.value)} onBlur={() => touch("amount")} placeholder="0.00" inputMode="decimal" disabled={isSynced} />
+            <CalculatorAmountInput value={amount} onChange={setAmount} onBlur={() => touch("amount")} placeholder="0.00" disabled={isSynced} />
           </Field>
           <select
             style={{ ...styles.input, width: 80, flexShrink: 0, padding: "11px 6px", textAlign: "center", fontWeight: 600, color: "#544A3C", opacity: isSynced ? 0.6 : 1 }}

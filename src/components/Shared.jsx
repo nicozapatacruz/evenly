@@ -241,11 +241,15 @@ export function useMonthSlide(viewMonth) {
 // deshacer (volvés a Filtros y los aplicás de nuevo, no se pierde nada).
 export function FiltersActiveBanner({ onOpen, onClear }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "7px 10px 7px 14px", borderRadius: 20, background: "#FBEDE7", border: "1px solid #EBC9BA" }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 14px", borderRadius: 20, background: "#FBEDE7", border: "1px solid #EBC9BA" }}>
       <button type="button" onClick={onOpen} style={{ flex: 1, background: "none", border: "none", padding: 0, textAlign: "left", fontSize: 13, fontWeight: 600, fontFamily: "system-ui, sans-serif", color: "#C75D3B", cursor: "pointer" }}>
         Filtros activos
       </button>
-      <button type="button" onClick={onClear} aria-label="Quitar filtros" style={{ background: "none", border: "none", padding: 6, display: "flex", color: "#C75D3B", cursor: "pointer" }}>
+      {/* Sin width/height ni padding propios: el botón de "quitar" mide lo
+          que mide el ícono (15px) y nada más, para que el alto de toda la
+          píldora lo termine dando el texto (igual que PendingRateBanner),
+          no un cuadrado de hitbox más alto que el texto. */}
+      <button type="button" onClick={onClear} aria-label="Quitar filtros" style={{ background: "none", border: "none", padding: 0, display: "flex", alignItems: "center", color: "#C75D3B", cursor: "pointer" }}>
         <X size={15} />
       </button>
     </div>
@@ -257,7 +261,7 @@ export function FiltersActiveBanner({ onOpen, onClear }) {
 // transacción pendiente para completarla.
 export function PendingRateBanner({ count, onOpen }) {
   return (
-    <button type="button" onClick={onOpen} style={{ display: "flex", width: "100%", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 20, background: "#FBEDE7", border: "1px solid #EBC9BA", textAlign: "left", fontSize: 13, fontWeight: 600, fontFamily: "system-ui, sans-serif", color: "#C75D3B", cursor: "pointer" }}>
+    <button type="button" onClick={onOpen} style={{ display: "flex", width: "100%", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 20, background: "#FBEDE7", border: "1px solid #EBC9BA", textAlign: "left", fontSize: 13, fontWeight: 600, fontFamily: "system-ui, sans-serif", color: "#C75D3B", cursor: "pointer" }}>
       {count === 1 ? "1 transacción pendiente de tasa de cambio" : `${count} transacciones pendientes de tasa de cambio`}
     </button>
   );
@@ -938,7 +942,9 @@ export function CurrencyConversionField({ amount, onChangeAmount, currency, acco
     setValorTokens(amount ? [String(amount)] : []);
     setRateDraft(rate || "");
     setSecondTokens([]);
-    setActiveRow("valor");
+    // Si "Valor" está bloqueado (amountDisabled), no puede arrancar activo:
+    // el teclado le escribiría encima a un campo que no se puede tocar.
+    setActiveRow(amountDisabled ? "second" : "valor");
     setOpen(true);
   };
 
@@ -983,7 +989,7 @@ export function CurrencyConversionField({ amount, onChangeAmount, currency, acco
       setRateDraft(valorValue != null && secondValue != null && secondValue > 0 ? String(Number((valorValue / secondValue).toPrecision(10))) : "");
     }
     setMode(nextMode);
-    setActiveRow("valor");
+    setActiveRow(amountDisabled ? "second" : "valor");
   };
 
   const activeUsesCalculator = activeRow === "valor" || mode === "montos";

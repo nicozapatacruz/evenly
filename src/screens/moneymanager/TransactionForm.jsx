@@ -435,8 +435,8 @@ export default function TransactionForm({
           </span>
         )}
 
-        {isSynced && needsRate && editingTransaction?.exchange_rate == null && (
-          <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600, color: "#B0473A", fontFamily: "system-ui, sans-serif" }}>
+        {isSynced && needsRate && !validRate && (
+          <p style={{ margin: 0, marginTop: -8, fontSize: 12.5, fontWeight: 600, color: "#B0473A", fontFamily: "system-ui, sans-serif" }}>
             Debés llenar la tasa de cambio para poder tener en cuenta esta transacción en tus totales.
           </p>
         )}

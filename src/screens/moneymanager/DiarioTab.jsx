@@ -81,19 +81,23 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
         {/* Fuera del subHeader que se desliza con el mes a propósito — esto
             no depende de qué mes estés viendo, tiene que quedar visible
             siempre que haya algo pendiente, no solo al navegar a ese mes.
-            paddingTop:12 (sin padding abajo) — el mismo valor que ya tiene
-            el paddingTop del body de abajo, así el banner queda con el
-            mismo espacio arriba y abajo (el de abajo lo da el propio body,
-            sin agregar nada extra acá) pase lo que pase con el body. Mismo
-            padding horizontal (20px) que el resto del header, no el 14px
-            que usan las filas del body. */}
+            Mismo padding horizontal (20px) que el resto del header, no el
+            14px que usan las filas del body. */}
         {pendingRateTx.length > 0 && (
-          <div style={{ padding: "12px 20px 0" }}>
+          // background + paddingBottom explícitos acá: este div vive adentro
+          // del contenedor sticky, así que al hacer scroll el body pasa justo
+          // detrás. Sin el background, el padding alrededor de la píldora
+          // quedaba transparente y se veía la fila de abajo asomando por los
+          // costados. El paddingBottom (8px) es la separación real con la
+          // fila de abajo cuando hay banner, por eso el body (abajo) le
+          // saca su propio paddingTop en ese caso, para no sumar los dos y
+          // terminar con el doble de separación.
+          <div style={{ padding: "8px 20px", background: "#FBF8F2" }}>
             <PendingRateBanner count={pendingRateTx.length} onOpen={() => onEditTransaction(pendingRateTx[0])} />
           </div>
         )}
       </div>
-      <div key={slide.key} className={slide.className} style={{ ...styles.form, flex: 1, paddingTop: 12, paddingBottom: 100 }} {...swipeHandlers}>
+      <div key={slide.key} className={slide.className} style={{ ...styles.form, flex: 1, paddingTop: pendingRateTx.length > 0 ? 0 : 12, paddingBottom: 100 }} {...swipeHandlers}>
         {/* Un solo div envolviendo banner+contenido (no 2 hijos sueltos del
             form de arriba, que tiene gap:14 — un valor distinto al que usan
             Cuentas/Tus grupos) — gap:8 acá adentro iguala el espacio entre
@@ -101,7 +105,7 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
             necesita 12px (no 8) hacia el contenido, así que se le suma un
             marginBottom extra de 4 (8 del gap + 4 = 12). */}
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {hasActiveFilters(filters) && <div style={{ marginBottom: 4 }}><FiltersActiveBanner onOpen={onOpenFilters} onClear={onClearFilters} /></div>}
+          {hasActiveFilters(filters) && <FiltersActiveBanner onOpen={onOpenFilters} onClear={onClearFilters} />}
           {loading ? (
             <EmptyState title="Cargando transacciones…" />
           ) : filtered.length === 0 ? (

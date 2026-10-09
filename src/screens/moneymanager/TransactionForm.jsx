@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
-import { X, Menu, Plus, ArrowLeftRight, Trash2, Copy, Star, Divide } from "lucide-react";
+import { X, Menu, Plus, Trash2, Copy, Star, Divide } from "lucide-react";
 import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, Footer, ConfirmInline, IconInput, PickerField, Field, Modal, CalculatorAmountInput } from "../../components/Shared.jsx";
+import { TopBar, Footer, ConfirmInline, IconInput, PickerField, Field, Modal, CalculatorAmountInput, CurrencyConversionField } from "../../components/Shared.jsx";
 import { parseAmountInput, todayInputValue, dateInputValueInZone, money, fmtDate } from "../../lib/helpers.jsx";
 import { RECURRING_FREQUENCIES, nextOccurrence, computeAmountMain, useRecentNoteTitles } from "../../lib/moneyManagerData.js";
 
@@ -60,17 +60,20 @@ export default function TransactionForm({
     || accounts.find((a) => a.id === (prefillBookmark?.account_id || defaultAccountId))?.currency
     || settings.main_currency
   );
+  // Se guarda siempre como "cuántas {moneda de la transacción} vale 1
+  // {moneda de la cuenta}" (ver ExchangeRateField: ahí se puede cargar como
+  // tasa o como monto ya convertido, pero lo que sube acá siempre queda en
+  // este mismo formato canónico).
   const [exchangeRate, setExchangeRate] = useState(
     (editingTransaction?.exchange_rate || prefillBookmark?.exchange_rate) ? String(editingTransaction?.exchange_rate || prefillBookmark?.exchange_rate) : ""
   );
-  // La tasa se guarda siempre como "cuántas {moneda de la transacción} vale 1
-  // {moneda principal}" (mismo formato de siempre) — este toggle solo cambia
-  // qué lado se le pide escribir al usuario; se invierte antes de guardar.
-  const [rateFlipped, setRateFlipped] = useState(false);
   const [categoryId, setCategoryId] = useState(editingTransaction?.category_id || prefillBookmark?.category_id || "");
-  // Sube cada vez que el botón "Sí" del teclado de Importe confirma el monto
+  // Sube cada vez que el botón "Ok" del teclado de Importe confirma el monto
   // y pide saltar directo a elegir categoría (ver CalculatorAmountInput).
   const [openCategorySignal, setOpenCategorySignal] = useState(0);
+  // Sube cada vez que la moneda cambia a una distinta de la cuenta, para que
+  // CurrencyConversionField se abra solo (ver abajo, cerca del campo Importe).
+  const [openConversionSignal, setOpenConversionSignal] = useState(0);
   const [accountId, setAccountId] = useState(editingTransaction?.account_id || prefillBookmark?.account_id || defaultAccountId || "");
   const [toAccountId, setToAccountId] = useState(editingTransaction?.to_account_id || prefillBookmark?.to_account_id || "");
   const [note, setNote] = useState(editingTransaction?.title || prefillBookmark?.title || "");
@@ -114,7 +117,7 @@ export default function TransactionForm({
     lastSuggestedAccountId.current = accountId;
     if (touched.currency || isSynced) return;
     const acc = accounts.find((a) => a.id === accountId);
-    if (acc) { setCurrency(acc.currency); setRateFlipped(false); }
+    if (acc) setCurrency(acc.currency);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountId]);
 
@@ -166,10 +169,20 @@ export default function TransactionForm({
 
   const numericAmount = parseAmountInput(amount);
   const validAmount = !isNaN(numericAmount) && numericAmount > 0;
-  const numericRate = parseAmountInput(exchangeRate);
-  const canonicalRate = rateFlipped && numericRate ? 1 / numericRate : numericRate;
+  const canonicalRate = parseAmountInput(exchangeRate);
   const needsRate = currency !== accountCurrency;
   const validRate = !needsRate || (!isNaN(canonicalRate) && canonicalRate > 0);
+
+  // Cambiar la moneda de la transacción a una distinta de la cuenta abre
+  // sola la hoja de conversión (CurrencyConversionField), pero no en el montaje
+  // inicial (ej. al editar una transacción que ya tenía esa combinación).
+  const prevCurrencyRef = useRef(currency);
+  useEffect(() => {
+    if (prevCurrencyRef.current !== currency) {
+      if (needsRate) setOpenConversionSignal((n) => n + 1);
+      prevCurrencyRef.current = currency;
+    }
+  }, [currency, needsRate]);
 
   const freq = RECURRING_FREQUENCIES.find((f) => f.value === freqValue);
   const customInterval = parseInt(freqInterval, 10);
@@ -373,30 +386,53 @@ export default function TransactionForm({
 
         <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
           <Field label="Importe" required style={{ flex: 1 }}>
-            <CalculatorAmountInput
-              value={amount}
-              onChange={setAmount}
-              onBlur={() => touch("amount")}
-              onConfirmNext={type !== "transfer" ? () => setOpenCategorySignal((n) => n + 1) : undefined}
-              placeholder="0.00"
-              disabled={isSynced}
-            />
+            {needsRate ? (
+              // A diferencia del resto del formulario cuando isSynced, la
+              // tasa/el monto convertido sí quedan editables acá: es el único
+              // dato que la reconciliación de Split Ledger NO puede completar
+              // sola (no hay nadie mirando un formulario en ese momento), así
+              // que queda "pendiente" hasta que lo cargues. El importe en sí
+              // sigue bloqueado cuando isSynced, igual que el resto del form.
+              <CurrencyConversionField
+                amount={amount}
+                onChangeAmount={setAmount}
+                currency={currency}
+                accountCurrency={accountCurrency}
+                rate={exchangeRate}
+                onChangeRate={setExchangeRate}
+                onBlur={() => { touch("amount"); touch("exchangeRate"); }}
+                onConfirmNext={type !== "transfer" ? () => setOpenCategorySignal((n) => n + 1) : undefined}
+                openSignal={openConversionSignal}
+                amountDisabled={isSynced}
+              />
+            ) : (
+              <CalculatorAmountInput
+                value={amount}
+                onChange={setAmount}
+                onBlur={() => touch("amount")}
+                onConfirmNext={type !== "transfer" ? () => setOpenCategorySignal((n) => n + 1) : undefined}
+                placeholder="0.00"
+                disabled={isSynced}
+              />
+            )}
           </Field>
           <select
             style={{ ...styles.input, width: 80, flexShrink: 0, padding: "11px 6px", textAlign: "center", fontWeight: 600, color: "#544A3C", opacity: isSynced ? 0.6 : 1 }}
             value={currency}
-            onChange={(e) => { setCurrency(e.target.value); setRateFlipped(false); touch("currency"); }}
+            onChange={(e) => { setCurrency(e.target.value); touch("currency"); }}
             disabled={isSynced}
           >
             {currencyOptions.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
         {/* El error vive FUERA del Field (que solo tiene Importe) para que no
-            le sume altura a esa columna sola — si no, el select de moneda
+            le sume altura a esa columna sola: si no, el select de moneda
             (hermano en el flex de arriba, "flex-end") quedaba alineado con
             el error de abajo en vez de con el input. */}
-        {touched.amount && !validAmount && (
-          <span style={{ fontSize: 12, fontWeight: 400, color: "#B0473A", marginTop: -8, fontFamily: "system-ui, sans-serif" }}>Ingresá un importe válido.</span>
+        {touched.amount && (!validAmount || !validRate) && (
+          <span style={{ fontSize: 12, fontWeight: 400, color: "#B0473A", marginTop: -8, fontFamily: "system-ui, sans-serif" }}>
+            {needsRate ? "Completá el importe y la tasa de conversión." : "Ingresá un importe válido."}
+          </span>
         )}
 
         {isSynced && needsRate && editingTransaction?.exchange_rate == null && (
@@ -405,41 +441,8 @@ export default function TransactionForm({
           </p>
         )}
 
-        {needsRate && (
-          <Field label={`1 ${rateFlipped ? currency : accountCurrency} equivale a`} required error={touched.exchangeRate && !validRate ? "Ingresá una tasa válida." : ""}>
-            <div style={{ display: "flex", gap: 8 }}>
-              <div style={{ position: "relative", flex: 1 }}>
-                {/* A diferencia del resto del formulario cuando isSynced, esta
-                    sí queda editable — es el único dato que la reconciliación
-                    de Split Ledger NO puede completar sola (no hay nadie
-                    mirando un formulario en ese momento), así que queda
-                    "pendiente" hasta que la cargues acá. */}
-                <input style={{ ...styles.input, width: "100%", paddingRight: 50 }} value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} onBlur={() => touch("exchangeRate")} placeholder="1.00" inputMode="decimal" />
-                <span style={{ position: "absolute", top: "50%", right: 13, transform: "translateY(-50%)", fontFamily: "system-ui, sans-serif", fontSize: 14, fontWeight: 600, color: "#544A3C", pointerEvents: "none" }}>
-                  {rateFlipped ? accountCurrency : currency}
-                </span>
-              </div>
-              <button
-                type="button"
-                style={styles.btnSecondarySmall}
-                onClick={() => {
-                  setRateFlipped((f) => !f);
-                  setExchangeRate((prev) => {
-                    const n = parseAmountInput(prev);
-                    if (!prev || isNaN(n) || n <= 0) return "";
-                    return String(Number((1 / n).toPrecision(10)));
-                  });
-                }}
-                aria-label="Invertir la tasa"
-              >
-                <ArrowLeftRight size={16} />
-              </button>
-            </div>
-          </Field>
-        )}
-
         {needsRate && validAmount && validRate && (
-          <p style={{ ...styles.muted, padding: 0, fontSize: 12.5, margin: 0 }}>
+          <p style={{ ...styles.muted, padding: 0, fontSize: 12.5, margin: 0, marginTop: -8 }}>
             {money(numericAmount, currency)} equivalen a {money(numericAmount / canonicalRate, accountCurrency)}.
           </p>
         )}

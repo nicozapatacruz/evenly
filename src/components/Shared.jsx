@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Ban, Camera, Check, ChevronLeft, ChevronRight, Info, Trash2, User, X } from "lucide-react";
 import { styles } from "../lib/styles.js";
 import { ICON_OPTIONS } from "../lib/moneyManagerData.js";
+import { money, parseAmountInput } from "../lib/helpers.jsx";
 
 const MONTH_LABEL = (d) => d.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
 
@@ -666,44 +667,27 @@ function CalculatorKeyButton({ label, onClick, accent, primary, wide }) {
   );
 }
 
-// Reemplaza el <input> numérico plano de "Importe": permite escribir
-// operaciones (ej. "12×3+5") con un teclado propio en vez del teclado
-// numérico nativo, y las resuelve en el mismo campo (ver PENDIENTES.md,
-// sección A). Mientras se edita, el campo muestra la expresión completa tal
-// cual se va tecleando (no colapsa a un resultado parcial en cada símbolo);
-// "=" o cerrar el teclado (click afuera, o se abrió otro picker) resuelve
-// lo pendiente. `value`/`onChange` siguen siendo el string plano de siempre
-// (compatible con parseAmountInput), el estado de "qué se está tecleando"
-// es interno y nunca llega al padre a medias.
-export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, placeholder = "0.00", disabled = false, style }) {
-  const [open, setOpen] = useState(false);
-  const [tokens, setTokens] = useState([]);
-  const idRef = useRef(null);
-  if (idRef.current === null) idRef.current = ++pickerInstanceCounter;
-  const containerRef = useRef(null);
-  const inputElRef = useRef(null);
-  const keypadRef = useRef(null);
-
-  // Empuja la página hacia arriba al abrir, pero SOLO lo justo para que el
-  // campo quede visible arriba del teclado fijo (igual que el teclado nativo
-  // del celular): si el campo ya estaba por encima de donde va a aparecer
-  // el teclado, no se mueve nada. Un elemento position:fixed (el teclado)
-  // nunca suma a la altura scrolleable de la página, así que si el form es
-  // corto no hay a dónde scrollear todavía. padding-bottom no sirve para
-  // crear ese margen porque "* { box-sizing: border-box }" (ver styles.js)
-  // lo mete adentro de los 100dvh fijos de <body> en vez de sumarlo; con
-  // min-height sí se fuerza una altura total mayor, sin pelear contra el
-  // box-sizing.
+// Empuja la página hacia arriba al abrir un teclado propio fijo abajo
+// (CalculatorAmountInput, ExchangeRateField), pero SOLO lo justo para que
+// el campo quede visible arriba del teclado (igual que el teclado nativo
+// del celular): si el campo ya estaba por encima de donde va a aparecer el
+// teclado, no se mueve nada. Un elemento position:fixed (el teclado) nunca
+// suma a la altura scrolleable de la página, así que si el form es corto no
+// hay a dónde scrollear todavía. padding-bottom no sirve para crear ese
+// margen porque "* { box-sizing: border-box }" (ver styles.js) lo mete
+// adentro de los 100dvh fijos de <body> en vez de sumarlo; con min-height sí
+// se fuerza una altura total mayor, sin pelear contra el box-sizing.
+function useKeypadScrollIntoView(open, anchorRef, sheetRef) {
   const scrolledByRef = useRef(0);
   useEffect(() => {
     if (!open) return;
     const prevMinHeight = document.body.style.minHeight;
     const raf = requestAnimationFrame(() => {
-      const inputRect = inputElRef.current?.getBoundingClientRect();
-      const keypadRect = keypadRef.current?.getBoundingClientRect();
-      if (!inputRect || !keypadRect) return;
-      document.body.style.minHeight = `calc(100dvh + ${keypadRect.height}px)`;
-      const overlap = inputRect.bottom - keypadRect.top;
+      const anchorRect = anchorRef.current?.getBoundingClientRect();
+      const sheetRect = sheetRef.current?.getBoundingClientRect();
+      if (!anchorRect || !sheetRect) return;
+      document.body.style.minHeight = `calc(100dvh + ${sheetRect.height}px)`;
+      const overlap = anchorRect.bottom - sheetRect.top;
       const scrollAmount = overlap > 0 ? overlap + 32 : 0;
       scrolledByRef.current = scrollAmount;
       if (scrollAmount > 0) window.scrollBy({ top: scrollAmount, behavior: "smooth" });
@@ -724,6 +708,27 @@ export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, 
       }
     };
   }, [open]);
+}
+
+// Reemplaza el <input> numérico plano de "Importe": permite escribir
+// operaciones (ej. "12×3+5") con un teclado propio en vez del teclado
+// numérico nativo, y las resuelve en el mismo campo (ver PENDIENTES.md,
+// sección A). Mientras se edita, el campo muestra la expresión completa tal
+// cual se va tecleando (no colapsa a un resultado parcial en cada símbolo);
+// "=" o cerrar el teclado (click afuera, o se abrió otro picker) resuelve
+// lo pendiente. `value`/`onChange` siguen siendo el string plano de siempre
+// (compatible con parseAmountInput), el estado de "qué se está tecleando"
+// es interno y nunca llega al padre a medias.
+export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, placeholder = "0.00", disabled = false, style }) {
+  const [open, setOpen] = useState(false);
+  const [tokens, setTokens] = useState([]);
+  const idRef = useRef(null);
+  if (idRef.current === null) idRef.current = ++pickerInstanceCounter;
+  const containerRef = useRef(null);
+  const inputElRef = useRef(null);
+  const keypadRef = useRef(null);
+
+  useKeypadScrollIntoView(open, inputElRef, keypadRef);
 
   // Cada vez que los tokens forman una expresión completa (termina en
   // número, no en operador colgado), se resuelve y se sube al padre: así
@@ -855,6 +860,278 @@ export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, 
             <CalculatorKeyButton label="=" onClick={pressEquals} />
             <CalculatorKeyButton label="Ok" primary wide onClick={pressConfirmNext} />
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Evalúa tokens completos (termina en número, no en operador colgado) o
+// devuelve null si la expresión está a medio escribir. Compartido por los 2
+// inputs "de valor" de CurrencyConversionField (y en espíritu con
+// CalculatorAmountInput, aunque cada uno maneja sus propios tokens).
+function completeCalculatorValue(tokens) {
+  if (tokens.length === 0 || tokens.length % 2 === 0) return null;
+  const result = evaluateCalculatorTokens(tokens);
+  return !isNaN(result) && isFinite(result) ? roundMoney(result) : null;
+}
+
+// Reemplaza TANTO el <input> de "Importe" COMO el de "tasa de cambio" cuando
+// la moneda de la transacción no coincide con la de la cuenta (ver
+// PENDIENTES.md, sección A). El campo "Importe" deja de ser editable en el
+// momento: pasa a ser un botón que abre esta misma hoja, que pide 2 datos a
+// la vez (nunca 1 solo, porque el importe en la moneda de la transacción
+// siempre hace falta igual):
+//   - "Valor": el importe en la moneda de la transacción. Siempre visible.
+//   - según el modo: "Tasa" (la tasa de conversión, numérico simple) o
+//     "Montos" (el importe ya convertido a la moneda de la cuenta, con
+//     calculadora igual que "Valor").
+// Cambiar de modo no pierde lo ya tecleado: convierte lo que haya a la
+// representación del modo nuevo. Cerrar la hoja (click afuera, "Ok", o se
+// abrió otro picker) siempre deja guardado lo último válido: subir el dato
+// al padre pasa continuamente mientras se edita (mismo criterio que
+// CalculatorAmountInput), así que cerrar nunca "pierde" nada a medio
+// terminar. "Ok" además salta al siguiente campo (igual que en Importe
+// simple); click afuera no.
+export function CurrencyConversionField({ amount, onChangeAmount, currency, accountCurrency, rate, onChangeRate, onBlur, onConfirmNext, openSignal, amountDisabled = false }) {
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState("rate"); // "rate" | "montos"
+  const [activeRow, setActiveRow] = useState("valor"); // "valor" | "second"
+  const [valorTokens, setValorTokens] = useState([]);
+  const [secondTokens, setSecondTokens] = useState([]); // usado en modo "montos"
+  const [rateDraft, setRateDraft] = useState(""); // usado en modo "rate"
+  const idRef = useRef(null);
+  if (idRef.current === null) idRef.current = ++pickerInstanceCounter;
+  const containerRef = useRef(null);
+  const boxRef = useRef(null);
+  const sheetRef = useRef(null);
+
+  useKeypadScrollIntoView(open, boxRef, sheetRef);
+
+  useEffect(() => {
+    if (open) window.dispatchEvent(new CustomEvent("mm-picker-open", { detail: idRef.current }));
+  }, [open]);
+  useEffect(() => {
+    const onOtherOpen = (e) => { if (e.detail !== idRef.current) setOpen(false); };
+    window.addEventListener("mm-picker-open", onOtherOpen);
+    return () => window.removeEventListener("mm-picker-open", onOtherOpen);
+  }, []);
+  useEffect(() => {
+    if (!open) return;
+    const onClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("click", onClickOutside);
+    return () => document.removeEventListener("click", onClickOutside);
+  }, [open]);
+
+  // Mismo criterio que PickerField/CalculatorAmountInput: no hay blur
+  // nativo, así que "onBlur" se dispara cuando la hoja se cierra.
+  const wasOpenRef = useRef(false);
+  useEffect(() => {
+    if (wasOpenRef.current && !open) onBlur?.();
+    wasOpenRef.current = open;
+  }, [open, onBlur]);
+
+  const openEdit = () => {
+    setMode("rate");
+    setValorTokens(amount ? [String(amount)] : []);
+    setRateDraft(rate || "");
+    setSecondTokens([]);
+    setActiveRow("valor");
+    setOpen(true);
+  };
+
+  // Apertura a control remoto: cuando cambiás la moneda de la transacción a
+  // una distinta de la cuenta, el padre sube `openSignal` para que esta hoja
+  // se abra sola (no hace falta que toques nada para que te la pida).
+  const firstOpenSignalRef = useRef(openSignal);
+  useEffect(() => {
+    if (openSignal !== undefined && openSignal !== firstOpenSignalRef.current) openEdit();
+    firstOpenSignalRef.current = openSignal;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openSignal]);
+
+  // Cada vez que "Valor" (y, según el modo, "Tasa" o "Montos") tiene algo
+  // completo, se sube al padre: así cerrar la hoja (sea como sea) nunca
+  // pierde lo último válido tecleado.
+  useEffect(() => {
+    const valorValue = completeCalculatorValue(valorTokens);
+    if (valorValue != null) onChangeAmount(String(valorValue));
+    if (mode === "rate") {
+      const n = parseAmountInput(rateDraft);
+      if (rateDraft && !isNaN(n) && n > 0) onChangeRate(rateDraft);
+    } else {
+      const secondValue = completeCalculatorValue(secondTokens);
+      if (valorValue != null && secondValue != null && secondValue > 0) {
+        onChangeRate(String(Number((valorValue / secondValue).toPrecision(10))));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valorTokens, secondTokens, rateDraft, mode]);
+
+  // Cambiar de modo no pierde lo ya tecleado: convierte el valor actual a la
+  // representación del modo nuevo (si se puede), en vez de limpiar todo.
+  const switchMode = (nextMode) => {
+    if (nextMode === mode) return;
+    const valorValue = completeCalculatorValue(valorTokens);
+    if (nextMode === "montos") {
+      const rateNum = parseAmountInput(rateDraft);
+      setSecondTokens(valorValue != null && !isNaN(rateNum) && rateNum > 0 ? [String(roundMoney(valorValue / rateNum))] : []);
+    } else {
+      const secondValue = completeCalculatorValue(secondTokens);
+      setRateDraft(valorValue != null && secondValue != null && secondValue > 0 ? String(Number((valorValue / secondValue).toPrecision(10))) : "");
+    }
+    setMode(nextMode);
+    setActiveRow("valor");
+  };
+
+  const activeUsesCalculator = activeRow === "valor" || mode === "montos";
+  const setActiveTokens = activeRow === "valor" ? setValorTokens : setSecondTokens;
+
+  const pressDigit = (d) => {
+    if (!activeUsesCalculator) {
+      setRateDraft((prev) => {
+        if (!prev) return d === "." ? "0." : d;
+        if (d === "." && prev.includes(".")) return prev;
+        return prev + d;
+      });
+      return;
+    }
+    setActiveTokens((prev) => {
+      if (prev.length === 0) return [d === "." ? "0." : d];
+      const lastIsOperator = prev.length % 2 === 0;
+      if (lastIsOperator) return [...prev, d === "." ? "0." : d];
+      const last = prev[prev.length - 1];
+      if (d === "." && last.includes(".")) return prev;
+      return [...prev.slice(0, -1), last + d];
+    });
+  };
+  const pressOperator = (op) => {
+    setActiveTokens((prev) => {
+      if (prev.length === 0) return prev;
+      const lastIsOperator = prev.length % 2 === 0;
+      return lastIsOperator ? [...prev.slice(0, -1), op] : [...prev, op];
+    });
+  };
+  const pressBackspace = () => {
+    if (!activeUsesCalculator) { setRateDraft((prev) => prev.slice(0, -1)); return; }
+    setActiveTokens((prev) => {
+      if (prev.length === 0) return prev;
+      const last = prev[prev.length - 1];
+      return last.length > 1 ? [...prev.slice(0, -1), last.slice(0, -1)] : prev.slice(0, -1);
+    });
+  };
+  const pressClear = () => {
+    if (!activeUsesCalculator) { setRateDraft(""); return; }
+    setActiveTokens([]);
+  };
+  const pressEquals = () => {
+    setActiveTokens((prev) => {
+      const complete = prev.length % 2 === 1 ? prev : prev.slice(0, -1);
+      if (complete.length === 0) return prev;
+      const result = evaluateCalculatorTokens(complete);
+      return !isNaN(result) && isFinite(result) ? [String(roundMoney(result))] : prev;
+    });
+  };
+  const pressOk = () => {
+    setOpen(false);
+    onConfirmNext?.();
+  };
+
+  const valorDisplay = valorTokens.length ? valorTokens.join(" ") : "0";
+  const secondDisplay = mode === "montos" ? (secondTokens.length ? secondTokens.join(" ") : "0") : (rateDraft || "0");
+  const rowStyle = (row) => ({
+    ...styles.input,
+    width: "100%",
+    boxSizing: "border-box",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    cursor: row === "valor" && amountDisabled ? "not-allowed" : "pointer",
+    opacity: row === "valor" && amountDisabled ? 0.6 : 1,
+    borderColor: activeRow === row ? "#C75D3B" : "#DDD2BE",
+  });
+
+  return (
+    <div ref={containerRef} onClick={(e) => e.stopPropagation()}>
+      <button
+        ref={boxRef}
+        type="button"
+        onClick={openEdit}
+        style={{ ...styles.input, width: "100%", height: 44, boxSizing: "border-box", textAlign: "left", display: "flex", alignItems: "center" }}
+      >
+        {amount ? `${amount} ${currency}` : <span style={{ color: "#A89A87", fontSize: 13 }}>0.00</span>}
+      </button>
+      {open && (
+        <div ref={sheetRef} style={{ position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: 0, width: "100%", maxWidth: 480, boxSizing: "border-box", background: "#FBF8F2", borderTop: "1px solid #DDD2BE", borderRadius: "16px 16px 0 0", boxShadow: "0 -4px 20px rgba(0,0,0,0.15)", padding: "10px 10px calc(10px + env(safe-area-inset-bottom))", zIndex: 15 }}>
+          <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+            <button type="button" onClick={() => switchMode("rate")} style={{ ...(mode === "rate" ? styles.tabActive : styles.tab), flex: 1 }}>Tasa</button>
+            <button type="button" onClick={() => switchMode("montos")} style={{ ...(mode === "montos" ? styles.tabActive : styles.tab), flex: 1 }}>Montos</button>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 10 }}>
+            <div>
+              <p style={{ ...styles.label, marginBottom: 6 }}>Valor</p>
+              <button
+                type="button"
+                onClick={() => !amountDisabled && setActiveRow("valor")}
+                disabled={amountDisabled}
+                style={rowStyle("valor")}
+              >
+                <span>{valorDisplay}</span>
+                <span style={{ color: "#A89A87", fontSize: 13 }}>{currency}</span>
+              </button>
+            </div>
+            <div>
+              <p style={{ ...styles.label, marginBottom: 6 }}>
+                {mode === "rate" ? "Tasa de conversión" : "Valor convertido"}
+              </p>
+              <button type="button" onClick={() => setActiveRow("second")} style={rowStyle("second")}>
+                <span>{secondDisplay}</span>
+                {mode === "montos" && <span style={{ color: "#A89A87", fontSize: 13 }}>{accountCurrency}</span>}
+              </button>
+            </div>
+          </div>
+          {activeUsesCalculator ? (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+              <CalculatorKeyButton label="7" onClick={() => pressDigit("7")} />
+              <CalculatorKeyButton label="8" onClick={() => pressDigit("8")} />
+              <CalculatorKeyButton label="9" onClick={() => pressDigit("9")} />
+              <CalculatorKeyButton label="÷" accent onClick={() => pressOperator("÷")} />
+              <CalculatorKeyButton label="4" onClick={() => pressDigit("4")} />
+              <CalculatorKeyButton label="5" onClick={() => pressDigit("5")} />
+              <CalculatorKeyButton label="6" onClick={() => pressDigit("6")} />
+              <CalculatorKeyButton label="×" accent onClick={() => pressOperator("×")} />
+              <CalculatorKeyButton label="1" onClick={() => pressDigit("1")} />
+              <CalculatorKeyButton label="2" onClick={() => pressDigit("2")} />
+              <CalculatorKeyButton label="3" onClick={() => pressDigit("3")} />
+              <CalculatorKeyButton label="-" accent onClick={() => pressOperator("-")} />
+              <CalculatorKeyButton label="0" onClick={() => pressDigit("0")} />
+              <CalculatorKeyButton label="." onClick={() => pressDigit(".")} />
+              <CalculatorKeyButton label="⌫" onClick={pressBackspace} />
+              <CalculatorKeyButton label="+" accent onClick={() => pressOperator("+")} />
+              <CalculatorKeyButton label="C" onClick={pressClear} />
+              <CalculatorKeyButton label="=" onClick={pressEquals} />
+              <CalculatorKeyButton label="Ok" primary wide onClick={pressOk} />
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+              <CalculatorKeyButton label="7" onClick={() => pressDigit("7")} />
+              <CalculatorKeyButton label="8" onClick={() => pressDigit("8")} />
+              <CalculatorKeyButton label="9" onClick={() => pressDigit("9")} />
+              <CalculatorKeyButton label="4" onClick={() => pressDigit("4")} />
+              <CalculatorKeyButton label="5" onClick={() => pressDigit("5")} />
+              <CalculatorKeyButton label="6" onClick={() => pressDigit("6")} />
+              <CalculatorKeyButton label="1" onClick={() => pressDigit("1")} />
+              <CalculatorKeyButton label="2" onClick={() => pressDigit("2")} />
+              <CalculatorKeyButton label="3" onClick={() => pressDigit("3")} />
+              <CalculatorKeyButton label="." onClick={() => pressDigit(".")} />
+              <CalculatorKeyButton label="0" onClick={() => pressDigit("0")} />
+              <CalculatorKeyButton label="⌫" onClick={pressBackspace} />
+              <CalculatorKeyButton label="C" onClick={pressClear} />
+              <CalculatorKeyButton label="Ok" primary wide onClick={pressOk} />
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -809,14 +809,14 @@ function AppShell({ session, onLogout, refreshProfile }) {
 
   const visibleTabs = TABS.filter((t) => t.key !== "splitledger" || session.splitLedgerEnabled);
   const showTabBar = activeTab === "config"
-    ? (!changingPassword && !viewingProfile && !creatingRecurring && !moneyManagerScreen)
+    ? (!changingPassword && !viewingProfile && !creatingRecurring && (!moneyManagerScreen || moneyManagerScreen === "recurring"))
     : activeTab === "accounts"
       ? (accountsView.screen === "list" || accountsView.screen === "activity")
       : activeTab === "ledger"
         ? ledgerView.screen === "list"
         : activeTab === "stats"
           ? (statsView.screen === "list" || statsView.screen === "drilldown")
-          : splitLedgerView.screen === "home";
+          : ["home", "group", "expenseDetail", "paymentDetail"].includes(splitLedgerView.screen);
 
   return (
     <div style={styles.app}>

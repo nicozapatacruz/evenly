@@ -1458,7 +1458,7 @@ function GroupView({ group, onBack, onAddExpense, onOpenExpense, onOpenPayment, 
         </div>
       )}
 
-      <button style={styles.fab} onClick={onAddExpense} aria-label="Agregar gasto"><Plus size={24} strokeWidth={2.5} /></button>
+      <button style={{ ...styles.fab, bottom: "calc(78px + env(safe-area-inset-bottom))" }} onClick={onAddExpense} aria-label="Agregar gasto"><Plus size={24} strokeWidth={2.5} /></button>
     </div>
   );
 }

@@ -439,12 +439,22 @@ export function Footer({ children }) {
 // una lista plana sin encabezados (ej. categorías, que no se agrupan).
 let pickerInstanceCounter = 0;
 
-export function PickerField({ value, onChange, groups, placeholder = "Elegir", onClear, onBlur, disabled = false, emptyMessage = "No hay opciones para elegir." }) {
+export function PickerField({ value, onChange, groups, placeholder = "Elegir", onClear, onBlur, disabled = false, emptyMessage = "No hay opciones para elegir.", openSignal }) {
   const [open, setOpen] = useState(false);
   const idRef = useRef(null);
   if (idRef.current === null) idRef.current = ++pickerInstanceCounter;
   const containerRef = useRef(null);
   const selected = groups.flatMap((g) => g.items).find((it) => it.value === value);
+
+  // Apertura "a control remoto": un padre que cambia `openSignal` (ej. un
+  // contador que sube) abre este picker sin tener que levantar su estado
+  // `open` entero acá (ej. el botón "Ok" de CalculatorAmountInput, que
+  // confirma el importe y salta directo a elegir categoría).
+  const firstOpenSignalRef = useRef(openSignal);
+  useEffect(() => {
+    if (openSignal !== undefined && openSignal !== firstOpenSignalRef.current) setOpen(true);
+    firstOpenSignalRef.current = openSignal;
+  }, [openSignal]);
 
   // No hay blur nativo (esto no es un <input>) — se dispara "onBlur" cuando
   // el desplegable se cierra, sea por elegir algo, click afuera, o que se
@@ -665,7 +675,7 @@ function CalculatorKeyButton({ label, onClick, accent, primary, wide }) {
 // lo pendiente. `value`/`onChange` siguen siendo el string plano de siempre
 // (compatible con parseAmountInput), el estado de "qué se está tecleando"
 // es interno y nunca llega al padre a medias.
-export function CalculatorAmountInput({ value, onChange, onBlur, placeholder = "0.00", disabled = false, style }) {
+export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, placeholder = "0.00", disabled = false, style }) {
   const [open, setOpen] = useState(false);
   const [tokens, setTokens] = useState([]);
   const idRef = useRef(null);
@@ -746,6 +756,14 @@ export function CalculatorAmountInput({ value, onChange, onBlur, placeholder = "
       return !isNaN(result) && isFinite(result) ? [String(roundMoney(result))] : prev;
     });
   };
+  // "Ok": lo mismo que "=" (ya queda resuelto solo por el efecto de arriba,
+  // que sube cada expresión completa al padre), pero además cierra el
+  // teclado y salta directo al siguiente campo (igual que la app Money
+  // Manager original).
+  const pressConfirmNext = () => {
+    setOpen(false);
+    onConfirmNext?.();
+  };
 
   const displayValue = open ? tokens.join(" ") : (value || "");
 
@@ -785,8 +803,9 @@ export function CalculatorAmountInput({ value, onChange, onBlur, placeholder = "
             <CalculatorKeyButton label="." onClick={() => pressDigit(".")} />
             <CalculatorKeyButton label="⌫" onClick={pressBackspace} />
             <CalculatorKeyButton label="+" accent onClick={() => pressOperator("+")} />
-            <CalculatorKeyButton label="C" onClick={() => setTokens([])} wide />
-            <CalculatorKeyButton label="=" primary wide onClick={pressEquals} />
+            <CalculatorKeyButton label="C" onClick={() => setTokens([])} />
+            <CalculatorKeyButton label="=" onClick={pressEquals} />
+            <CalculatorKeyButton label="Ok" primary wide onClick={pressConfirmNext} />
           </div>
         </div>
       )}

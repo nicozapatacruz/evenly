@@ -68,6 +68,9 @@ export default function TransactionForm({
   // qué lado se le pide escribir al usuario; se invierte antes de guardar.
   const [rateFlipped, setRateFlipped] = useState(false);
   const [categoryId, setCategoryId] = useState(editingTransaction?.category_id || prefillBookmark?.category_id || "");
+  // Sube cada vez que el botón "Sí" del teclado de Importe confirma el monto
+  // y pide saltar directo a elegir categoría (ver CalculatorAmountInput).
+  const [openCategorySignal, setOpenCategorySignal] = useState(0);
   const [accountId, setAccountId] = useState(editingTransaction?.account_id || prefillBookmark?.account_id || defaultAccountId || "");
   const [toAccountId, setToAccountId] = useState(editingTransaction?.to_account_id || prefillBookmark?.to_account_id || "");
   const [note, setNote] = useState(editingTransaction?.title || prefillBookmark?.title || "");
@@ -370,7 +373,14 @@ export default function TransactionForm({
 
         <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
           <Field label="Importe" required style={{ flex: 1 }}>
-            <CalculatorAmountInput value={amount} onChange={setAmount} onBlur={() => touch("amount")} placeholder="0.00" disabled={isSynced} />
+            <CalculatorAmountInput
+              value={amount}
+              onChange={setAmount}
+              onBlur={() => touch("amount")}
+              onConfirmNext={type !== "transfer" ? () => setOpenCategorySignal((n) => n + 1) : undefined}
+              placeholder="0.00"
+              disabled={isSynced}
+            />
           </Field>
           <select
             style={{ ...styles.input, width: 80, flexShrink: 0, padding: "11px 6px", textAlign: "center", fontWeight: 600, color: "#544A3C", opacity: isSynced ? 0.6 : 1 }}
@@ -443,6 +453,7 @@ export default function TransactionForm({
                 setCategoryId(v);
               }}
               onClear={() => setCategoryId("")}
+              openSignal={openCategorySignal}
               placeholder="Sin categoría"
               groups={[{
                 label: null,

@@ -687,17 +687,42 @@ export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, 
   // Empuja la página hacia arriba al abrir, pero SOLO lo justo para que el
   // campo quede visible arriba del teclado fijo (igual que el teclado nativo
   // del celular): si el campo ya estaba por encima de donde va a aparecer
-  // el teclado, no se mueve nada.
+  // el teclado, no se mueve nada. Un elemento position:fixed (el teclado)
+  // nunca suma a la altura scrolleable de la página, así que si el form es
+  // corto no hay a dónde scrollear todavía. padding-bottom no sirve para
+  // crear ese margen porque "* { box-sizing: border-box }" (ver styles.js)
+  // lo mete adentro de los 100dvh fijos de <body> en vez de sumarlo; con
+  // min-height sí se fuerza una altura total mayor, sin pelear contra el
+  // box-sizing.
+  const scrolledByRef = useRef(0);
   useEffect(() => {
     if (!open) return;
+    const prevMinHeight = document.body.style.minHeight;
     const raf = requestAnimationFrame(() => {
       const inputRect = inputElRef.current?.getBoundingClientRect();
       const keypadRect = keypadRef.current?.getBoundingClientRect();
       if (!inputRect || !keypadRect) return;
+      document.body.style.minHeight = `calc(100dvh + ${keypadRect.height}px)`;
       const overlap = inputRect.bottom - keypadRect.top;
-      if (overlap > 0) window.scrollBy({ top: overlap + 16, behavior: "smooth" });
+      const scrollAmount = overlap > 0 ? overlap + 32 : 0;
+      scrolledByRef.current = scrollAmount;
+      if (scrollAmount > 0) window.scrollBy({ top: scrollAmount, behavior: "smooth" });
     });
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      const scrolledBy = scrolledByRef.current;
+      scrolledByRef.current = 0;
+      // Si se scrolleó al abrir, primero se deshace ese scroll suavemente
+      // y recién cuando termina esa animación se achica el <body> de
+      // vuelta: si se achica ya mismo, el navegador recorta el scroll de
+      // golpe al nuevo máximo (más chico) y se siente como un salto brusco.
+      if (scrolledBy > 0) {
+        window.scrollBy({ top: -scrolledBy, behavior: "smooth" });
+        setTimeout(() => { document.body.style.minHeight = prevMinHeight; }, 350);
+      } else {
+        document.body.style.minHeight = prevMinHeight;
+      }
+    };
   }, [open]);
 
   // Cada vez que los tokens forman una expresión completa (termina en

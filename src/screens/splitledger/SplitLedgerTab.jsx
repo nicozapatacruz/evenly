@@ -1959,12 +1959,14 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
                   <span style={{ ...styles.checkbox, ...(isIn ? styles.checkboxOn : {}), flexShrink: 0 }}>{isIn && <Check size={12} color="#fff" strokeWidth={3} />}</span>
                   <span style={{ ...styles.avatar, background: colorFor(m.id) }}>{initials(m.name)}</span>
                   <span style={{ flex: 1 }}>{m.name}</span>
-                  <CalculatorAmountInput
+                  <input
                     style={styles.customInput}
                     disabled={!isIn}
                     value={payerAmounts[m.id]}
-                    onChange={(v) => setPayerAmounts((p) => ({ ...p, [m.id]: v }))}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => setPayerAmounts((p) => ({ ...p, [m.id]: e.target.value }))}
                     placeholder="0.00"
+                    inputMode="decimal"
                   />
                 </button>
               );
@@ -2039,7 +2041,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
                         <span style={{ ...styles.checkbox, ...(isIn ? styles.checkboxOn : {}), flexShrink: 0 }}>{isIn && <Check size={12} color="#fff" strokeWidth={3} />}</span>
                         <span style={{ ...styles.avatar, background: colorFor(m.id) }}>{initials(m.name)}</span>
                         <span style={{ flex: 1 }}>{m.name}</span>
-                        <CalculatorAmountInput style={styles.customInput} disabled={!isIn} value={exactAmounts[m.id]} onChange={(v) => setExactAmounts((p) => ({ ...p, [m.id]: v }))} placeholder="0.00" />
+                        <input style={styles.customInput} disabled={!isIn} value={exactAmounts[m.id]} onClick={(e) => e.stopPropagation()} onChange={(e) => setExactAmounts((p) => ({ ...p, [m.id]: e.target.value }))} placeholder="0.00" inputMode="decimal" />
                       </button>
                     );
                   })}

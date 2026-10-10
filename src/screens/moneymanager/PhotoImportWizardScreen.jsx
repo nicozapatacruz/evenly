@@ -330,7 +330,7 @@ function WizardStep({ userId, settings, candidate, savedEntry, rule, categories,
       {showExitConfirm && (
         <Modal title="¿Salir del asistente?" onClose={() => setShowExitConfirm(false)}>
           <p style={{ margin: "0 0 14px", fontSize: 14, fontFamily: "system-ui, sans-serif", color: "#6B6355" }}>
-            Todavía no se guardó ninguna transacción de este lote. Si salís ahora se pierden las {stepNumber - 1} que ya confirmaste.
+            Se va a perder la importación de esta foto, con todo lo que ya confirmaste.
           </p>
           <div style={{ display: "flex", gap: 8 }}>
             <button style={{ ...styles.btnGhostSmall, flex: 1, justifyContent: "center" }} onClick={() => setShowExitConfirm(false)}>Cancelar</button>

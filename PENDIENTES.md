@@ -48,17 +48,17 @@ Lista viva de pendientes del proyecto. Reglas:
   - `src/screens/moneymanager/BookmarksScreen.jsx:242` — sub-pantalla "Elegí una transacción" (crear favorito desde una transacción existente).
   - `src/screens/moneymanager/CuentasTab.jsx:520` — `ManageAccounts` (administrar cuentas de un grupo).
   - `src/screens/moneymanager/CuentasTab.jsx:616` — `ManageAllAccounts` (todas las cuentas).
-  - `src/screens/moneymanager/PhotoImportWizardScreen.jsx:99` — pantalla "Guardando transacciones…" del asistente de importar gastos.
-  - `src/screens/moneymanager/PhotoImportWizardScreen.jsx:109` — pantalla resumen final del mismo asistente.
-  - `src/screens/moneymanager/PhotoImportWizardScreen.jsx:231` — `WizardStep`, el formulario de cada paso del asistente.
+  - `src/screens/moneymanager/PhotoImportWizardScreen.jsx:115` — pantalla "Guardando transacciones…" del asistente de importar gastos.
+  - `src/screens/moneymanager/PhotoImportWizardScreen.jsx:126` — pantalla resumen final del mismo asistente.
+  - `src/screens/moneymanager/PhotoImportWizardScreen.jsx:269` — `WizardStep`, el formulario de cada paso del asistente.
   - `src/screens/config/ConfigScreen.jsx:64` — pantalla "Transacciones repetidas".
   - `src/screens/config/ConfigScreen.jsx:347` — `ProfileScreen` ("Perfil").
   - `src/screens/config/ConfigScreen.jsx:417` — `ChangePasswordScreen` ("Cambiar contraseña").
   - `src/screens/config/ConfigScreen.jsx:534` — `SplitLedgerSettings` (ajustes de Split Ledger).
   - `src/screens/splitledger/SplitLedgerTab.jsx:706` — `GroupForm` ("Nuevo grupo"/"Editar grupo").
-  - `src/screens/splitledger/SplitLedgerTab.jsx:1829` — `ExpenseForm` (alta/edición de gasto).
-  - `src/screens/splitledger/SplitLedgerTab.jsx:2392` — `SettleUp` ("Registrar pago").
-  - `src/screens/splitledger/SplitLedgerTab.jsx:2520` — `InviteScreen` ("Invitar al grupo").
+  - `src/screens/splitledger/SplitLedgerTab.jsx:1855` — `ExpenseForm` (alta/edición de gasto).
+  - `src/screens/splitledger/SplitLedgerTab.jsx:2456` — `SettleUp` ("Registrar pago").
+  - `src/screens/splitledger/SplitLedgerTab.jsx:2584` — `InviteScreen` ("Invitar al grupo").
   - `src/screens/moneymanager/CurrencySettingsScreen.jsx:62` — pantalla "Ajustes de moneda".
 
   **Fuera de esta lista, sin revisar todavía**: las ~32 pantallas que usan `styles.screen` directo sin wrapper `.form` (listas largas, ej. `DiarioTab`, `EstadisticasTab`, `SearchScreen`) — ahí no hay doble-conteo porque no hay un segundo `paddingBottom:100`, pero no se confirmó que el único 100 de `styles.screen` sea siempre suficiente/necesario en cada una; quedan fuera del diagnóstico de esta sesión, revisar aparte si en alguna de ellas también aparece scroll de sobra.

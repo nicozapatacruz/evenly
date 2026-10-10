@@ -148,7 +148,14 @@ export function Field({ label, info, infoBlocked, required, error, style, childr
 export function TopBar({ title, onBack, right }) {
   return (
     <div style={styles.topBar}>
-      <button style={{ ...styles.iconBtnGhost, justifySelf: "start" }} onClick={onBack} aria-label="Volver"><ArrowLeft size={20} /></button>
+      {/* Siempre 3 hijos (aunque este quede vacío): el grid de 3 columnas
+          ("1fr auto 1fr") ubica a sus hijos por orden de aparición, no por
+          la columna "lógica" que cada uno debería ocupar — si este div no
+          se renderizara cuando no hay onBack, el título pasaría a ocupar
+          la primera columna en vez de la del medio y se vería descentrado. */}
+      {onBack
+        ? <button style={{ ...styles.iconBtnGhost, justifySelf: "start" }} onClick={onBack} aria-label="Volver"><ArrowLeft size={20} /></button>
+        : <div />}
       <h2 style={styles.topBarTitle}>{title}</h2>
       <div style={{ display: "flex", justifySelf: "end" }}>{right}</div>
     </div>

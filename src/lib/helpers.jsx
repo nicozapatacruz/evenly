@@ -271,6 +271,11 @@ export function useImageUpload(initialUrl = null, onError) {
   const [removed, setRemoved] = useState(false);
   const handleImageChange = useCallback((e) => {
     const file = e.target.files?.[0];
+    // Se resetea siempre, haya o no archivo válido: si no, el navegador no
+    // vuelve a disparar este evento la próxima vez que se elija el MISMO
+    // archivo (desde su punto de vista el input no cambió de valor), y
+    // "Quitar foto" + volver a elegir la misma foto se queda sin preview.
+    e.target.value = "";
     if (!file) return;
     if (file.size > 4_000_000) { onError?.("La imagen no puede superar 4 MB."); return; }
     setPendingFile(file);

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Search, SlidersHorizontal, Star } from "lucide-react";
+import { Plus, Search, SlidersHorizontal, Star, Camera } from "lucide-react";
 import { styles } from "../../lib/styles.js";
 import { RootHeader, MonthNav, TodayButton, FiltersActiveBanner, PendingRateBanner, HeaderMenu, EmptyState, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
 import { money } from "../../lib/helpers.jsx";
@@ -14,7 +14,7 @@ import { TransactionDayGroups } from "./TransactionDayGroups.jsx";
    Resumen que acá no replicamos.
    ========================================================================= */
 
-export default function DiarioTab({ userId, settings, groups, accounts, categories, slLinks, viewMonth, setViewMonth, onNewTransaction, onEditTransaction, onOpenSearch, onOpenBookmarks, filters, onOpenFilters, onClearFilters }) {
+export default function DiarioTab({ userId, settings, groups, accounts, categories, slLinks, viewMonth, setViewMonth, onNewTransaction, onEditTransaction, onOpenSearch, onOpenBookmarks, onOpenPhotoImport, filters, onOpenFilters, onClearFilters }) {
   // Solo pedimos las transacciones del mes visible (no toda la tabla) — se
   // refetchea solo cuando cambiás de mes.
   const { transactions: monthTx, loading } = useMonthTransactions(userId, viewMonth);
@@ -50,6 +50,7 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
                 items={[
                   { icon: <SlidersHorizontal size={16} color="#6B6355" />, label: "Filtros", onClick: onOpenFilters, badge: hasActiveFilters(filters) },
                   { icon: <Star size={16} color="#6B6355" />, label: "Favoritos", onClick: onOpenBookmarks },
+                  { icon: <Camera size={16} color="#6B6355" />, label: "Importar gastos", onClick: onOpenPhotoImport },
                 ]}
                 currencies={currencies}
                 currency={currency}

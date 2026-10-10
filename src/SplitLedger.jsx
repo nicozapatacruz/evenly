@@ -12,6 +12,8 @@ import EstadisticasTab from "./screens/moneymanager/EstadisticasTab.jsx";
 import CategoryDrillDownScreen from "./screens/moneymanager/CategoryDrillDownScreen.jsx";
 import SearchScreen from "./screens/moneymanager/SearchScreen.jsx";
 import BookmarksScreen from "./screens/moneymanager/BookmarksScreen.jsx";
+import PhotoImportEntryScreen from "./screens/moneymanager/PhotoImportEntryScreen.jsx";
+import PhotoImportWizardScreen from "./screens/moneymanager/PhotoImportWizardScreen.jsx";
 import { FiltersPanel } from "./screens/moneymanager/FiltersPanel.jsx";
 import { useMoneyManager } from "./lib/moneyManagerData.js";
 import { createBookmark } from "./lib/bookmarksData.js";
@@ -957,6 +959,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           onEditTransaction={(t) => setLedgerView({ screen: "editTransaction", transaction: t, returnTo: "list" })}
           onOpenSearch={() => setLedgerView({ screen: "search" })}
           onOpenBookmarks={() => setLedgerView({ screen: "bookmarks" })}
+          onOpenPhotoImport={() => setLedgerView({ screen: "photoImportPick" })}
           filters={diarioFilters}
           onOpenFilters={() => setLedgerView({ screen: "filters" })}
           onClearFilters={() => setDiarioFilters(EMPTY_FILTERS)}
@@ -972,6 +975,33 @@ function AppShell({ session, onLogout, refreshProfile }) {
           showInfo={showInfo}
           onBack={() => setLedgerView({ screen: "list" })}
           onUseBookmark={(bookmark) => setLedgerView({ screen: "newTransaction", prefillBookmark: bookmark, returnTo: "list" })}
+        />
+      )}
+
+      {activeTab === "ledger" && ledgerView.screen === "photoImportPick" && (
+        <PhotoImportEntryScreen
+          groups={moneyManager.groups}
+          accounts={moneyManager.accounts}
+          showError={showError}
+          onBack={() => setLedgerView({ screen: "list" })}
+          onExtracted={(candidates, accountId, date) =>
+            setLedgerView({ screen: "photoImportWizard", candidates, accountId, date, returnTo: "list" })}
+        />
+      )}
+
+      {activeTab === "ledger" && ledgerView.screen === "photoImportWizard" && (
+        <PhotoImportWizardScreen
+          userId={session.userId}
+          settings={moneyManager.settings}
+          accounts={moneyManager.accounts}
+          categories={moneyManager.categories}
+          accountId={ledgerView.accountId}
+          candidates={ledgerView.candidates}
+          date={ledgerView.date}
+          onSaveMoneyTransaction={saveMoneyTransaction}
+          showError={showError}
+          onBack={() => setLedgerView({ screen: "photoImportPick" })}
+          onFinish={() => setLedgerView({ screen: ledgerView.returnTo })}
         />
       )}
 

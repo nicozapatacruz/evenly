@@ -1470,6 +1470,7 @@ function GroupView({ group, onBack, onAddExpense, onOpenExpense, onOpenPayment, 
 function ExpenseDetail({ group, expenseId, onBack, onEdit }) {
   const { members } = group;
   const e = group.expenses.find((x) => x.id === expenseId);
+  const [showFullPhoto, setShowFullPhoto] = useState(false);
 
   if (!e) {
     return (
@@ -1554,7 +1555,31 @@ function ExpenseDetail({ group, expenseId, onBack, onEdit }) {
         </div>
 
         {e.imageUrl && (
-          <img src={e.imageUrl} alt="" style={{ width: "100%", borderRadius: 12, border: "1px solid #ECE3D3", objectFit: "cover", maxHeight: 220 }} />
+          <button
+            type="button"
+            onClick={() => setShowFullPhoto(true)}
+            aria-label="Ver foto completa"
+            style={{ width: "100%", padding: 0, border: "none", background: "none", display: "block", cursor: "zoom-in" }}
+          >
+            <img src={e.imageUrl} alt="" style={{ width: "100%", borderRadius: 12, border: "1px solid #ECE3D3", objectFit: "cover", maxHeight: 220, display: "block" }} />
+          </button>
+        )}
+
+        {showFullPhoto && e.imageUrl && (
+          <div
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 30 }}
+            onClick={() => setShowFullPhoto(false)}
+          >
+            <img src={e.imageUrl} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+            <button
+              type="button"
+              onClick={() => setShowFullPhoto(false)}
+              aria-label="Cerrar"
+              style={{ position: "absolute", top: 16, right: 16, width: 40, height: 40, borderRadius: "50%", border: "none", background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+            >
+              <X size={22} color="#fff" />
+            </button>
+          </div>
         )}
 
         {e.notes && (
@@ -1625,6 +1650,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [saving, setSaving] = useState(false);
   const [touched, setTouched] = useState({});
+  const [showFullPhoto, setShowFullPhoto] = useState(false);
   const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
 
   // Mi Money Manager — solo si YO tengo este grupo vinculado. (myMemberId ya
@@ -1868,7 +1894,13 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
                   }))
                   .filter((g) => g.items.length > 0)}
               />
-              <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", display: "flex", pointerEvents: "none" }} title="Viene de/va a Money Manager">
+              {/* top:22 (mitad del alto fijo de 44px del botón de PickerField),
+                  no "50%": "50%" se calcula sobre el alto de ESTE wrapper
+                  entero, que incluye la grilla desplegada cuando el picker
+                  está abierto — con "50%" el ícono terminaba centrado en
+                  medio de la grilla abierta en vez de quedarse pegado al
+                  campo cerrado. */}
+              <span style={{ position: "absolute", right: 12, top: 22, transform: "translateY(-50%)", display: "flex", pointerEvents: "none" }} title="Viene de/va a Money Manager">
                 <SplitLedgerIcon size={26} />
               </span>
             </div>
@@ -1893,7 +1925,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
                   en right:6 y se superponía con este ícono. Sin selección no
                   hay "X", así que usa el mismo offset que el resto para
                   quedar alineado con Cuenta/Grupo. */}
-              <span style={{ position: "absolute", right: mmCategoryId ? 40 : 12, top: "50%", transform: "translateY(-50%)", display: "flex", pointerEvents: "none" }} title="Viene de/va a Money Manager">
+              <span style={{ position: "absolute", right: mmCategoryId ? 40 : 12, top: 22, transform: "translateY(-50%)", display: "flex", pointerEvents: "none" }} title="Viene de/va a Money Manager">
                 <SplitLedgerIcon size={26} />
               </span>
             </div>
@@ -1905,11 +1937,14 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
             vinculado a Money Manager (participes/pagues o no) — así no
             cambia de nombre según el caso, que sería más confuso que útil. */}
         <Field label={activeLink ? `Categoría de ${group.name}` : "Categoría"}>
-          <select style={{ ...styles.input, height: 44, boxSizing: "border-box", paddingRight: 10 }} value={category} onChange={(e) => setCategory(e.target.value)}>
-            {groupCategories(group).map((c) => (
-              <option key={c.id} value={c.id}>{c.label}</option>
-            ))}
-          </select>
+          <PickerField
+            value={category}
+            onChange={setCategory}
+            groups={[{
+              label: null,
+              items: groupCategories(group).map((c) => ({ value: c.id, label: c.label, icon: <IconComp iconKey={c.iconKey} size={16} /> })),
+            }]}
+          />
         </Field>
 
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
@@ -2117,9 +2152,38 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
 
         {imageUrl && (
           <div style={{ position: "relative" }}>
-            <img src={imageUrl} alt="Adjunto del gasto" style={{ width: "100%", borderRadius: 12, maxHeight: 180, objectFit: "cover", border: "1px solid #ECE3D3" }} />
-            <button onClick={clearImage} style={{ position: "absolute", top: 8, right: 8, width: 28, height: 28, borderRadius: "50%", border: "none", background: "rgba(0,0,0,0.5)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }} aria-label="Quitar imagen">
-              <X size={14} />
+            <button
+              type="button"
+              onClick={() => setShowFullPhoto(true)}
+              aria-label="Ver foto completa"
+              style={{ width: "100%", padding: 0, border: "none", background: "none", display: "block", cursor: "zoom-in" }}
+            >
+              <img src={imageUrl} alt="Adjunto del gasto" style={{ width: "100%", borderRadius: 12, maxHeight: 180, objectFit: "cover", border: "1px solid #ECE3D3", display: "block" }} />
+            </button>
+            <button
+              type="button"
+              onClick={clearImage}
+              aria-label="Quitar imagen"
+              style={{ position: "absolute", top: 10, right: 10, width: 36, height: 36, borderRadius: "50%", border: "none", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(0,0,0,0.25)", cursor: "pointer" }}
+            >
+              <Trash2 size={17} color="#B0473A" />
+            </button>
+          </div>
+        )}
+
+        {showFullPhoto && imageUrl && (
+          <div
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 30 }}
+            onClick={() => setShowFullPhoto(false)}
+          >
+            <img src={imageUrl} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+            <button
+              type="button"
+              onClick={() => setShowFullPhoto(false)}
+              aria-label="Cerrar"
+              style={{ position: "absolute", top: 16, right: 16, width: 40, height: 40, borderRadius: "50%", border: "none", background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+            >
+              <X size={22} color="#fff" />
             </button>
           </div>
         )}
@@ -2470,7 +2534,7 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
                   }))
                   .filter((g) => g.items.length > 0)}
               />
-              <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", display: "flex", pointerEvents: "none" }} title="Viene de/va a Money Manager">
+              <span style={{ position: "absolute", right: 12, top: 22, transform: "translateY(-50%)", display: "flex", pointerEvents: "none" }} title="Viene de/va a Money Manager">
                 <SplitLedgerIcon size={26} />
               </span>
             </div>

@@ -521,7 +521,7 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", o
         >
           {selected ? (
             <>
-              {selected.icon && <span>{selected.icon}</span>}
+              {selected.icon && <span style={{ display: "inline-flex", alignItems: "center" }}>{selected.icon}</span>}
               <span style={selected.deleted ? { textDecoration: "line-through", color: "#B0473A" } : undefined}>{selected.label}</span>
               {selected.deleted && (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 1, color: "#B0473A" }}>
@@ -578,7 +578,7 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", o
                       border: "none", background: it.value === value ? "#FBEDE7" : "#fff", color: "#2B2620", textAlign: "left", cursor: "pointer", minWidth: 0,
                     }}
                   >
-                    {it.icon && <span style={{ flexShrink: 0 }}>{it.icon}</span>}
+                    {it.icon && <span style={{ flexShrink: 0, display: "inline-flex", alignItems: "center" }}>{it.icon}</span>}
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", ...(it.deleted ? { textDecoration: "line-through", color: "#B0473A" } : null) }}>
                       {it.label}
                     </span>
@@ -1283,7 +1283,7 @@ export function MultiPickerField({ value, onChange, groups, placeholder = "Elegi
                         border: "none", background: checked ? "#FBEDE7" : "#fff", color: "#2B2620", textAlign: "left", cursor: "pointer", minWidth: 0,
                       }}
                     >
-                      {it.icon && <span style={{ flexShrink: 0 }}>{it.icon}</span>}
+                      {it.icon && <span style={{ flexShrink: 0, display: "inline-flex", alignItems: "center" }}>{it.icon}</span>}
                       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{it.label}</span>
                       {checked && <Check size={14} style={{ flexShrink: 0, color: "#C75D3B" }} />}
                     </button>

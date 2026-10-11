@@ -40,6 +40,10 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
   // la transferencia puntual, no el balance de la cuenta entera.
   const isNico = session.email === "nicozapatacruz@gmail.com";
   const [pendienteTcSum, setPendienteTcSum] = useState(0);
+  // Arranca en null (no en 0) a propósito: mientras no se sabe el valor
+  // real todavía, mejor no mostrar la fila "Saldo Real" que mostrar un
+  // número de entrada que es incompleto y después salta solo.
+  const [pendienteTcLoaded, setPendienteTcLoaded] = useState(false);
   useEffect(() => {
     if (!isNico) return;
     const tcId = accounts.find((a) => a.name === "TC Santander" && !a.deleted)?.id;
@@ -54,7 +58,10 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
       .eq("account_id", tcId)
       .eq("to_account_id", pendienteId)
       .eq("title", "Pendiente TC")
-      .then(({ data }) => setPendienteTcSum((data || []).reduce((s, t) => s + t.amount, 0)));
+      .then(({ data }) => {
+        setPendienteTcSum((data || []).reduce((s, t) => s + t.amount, 0));
+        setPendienteTcLoaded(true);
+      });
   }, [isNico, accounts, session.userId]);
 
   if (view.screen === "manageAllAccounts") {
@@ -230,7 +237,9 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
                 return (
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14, background: "#FDFBF9", fontWeight: 700 }}>
                     <span>Saldo Real</span>
-                    <span style={{ color: balanceColor(saldoReal) }}>{money(saldoReal, saldoAcc.currency)}</span>
+                    {pendienteTcLoaded
+                      ? <span style={{ color: balanceColor(saldoReal) }}>{money(saldoReal, saldoAcc.currency)}</span>
+                      : <span style={{ color: "#A89A87" }}>—</span>}
                   </div>
                 );
               })()}

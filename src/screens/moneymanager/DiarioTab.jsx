@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React, { useLayoutEffect, useRef, useState } from "react";
 import { Plus, Search, SlidersHorizontal, Star, Camera } from "lucide-react";
 import { styles } from "../../lib/styles.js";
 import { RootHeader, MonthNav, TodayButton, FiltersActiveBanner, PendingRateBanner, HeaderMenu, EmptyState, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
-import { money } from "../../lib/helpers.jsx";
+import { money, todayInputValue } from "../../lib/helpers.jsx";
 import { useMonthTransactions, usePendingRateTransactions, currenciesInUse } from "../../lib/moneyManagerData.js";
 import { hasActiveFilters, matchesFilters } from "../../lib/filterHelpers.js";
 import { TransactionDayGroups } from "./TransactionDayGroups.jsx";
@@ -37,9 +37,44 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
   const monthIncome = filtered.filter((t) => t.type === "income" && isSelectedCurrencyTx(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
   const monthExpense = filtered.filter((t) => t.type === "expense" && isSelectedCurrencyTx(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
 
+  // Por defecto (y para meses que no son el actual) alcanza con el orden
+  // descendente de TransactionDayGroups: el día más reciente queda primero
+  // en el DOM, así que el tope de la página ya lo muestra solo, sin
+  // necesidad de ningún scroll manual. Pero en el MES ACTUAL "más reciente"
+  // puede ser una fecha futura (ej. una cuota de préstamo cargada por
+  // adelantado) — en ese caso hay que bajar el scroll hasta hoy a propósito,
+  // para que no quede tapado por algo que todavía no pasó.
+  const headerRef = useRef(null);
+  const listRef = useRef(null);
+  useLayoutEffect(() => {
+    if (loading) return;
+    // Con filtros activos no tiene sentido priorizar "hoy" (el filtro puede
+    // ni siquiera incluir nada de hoy) y, peor, el banner de "Filtros
+    // activos" vive arriba de las tarjetas de día (no en el header fijo) —
+    // si scrolleamos hasta hoy, el banner queda tapado fuera de vista y el
+    // usuario no se entera de que está viendo una versión filtrada.
+    if (hasActiveFilters(filters)) return;
+    const now = new Date();
+    const isCurrentMonth = viewMonth.getFullYear() === now.getFullYear() && viewMonth.getMonth() === now.getMonth();
+    if (!isCurrentMonth) return;
+    const todayKey = todayInputValue();
+    const dayEls = listRef.current?.querySelectorAll("[data-daykey]");
+    if (!dayEls || dayEls.length === 0) return;
+    const target = [...dayEls].find((el) => el.dataset.daykey <= todayKey);
+    if (!target) return; // no hay ningún día cargado de hoy para atrás, nada desde dónde bajar
+    // scroll-margin-top (no scrollBy después): le dice al propio navegador
+    // que reserve ese espacio arriba al calcular el scroll, en vez de
+    // nosotros intentar corregir a mano con una resta que salió mal.
+    // +12: el mismo paddingTop que ya tiene el contenido en cualquier otro
+    // mes (ver paddingTop del form más abajo) — sin este extra, el día de
+    // hoy quedaba pegado al header en vez de con el mismo aire de siempre.
+    target.style.scrollMarginTop = `${(headerRef.current?.offsetHeight || 0) + 12}px`;
+    target.scrollIntoView({ block: "start" });
+  }, [loading, viewMonth, filters]);
+
   return (
     <div style={{ ...styles.screen, display: "flex", flexDirection: "column" }}>
-      <div style={{ position: "sticky", top: 0, zIndex: 5 }}>
+      <div ref={headerRef} style={{ position: "sticky", top: 0, zIndex: 5 }}>
         <RootHeader
           title="Transacciones"
           right={
@@ -105,7 +140,7 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
             tarjetas de día al resto de la app. El banner es la excepción:
             necesita 12px (no 8) hacia el contenido, así que se le suma un
             marginBottom extra de 4 (8 del gap + 4 = 12). */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div ref={listRef} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {hasActiveFilters(filters) && <FiltersActiveBanner onOpen={onOpenFilters} onClear={onClearFilters} />}
           {loading ? (
             <EmptyState title="Cargando transacciones…" />

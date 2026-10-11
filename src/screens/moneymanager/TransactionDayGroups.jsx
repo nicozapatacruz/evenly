@@ -103,7 +103,7 @@ export function TransactionDayGroups({ transactions, settings, accounts, categor
           ? txs.reduce((s, t) => { const c = contribution(t); return c < 0 ? s - c : s; }, 0)
           : txs.filter((t) => t.type === "expense" && accountCurrency(t.account_id) === settings.main_currency).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
         return (
-          <div key={dayKey} style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
+          <div key={dayKey} data-daykey={dayKey} style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
             <div
               onClick={() => onNewTransaction(dayKey)}
               style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 14px", background: "#FAF7F2", borderBottom: "1px solid #F0EBE2", fontFamily: "system-ui, sans-serif", cursor: "pointer" }}

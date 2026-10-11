@@ -613,8 +613,14 @@ function AppShell({ session, onLogout, refreshProfile }) {
   useLayoutEffect(() => {
     const isTransactionsList = activeTab === "ledger" && ledgerView.screen === "list";
     if (isTransactionsList) return;
-    window.scrollTo(0, 0);
-    const raf = requestAnimationFrame(() => window.scrollTo(0, 0));
+    // scrollIntoView (no window.scrollTo): en la PWA instalada de iOS,
+    // scrollTo a veces no hace nada, pero scrollIntoView sí — es el mismo
+    // mecanismo que ya probamos que funciona en el auto-scroll de
+    // Transacciones (ver DiarioTab.jsx). #root siempre existe, no hace
+    // falta un ref por pantalla.
+    const scrollToTop = () => document.getElementById("root")?.scrollIntoView({ block: "start" });
+    scrollToTop();
+    const raf = requestAnimationFrame(scrollToTop);
     return () => cancelAnimationFrame(raf);
   }, [activeTab, splitLedgerView.screen, accountsView.screen, ledgerView.screen, statsView.screen, moneyManagerScreen, changingPassword, viewingProfile, creatingRecurring]);
   const [toast, setToast] = useState(null); // { message, type: "error" | "success" | "info" }

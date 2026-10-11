@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { supabase } from "./lib/supabaseClient.js";
-import { BookOpen, BarChart3, Coins, Divide, MoreHorizontal, MailCheck } from "lucide-react";
+import { BookOpen, BarChart3, Coins, Divide, MoreHorizontal, MailCheck, Eye, EyeOff } from "lucide-react";
 import { styles, globalCss } from "./lib/styles.js";
 import { Field } from "./components/Shared.jsx";
 import SplitLedgerTab from "./screens/splitledger/SplitLedgerTab.jsx";
@@ -321,6 +321,26 @@ function useGroups(userId) {
    AUTH SCREEN
    ========================================================================= */
 
+// Input de contraseña con el "ojito" para mostrar/ocultar en texto plano —
+// mismo <input> de siempre, solo le agrega el ícono superpuesto y el padding
+// para que el texto no quede debajo del botón.
+function PasswordInput({ style, ...rest }) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div style={{ position: "relative" }}>
+      <input {...rest} type={visible ? "text" : "password"} style={{ ...style, width: "100%", boxSizing: "border-box", paddingRight: 38 }} />
+      <button
+        type="button"
+        onClick={() => setVisible((v) => !v)}
+        aria-label={visible ? "Ocultar contraseña" : "Mostrar contraseña"}
+        style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", padding: 4, display: "flex", color: "#A89A87", cursor: "pointer" }}
+      >
+        {visible ? <EyeOff size={17} /> : <Eye size={17} />}
+      </button>
+    </div>
+  );
+}
+
 function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
   const [mode, setMode] = useState("login"); // "login" | "register" | "forgot"
   const [email, setEmail] = useState("");
@@ -430,7 +450,7 @@ function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
           </Field>
           {mode !== "forgot" && (
             <Field label="Contraseña" required error={touched.password && !password ? "Este campo es obligatorio." : ""}>
-              <input style={styles.input} type="password" name={mode === "login" ? "current-password" : "new-password"} value={password} onChange={e => setPassword(e.target.value)} onBlur={() => touch("password")} placeholder="Contraseña" autoComplete={mode === "login" ? "current-password" : "new-password"} />
+              <PasswordInput style={styles.input} name={mode === "login" ? "current-password" : "new-password"} value={password} onChange={e => setPassword(e.target.value)} onBlur={() => touch("password")} placeholder="Contraseña" autoComplete={mode === "login" ? "current-password" : "new-password"} />
             </Field>
           )}
           {mode === "login" && (
@@ -450,7 +470,7 @@ function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
                 ? (!confirmPassword ? "Este campo es obligatorio." : (password !== confirmPassword ? "Las contraseñas no coinciden." : ""))
                 : ""}
             >
-              <input style={styles.input} type="password" name="confirm-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} onBlur={() => touch("confirmPassword")} placeholder="Confirmar contraseña" autoComplete="new-password" />
+              <PasswordInput style={styles.input} name="confirm-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} onBlur={() => touch("confirmPassword")} placeholder="Confirmar contraseña" autoComplete="new-password" />
             </Field>
           )}
           {err && <p style={styles.errText}>{err}</p>}

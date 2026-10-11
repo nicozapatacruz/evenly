@@ -69,8 +69,9 @@ export default function TransactionForm({
   );
   const [categoryId, setCategoryId] = useState(editingTransaction?.category_id || prefillBookmark?.category_id || "");
   // Sube cada vez que el botón "Ok" del teclado de Importe confirma el monto
-  // y pide saltar directo a elegir categoría (ver CalculatorAmountInput).
-  const [openCategorySignal, setOpenCategorySignal] = useState(0);
+  // y pide saltar directo a elegir cuenta (ver CalculatorAmountInput) — el
+  // campo que sigue a Importe desde que Cuenta pasó a ir antes que Categoría.
+  const [openAccountSignal, setOpenAccountSignal] = useState(0);
   // Sube cada vez que la moneda cambia a una distinta de la cuenta, para que
   // CurrencyConversionField se abra solo (ver abajo, cerca del campo Importe).
   const [openConversionSignal, setOpenConversionSignal] = useState(0);
@@ -401,7 +402,7 @@ export default function TransactionForm({
                 rate={exchangeRate}
                 onChangeRate={setExchangeRate}
                 onBlur={() => { touch("amount"); touch("exchangeRate"); }}
-                onConfirmNext={type !== "transfer" ? () => setOpenCategorySignal((n) => n + 1) : undefined}
+                onConfirmNext={type !== "transfer" ? () => setOpenAccountSignal((n) => n + 1) : undefined}
                 openSignal={openConversionSignal}
                 amountDisabled={isSynced}
               />
@@ -410,7 +411,7 @@ export default function TransactionForm({
                 value={amount}
                 onChange={setAmount}
                 onBlur={() => touch("amount")}
-                onConfirmNext={type !== "transfer" ? () => setOpenCategorySignal((n) => n + 1) : undefined}
+                onConfirmNext={type !== "transfer" ? () => setOpenAccountSignal((n) => n + 1) : undefined}
                 placeholder="0.00"
                 disabled={isSynced}
               />
@@ -447,39 +448,13 @@ export default function TransactionForm({
           </p>
         )}
 
-        {type !== "transfer" && (
-          <Field label="Categoría">
-            <PickerField
-              value={categoryId}
-              onChange={(v) => {
-                if (v === "__new__") { setManagingCategoryType(type === "income" ? "income" : "expense"); return; }
-                setCategoryId(v);
-              }}
-              onClear={() => setCategoryId("")}
-              openSignal={openCategorySignal}
-              placeholder="Sin categoría"
-              groups={[{
-                label: null,
-                items: [
-                  ...typeCategories.map((c) => ({ value: c.id, label: c.name, icon: c.icon, deleted: c.deleted })),
-                  { value: "__new__", label: "Nuevo", icon: "➕" },
-                ],
-              }]}
-            />
-          </Field>
-        )}
-        {type !== "transfer" && categories.find((c) => c.id === categoryId)?.deleted && (
-          <p style={{ ...styles.muted, padding: 0, marginTop: -8, color: "#B0473A", display: "flex", alignItems: "center", gap: 5 }}>
-            <Trash2 size={13} /> Esta categoría fue eliminada.
-          </p>
-        )}
-
         <Field label={type === "transfer" ? "De" : "Cuenta"} required error={touched.accountId && !accountId ? "Este campo es obligatorio." : ""}>
           <PickerField
             value={accountId}
             onChange={setAccountId}
             onClear={() => setAccountId("")}
             onBlur={() => touch("accountId")}
+            openSignal={openAccountSignal}
             placeholder="Elegí una cuenta"
             disabled={isSynced}
             groups={groups
@@ -543,6 +518,32 @@ export default function TransactionForm({
         {type === "transfer" && accounts.find((a) => a.id === toAccountId)?.deleted && (
           <p style={{ ...styles.muted, padding: 0, marginTop: -8, color: "#B0473A", display: "flex", alignItems: "center", gap: 5 }}>
             <Trash2 size={13} /> Esta cuenta fue eliminada.
+          </p>
+        )}
+
+        {type !== "transfer" && (
+          <Field label="Categoría">
+            <PickerField
+              value={categoryId}
+              onChange={(v) => {
+                if (v === "__new__") { setManagingCategoryType(type === "income" ? "income" : "expense"); return; }
+                setCategoryId(v);
+              }}
+              onClear={() => setCategoryId("")}
+              placeholder="Sin categoría"
+              groups={[{
+                label: null,
+                items: [
+                  ...typeCategories.map((c) => ({ value: c.id, label: c.name, icon: c.icon, deleted: c.deleted })),
+                  { value: "__new__", label: "Nuevo", icon: "➕" },
+                ],
+              }]}
+            />
+          </Field>
+        )}
+        {type !== "transfer" && categories.find((c) => c.id === categoryId)?.deleted && (
+          <p style={{ ...styles.muted, padding: 0, marginTop: -8, color: "#B0473A", display: "flex", alignItems: "center", gap: 5 }}>
+            <Trash2 size={13} /> Esta categoría fue eliminada.
           </p>
         )}
 

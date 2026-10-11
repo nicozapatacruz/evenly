@@ -597,6 +597,18 @@ function AppShell({ session, onLogout, refreshProfile }) {
   const [viewingProfile, setViewingProfile] = useState(false);
   const [creatingRecurring, setCreatingRecurring] = useState(false);
   const [moneyManagerScreen, setMoneyManagerScreen] = useState(null);
+  // Esta app no navega con URLs/router — cambiar de pantalla es solo React
+  // mostrando otro árbol de componentes, así que el navegador nunca resetea
+  // el scroll solo (eso sí pasaría con una navegación real de página). Sin
+  // esto, un formulario nuevo heredaba el scroll que tenía la pantalla
+  // anterior y podía arrancar mostrado desde la mitad, no desde arriba.
+  // Transacciones (ledger/list) es la única excepción a propósito: esa
+  // pantalla ya decide su propio scroll al entrar (día de hoy), y correr
+  // esto ahí lo pisaría.
+  useEffect(() => {
+    const isTransactionsList = activeTab === "ledger" && ledgerView.screen === "list";
+    if (!isTransactionsList) window.scrollTo(0, 0);
+  }, [activeTab, splitLedgerView.screen, accountsView.screen, ledgerView.screen, statsView.screen, moneyManagerScreen, changingPassword, viewingProfile, creatingRecurring]);
   const [toast, setToast] = useState(null); // { message, type: "error" | "success" | "info" }
   const [invites, setInvites] = useState([]); // invitaciones que ME llegaron (bandeja)
 

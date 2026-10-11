@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { TopBar, Footer, Field, PickerField, CalculatorAmountInput, EmptyState, Modal } from "../../components/Shared.jsx";
 import { styles } from "../../lib/styles.js";
-import { money, parseAmountInput, dateInputValue } from "../../lib/helpers.jsx";
+import { money, parseAmountInput, dateInputValue, useScrollToTopOnChange } from "../../lib/helpers.jsx";
 import { computeAmountMain, useRecentNoteTitles } from "../../lib/moneyManagerData.js";
 import { useDescriptionRules, findDescriptionRule, upsertDescriptionRule, normalizeDescription } from "../../lib/descriptionRulesData.js";
 import { Check, Inbox, RefreshCw, X } from "lucide-react";
@@ -56,6 +56,7 @@ export default function PhotoImportWizardScreen({ userId, settings, accounts, ca
   const [entries, setEntries] = useState(() => new Array(candidates.length).fill(null)); // entries[i] = { status: "confirmed", tx, ruleArgs } | { status: "skipped" }
   const [saving, setSaving] = useState(false);
   const [results, setResults] = useState(null); // transacciones efectivamente guardadas, una vez termina el guardado
+  useScrollToTopOnChange(stepIndex, results !== null);
 
   const account = accounts.find((a) => a.id === accountId);
   const accountCurrency = account?.currency;

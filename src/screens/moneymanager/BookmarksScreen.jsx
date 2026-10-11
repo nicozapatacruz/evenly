@@ -5,7 +5,7 @@ import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } 
 import { CSS } from "@dnd-kit/utilities";
 import { styles } from "../../lib/styles.js";
 import { TopBar, ConfirmInline, EmptyState } from "../../components/Shared.jsx";
-import { money } from "../../lib/helpers.jsx";
+import { money, useScrollToTopOnChange } from "../../lib/helpers.jsx";
 import { useBookmarks, createBookmark, deleteBookmark, reorderBookmarks } from "../../lib/bookmarksData.js";
 import { searchTransactions } from "../../lib/moneyManagerData.js";
 
@@ -24,6 +24,7 @@ export default function BookmarksScreen({ userId, accounts, categories, onBack, 
   const { bookmarks, loading, reload } = useBookmarks(userId);
   const [managing, setManaging] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
+  useScrollToTopOnChange(showPicker);
 
   const grouped = ["expense", "income", "transfer"]
     .map((type) => ({ type, items: bookmarks.filter((b) => b.type === type) }))

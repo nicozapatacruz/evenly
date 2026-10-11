@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { supabase } from "./supabaseClient.js";
 import {
   Receipt, UtensilsCrossed, Car, Home as HomeIcon, Plug, PartyPopper, ShoppingBag,
@@ -255,6 +255,20 @@ export function dateInputValue(ms) {
 // nunca al editar uno existente ni al agruparlo por día en las listas.
 export function dateInputValueInZone(ms, tz) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms));
+}
+
+// Esta app no navega con URLs/router: "cambiar de pantalla" es solo React
+// mostrando otro árbol de componentes, así que el navegador nunca resetea el
+// scroll solo (eso sí pasaría con una navegación real de página). Cualquier
+// componente que alterne entre un listado y un detalle/formulario con un
+// estado propio (no levantado al padre) tiene que llamar a este hook con ese
+// mismo estado, para no heredar el scroll que tenía la vista anterior. Ver
+// también el mismo patrón a nivel de pantalla completa en SplitLedger.jsx.
+export function useScrollToTopOnChange(...deps) {
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
 }
 
 /* =========================================================================

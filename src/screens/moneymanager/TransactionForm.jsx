@@ -6,7 +6,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, Footer, ConfirmInline, IconInput, PickerField, Field, Modal, CalculatorAmountInput, CurrencyConversionField } from "../../components/Shared.jsx";
-import { parseAmountInput, todayInputValue, dateInputValueInZone, money, fmtDate } from "../../lib/helpers.jsx";
+import { parseAmountInput, todayInputValue, dateInputValueInZone, money, fmtDate, useScrollToTopOnChange } from "../../lib/helpers.jsx";
 import { RECURRING_FREQUENCIES, nextOccurrence, computeAmountMain, useRecentNoteTitles } from "../../lib/moneyManagerData.js";
 
 const TYPE_INFO = {
@@ -29,6 +29,7 @@ export default function TransactionForm({
   prefillBookmark = null, slLinks = null, onOpenSplitLedgerExpense = null,
 }) {
   const [managingCategoryType, setManagingCategoryType] = useState(null); // "income" | "expense" | null
+  useScrollToTopOnChange(managingCategoryType);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showCopyModal, setShowCopyModal] = useState(false);
@@ -709,6 +710,7 @@ function RecurringFields({ type, date, freqValue, setFreqValue, freqInterval, se
 
 export function ManageCategories({ session, type, categories, reload, showError, showInfo, onBack, initialCreating = false }) {
   const [creating, setCreating] = useState(initialCreating);
+  useScrollToTopOnChange(creating);
   const typeCategories = categories.filter((c) => c.type === type && !c.deleted);
   const [names, setNames] = useState(() => Object.fromEntries(typeCategories.map((c) => [c.id, c.name])));
   const [icons, setIcons] = useState(() => Object.fromEntries(typeCategories.map((c) => [c.id, c.icon])));

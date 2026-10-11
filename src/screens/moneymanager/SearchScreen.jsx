@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Search as SearchIcon, SlidersHorizontal, Trash2, Divide, AlertCircle } from "lucide-react";
 import { styles } from "../../lib/styles.js";
 import { TopBar, HeaderMenu, EmptyState } from "../../components/Shared.jsx";
-import { money, dateInputValueInZone, measureTextWidth } from "../../lib/helpers.jsx";
+import { money, dateInputValueInZone, measureTextWidth, useScrollToTopOnChange } from "../../lib/helpers.jsx";
 import { useRecentNoteTitles, searchTransactions, isRatePending, currenciesInUse } from "../../lib/moneyManagerData.js";
 import { EMPTY_FILTERS, hasActiveFilters } from "../../lib/filterHelpers.js";
 import { FiltersPanel } from "./FiltersPanel.jsx";
@@ -172,6 +172,7 @@ export default function SearchScreen({
   const [noteFocused, setNoteFocused] = useState(false);
   const [noteDismissed, setNoteDismissed] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  useScrollToTopOnChange(filtersOpen);
   const [draft, setDraft] = useState(filters);
 
   // Fase 2 de multi-moneda (ver MULTI_CURRENCY_PLAN.md): el renglón de

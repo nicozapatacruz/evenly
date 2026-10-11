@@ -6,7 +6,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
 import { RootHeader, TopBar, ConfirmInline, Footer, Field, EmptyState } from "../../components/Shared.jsx";
-import { money } from "../../lib/helpers.jsx";
+import { money, useScrollToTopOnChange } from "../../lib/helpers.jsx";
 import { accountBalance, computeCreditCardBalance, disableAutoPayForDeletedAccounts, useCreditCardActivity } from "../../lib/moneyManagerData.js";
 import AccountDetailScreen from "./AccountDetailScreen.jsx";
 import AccountActivityScreen from "./AccountActivityScreen.jsx";
@@ -275,6 +275,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
 export function ManageGroups({ session, groups: allGroups, accounts, reload, showError, showInfo, onBack, onOpenGroup }) {
   const groups = allGroups.filter((g) => !g.deleted);
   const [creating, setCreating] = useState(false);
+  useScrollToTopOnChange(creating);
   const [order, setOrder] = useState(() => groups.map((g) => g.id));
 
   useEffect(() => {
@@ -398,6 +399,7 @@ export function ManageAccounts({ session, group = null, groups, accounts, accoun
   const [deleting, setDeleting] = useState(false);
   const [creating, setCreating] = useState(false);
   const [viewingAccountId, setViewingAccountId] = useState(null);
+  useScrollToTopOnChange(creating, viewingAccountId);
   const [nameTouched, setNameTouched] = useState(false);
 
   // El grupo "Split Ledger" (auto-creado al vincular un grupo compartido) no
@@ -566,6 +568,7 @@ export function ManageAccounts({ session, group = null, groups, accounts, accoun
 export function ManageAllAccounts({ session, groups, accounts, accountTotals, settings, slLinks, onOpenSplitLedgerGroup, reload, showError, showInfo, onBack }) {
   const [creating, setCreating] = useState(false);
   const [viewingAccountId, setViewingAccountId] = useState(null);
+  useScrollToTopOnChange(creating, viewingAccountId);
 
   if (creating) {
     return (

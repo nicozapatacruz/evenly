@@ -6,7 +6,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, RootHeader, ConfirmInline, Footer, PhotoPicker, ToggleField, Field, PasswordInput } from "../../components/Shared.jsx";
-import { useImageUpload, resolvePhotoUrl, colorFor, initials } from "../../lib/helpers.jsx";
+import { useImageUpload, resolvePhotoUrl, colorFor, initials, useScrollToTopOnChange } from "../../lib/helpers.jsx";
 import RecurringScreen from "../moneymanager/RecurringScreen.jsx";
 import TransactionForm, { ManageCategories } from "../moneymanager/TransactionForm.jsx";
 import { ManageGroups, ManageAccounts, ManageAllAccounts } from "../moneymanager/CuentasTab.jsx";
@@ -35,6 +35,7 @@ export default function ConfigScreen({
   useEffect(() => {
     localStorage.setItem("evenly_configSection", section);
   }, [section]);
+  useScrollToTopOnChange(section);
 
   if (creatingRecurring) {
     return (
@@ -281,6 +282,7 @@ function MenuRow({ label, onClick, badge, last }) {
 
 function AccountsSettingsScreen({ session, groups, accounts, accountTotals, settings, slLinks, onOpenSplitLedgerGroup, reload, showError, showInfo, onBack }) {
   const [view, setView] = useState({ screen: "groups" });
+  useScrollToTopOnChange(view.screen, view.groupId);
 
   if (view.screen === "accounts") {
     const group = groups.find((g) => g.id === view.groupId);

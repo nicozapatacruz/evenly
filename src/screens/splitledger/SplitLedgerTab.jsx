@@ -16,7 +16,7 @@ import {
   DEFAULT_CATEGORIES, groupCategories, catInfo, colorFor, initials, shortName, nameOf,
   computeBalances, simplifyDebts, fairSplit, computeShares,
   dateInputValue, todayInputValue, fmtDate,
-  useImageUpload, resolvePhotoUrl,
+  useImageUpload, resolvePhotoUrl, useScrollToTopOnChange,
 } from "../../lib/helpers.jsx";
 
 /* =========================================================================
@@ -1136,6 +1136,7 @@ function SortableCategoryRow({ cat, onEditIcon, onChangeLabel, onRemove, draggab
 
 function GroupView({ group, onBack, onAddExpense, onOpenExpense, onOpenPayment, onSettleUp, onEditGroup, onSoftDeleteExpense }) {
   const [tab, setTab] = useState("activity"); // activity | balances | individual
+  useScrollToTopOnChange(tab);
   const [selectedMember, setSelectedMember] = useState(group.members[0]?.id || null);
   const { members, expenses, payments = [] } = group;
 

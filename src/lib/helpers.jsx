@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useLayoutEffect } from "react";
 import { supabase } from "./supabaseClient.js";
 import {
   Receipt, UtensilsCrossed, Car, Home as HomeIcon, Plug, PartyPopper, ShoppingBag,
@@ -265,8 +265,15 @@ export function dateInputValueInZone(ms, tz) {
 // mismo estado, para no heredar el scroll que tenía la vista anterior. Ver
 // también el mismo patrón a nivel de pantalla completa en SplitLedger.jsx.
 export function useScrollToTopOnChange(...deps) {
-  useEffect(() => {
+  // useLayoutEffect (no useEffect): corre antes de pintar, así la vista
+  // nueva nunca se ve un instante en la posición vieja. El segundo intento
+  // en el próximo frame es por si en mobile algo (el teclado nativo
+  // reacomodándose, una fuente que termina de cargar) corre el scroll de
+  // nuevo justo después del primero.
+  useLayoutEffect(() => {
     window.scrollTo(0, 0);
+    const raf = requestAnimationFrame(() => window.scrollTo(0, 0));
+    return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 }

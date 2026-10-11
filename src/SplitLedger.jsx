@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useLayoutEffect, useCallback } from "react";
 import { supabase } from "./lib/supabaseClient.js";
 import { BookOpen, BarChart3, Coins, Divide, MoreHorizontal, MailCheck } from "lucide-react";
 import { styles, globalCss } from "./lib/styles.js";
@@ -605,9 +605,17 @@ function AppShell({ session, onLogout, refreshProfile }) {
   // Transacciones (ledger/list) es la única excepción a propósito: esa
   // pantalla ya decide su propio scroll al entrar (día de hoy), y correr
   // esto ahí lo pisaría.
-  useEffect(() => {
+  // useLayoutEffect (no useEffect): corre ANTES de pintar, así la pantalla
+  // nueva nunca llega a mostrarse (ni un instante) en la posición vieja. El
+  // segundo intento en el próximo frame es por las dudas en el celular algo
+  // (el teclado nativo reacomodándose, una fuente que termina de cargar)
+  // vuelva a mover el scroll justo después del primero.
+  useLayoutEffect(() => {
     const isTransactionsList = activeTab === "ledger" && ledgerView.screen === "list";
-    if (!isTransactionsList) window.scrollTo(0, 0);
+    if (isTransactionsList) return;
+    window.scrollTo(0, 0);
+    const raf = requestAnimationFrame(() => window.scrollTo(0, 0));
+    return () => cancelAnimationFrame(raf);
   }, [activeTab, splitLedgerView.screen, accountsView.screen, ledgerView.screen, statsView.screen, moneyManagerScreen, changingPassword, viewingProfile, creatingRecurring]);
   const [toast, setToast] = useState(null); // { message, type: "error" | "success" | "info" }
   const [invites, setInvites] = useState([]); // invitaciones que ME llegaron (bandeja)

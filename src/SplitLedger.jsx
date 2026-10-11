@@ -825,11 +825,18 @@ function AppShell({ session, onLogout, refreshProfile }) {
 
   const handleTabClick = (tab) => {
     if (tab.comingSoon) { showInfo("Próximamente"); return; }
-    // Re-tocar la tab en la que ya estás parado (Transacciones/Estadísticas)
-    // te lleva al mes actual — mismo gesto que el botón "Hoy" del header.
-    if (tab.key === activeTab && (tab.key === "ledger" || tab.key === "stats")) {
-      const now = new Date();
-      setLedgerMonth(new Date(now.getFullYear(), now.getMonth(), 1));
+    if (tab.key === activeTab) {
+      // Re-tocar Transacciones/Estadísticas ya parado ahí te lleva al mes
+      // actual — mismo gesto que el botón "Hoy" del header.
+      if (tab.key === "ledger" || tab.key === "stats") {
+        const now = new Date();
+        setLedgerMonth(new Date(now.getFullYear(), now.getMonth(), 1));
+      }
+      // Y si además estabas en un drill-down/sub-pantalla de Estadísticas o
+      // Cuentas, re-tocar la tab te vuelve a la pantalla principal de esa
+      // pestaña, no solo cambia el mes.
+      if (tab.key === "stats") setStatsView({ screen: "list" });
+      if (tab.key === "accounts") setAccountsView({ screen: "list" });
       return;
     }
     setActiveTab(tab.key);

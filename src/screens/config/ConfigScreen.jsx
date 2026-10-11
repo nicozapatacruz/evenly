@@ -5,7 +5,7 @@ import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } 
 import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, RootHeader, ConfirmInline, Footer, PhotoPicker, ToggleField, Field } from "../../components/Shared.jsx";
+import { TopBar, RootHeader, ConfirmInline, Footer, PhotoPicker, ToggleField, Field, PasswordInput } from "../../components/Shared.jsx";
 import { useImageUpload, resolvePhotoUrl, colorFor, initials } from "../../lib/helpers.jsx";
 import RecurringScreen from "../moneymanager/RecurringScreen.jsx";
 import TransactionForm, { ManageCategories } from "../moneymanager/TransactionForm.jsx";
@@ -416,7 +416,7 @@ function ChangePasswordScreen({ session, onBack, onSave }) {
       <TopBar title="Cambiar contraseña" onBack={onBack} />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
         <Field label="Contraseña actual" required error={touched.currentPassword && !currentPassword ? "Este campo es obligatorio." : ""}>
-          <input style={styles.input} type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} onBlur={() => touch("currentPassword")} placeholder="Contraseña actual" />
+          <PasswordInput style={styles.input} value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} onBlur={() => touch("currentPassword")} placeholder="Contraseña actual" />
         </Field>
         <Field
           label="Nueva contraseña"
@@ -425,7 +425,7 @@ function ChangePasswordScreen({ session, onBack, onSave }) {
             ? (newPassword.length < 4 ? "Debe tener al menos 4 caracteres." : (newPassword === currentPassword && currentPassword ? "Debe ser diferente a la actual." : ""))
             : ""}
         >
-          <input style={styles.input} type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} onBlur={() => touch("newPassword")} placeholder="Nueva contraseña" />
+          <PasswordInput style={styles.input} value={newPassword} onChange={e => setNewPassword(e.target.value)} onBlur={() => touch("newPassword")} placeholder="Nueva contraseña" />
         </Field>
         <Field
           label="Confirmar nueva contraseña"
@@ -434,7 +434,7 @@ function ChangePasswordScreen({ session, onBack, onSave }) {
             ? (!confirmPassword ? "Este campo es obligatorio." : (newPassword !== confirmPassword ? "Las contraseñas no coinciden." : ""))
             : ""}
         >
-          <input style={styles.input} type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} onBlur={() => touch("confirmPassword")} placeholder="Confirmar nueva contraseña" />
+          <PasswordInput style={styles.input} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} onBlur={() => touch("confirmPassword")} placeholder="Confirmar nueva contraseña" />
         </Field>
         {err && <p style={styles.errText}>{err}</p>}
       </div>

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { supabase } from "./lib/supabaseClient.js";
-import { BookOpen, BarChart3, Coins, Divide, MoreHorizontal, MailCheck, Eye, EyeOff } from "lucide-react";
+import { BookOpen, BarChart3, Coins, Divide, MoreHorizontal, MailCheck } from "lucide-react";
 import { styles, globalCss } from "./lib/styles.js";
-import { Field } from "./components/Shared.jsx";
+import { Field, PasswordInput } from "./components/Shared.jsx";
 import SplitLedgerTab from "./screens/splitledger/SplitLedgerTab.jsx";
 import ConfigScreen from "./screens/config/ConfigScreen.jsx";
 import CuentasTab from "./screens/moneymanager/CuentasTab.jsx";
@@ -321,26 +321,6 @@ function useGroups(userId) {
    AUTH SCREEN
    ========================================================================= */
 
-// Input de contraseña con el "ojito" para mostrar/ocultar en texto plano —
-// mismo <input> de siempre, solo le agrega el ícono superpuesto y el padding
-// para que el texto no quede debajo del botón.
-function PasswordInput({ style, ...rest }) {
-  const [visible, setVisible] = useState(false);
-  return (
-    <div style={{ position: "relative" }}>
-      <input {...rest} type={visible ? "text" : "password"} style={{ ...style, width: "100%", boxSizing: "border-box", paddingRight: 38 }} />
-      <button
-        type="button"
-        onClick={() => setVisible((v) => !v)}
-        aria-label={visible ? "Ocultar contraseña" : "Mostrar contraseña"}
-        style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", padding: 4, display: "flex", color: "#A89A87", cursor: "pointer" }}
-      >
-        {visible ? <EyeOff size={17} /> : <Eye size={17} />}
-      </button>
-    </div>
-  );
-}
-
 function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
   const [mode, setMode] = useState("login"); // "login" | "register" | "forgot"
   const [email, setEmail] = useState("");
@@ -528,7 +508,7 @@ function RecoverPasswordScreen({ onComplete, onCancel }) {
 
         <form style={{ display: "flex", flexDirection: "column", gap: 12 }} onSubmit={e => { e.preventDefault(); if (!saving) handleSave(); }}>
           <Field label="Nueva contraseña" required error={touched.newPassword && newPassword.length < 4 ? "Debe tener al menos 4 caracteres." : ""}>
-            <input style={styles.input} type="password" name="new-password" autoComplete="new-password" value={newPassword} onChange={e => setNewPassword(e.target.value)} onBlur={() => touch("newPassword")} placeholder="Nueva contraseña" />
+            <PasswordInput style={styles.input} name="new-password" autoComplete="new-password" value={newPassword} onChange={e => setNewPassword(e.target.value)} onBlur={() => touch("newPassword")} placeholder="Nueva contraseña" />
           </Field>
           <Field
             label="Confirmar nueva contraseña"
@@ -537,7 +517,7 @@ function RecoverPasswordScreen({ onComplete, onCancel }) {
               ? (confirmPassword.length < 4 ? "Debe tener al menos 4 caracteres." : (newPassword !== confirmPassword ? "Las contraseñas no coinciden." : ""))
               : ""}
           >
-            <input style={styles.input} type="password" name="confirm-password" autoComplete="new-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} onBlur={() => touch("confirmPassword")} placeholder="Confirmar nueva contraseña" />
+            <PasswordInput style={styles.input} name="confirm-password" autoComplete="new-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} onBlur={() => touch("confirmPassword")} placeholder="Confirmar nueva contraseña" />
           </Field>
           {err && <p style={styles.errText}>{err}</p>}
           <button type="submit" style={{ ...styles.btnPrimary, marginTop: 4, opacity: (saving || !canSave) ? 0.5 : 1 }} disabled={saving}>

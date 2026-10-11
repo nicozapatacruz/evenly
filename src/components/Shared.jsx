@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Ban, Camera, Check, ChevronLeft, ChevronRight, Info, Trash2, User, X } from "lucide-react";
+import { ArrowLeft, Ban, Camera, Check, ChevronLeft, ChevronRight, Eye, EyeOff, Info, Trash2, User, X } from "lucide-react";
 import { styles } from "../lib/styles.js";
 import { ICON_OPTIONS } from "../lib/moneyManagerData.js";
 import { money, parseAmountInput } from "../lib/helpers.jsx";
@@ -142,6 +142,26 @@ export function Field({ label, info, infoBlocked, required, error, style, childr
       {children}
       {error && <span style={{ fontSize: 12, fontWeight: 400, color: "#B0473A" }}>{error}</span>}
     </Wrapper>
+  );
+}
+
+// Input de contraseña con el "ojito" para mostrar/ocultar en texto plano —
+// mismo <input> de siempre, solo le agrega el ícono superpuesto y el padding
+// para que el texto no quede debajo del botón.
+export function PasswordInput({ style, ...rest }) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div style={{ position: "relative" }}>
+      <input {...rest} type={visible ? "text" : "password"} style={{ ...style, width: "100%", boxSizing: "border-box", paddingRight: 38 }} />
+      <button
+        type="button"
+        onClick={() => setVisible((v) => !v)}
+        aria-label={visible ? "Ocultar contraseña" : "Mostrar contraseña"}
+        style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", padding: 4, display: "flex", color: "#A89A87", cursor: "pointer" }}
+      >
+        {visible ? <EyeOff size={17} /> : <Eye size={17} />}
+      </button>
+    </div>
   );
 }
 

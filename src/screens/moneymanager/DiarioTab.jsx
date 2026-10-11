@@ -76,7 +76,7 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
     <div style={{ ...styles.screen, display: "flex", flexDirection: "column" }}>
       <div ref={headerRef} style={{ position: "sticky", top: 0, zIndex: 5 }}>
         <RootHeader
-          title="Transacciones"
+          title="test"
           right={
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <TodayButton viewMonth={viewMonth} setViewMonth={setViewMonth} />

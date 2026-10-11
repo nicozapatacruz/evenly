@@ -28,6 +28,35 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
   const creditCardIds = accounts.filter((a) => a.is_credit_card && !a.deleted).map((a) => a.id);
   const { transactions: ccTx } = useCreditCardActivity(session.userId, creditCardIds);
 
+  // "Saldo Real" — solo para Nico, solo tiene sentido con SU setup puntual
+  // de cuentas (Saldo/TC Santander/Pendiente), por eso hardcodeado por
+  // nombre en vez de una regla genérica. Fórmula: el balance de "Saldo" más
+  // el de "TC Santander" (ya negativo, es deuda) más lo que de esa deuda en
+  // realidad no es suya — las transferencias puntuales que hace a fin de
+  // mes de "TC Santander" a "Pendiente" para separar gastos compartidos
+  // (ej. pagarle algo a alguien o un gasto de Split Ledger). "Pendiente"
+  // como CUENTA no sirve para esto (mezcla esas transferencias con otras
+  // cosas sueltas, como un regalo o efectivo por sacar) — por eso se suma
+  // la transferencia puntual, no el balance de la cuenta entera.
+  const isNico = session.email === "nicozapatacruz@gmail.com";
+  const [pendienteTcSum, setPendienteTcSum] = useState(0);
+  useEffect(() => {
+    if (!isNico) return;
+    const tcId = accounts.find((a) => a.name === "TC Santander" && !a.deleted)?.id;
+    const pendienteId = accounts.find((a) => a.name === "Pendiente" && !a.deleted)?.id;
+    if (!tcId || !pendienteId) return;
+    supabase
+      .from("mm_transactions")
+      .select("amount")
+      .eq("user_id", session.userId)
+      .eq("deleted", false)
+      .eq("type", "transfer")
+      .eq("account_id", tcId)
+      .eq("to_account_id", pendienteId)
+      .eq("title", "Pendiente TC")
+      .then(({ data }) => setPendienteTcSum((data || []).reduce((s, t) => s + t.amount, 0)));
+  }, [isNico, accounts, session.userId]);
+
   if (view.screen === "manageAllAccounts") {
     return (
       <ManageAllAccounts
@@ -193,6 +222,18 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
                   ))}
                 </span>
               </div>
+              {isNico && g.name === "Santander" && (() => {
+                const saldoAcc = accounts.find((a) => a.name === "Saldo" && !a.deleted);
+                const tcAcc = accounts.find((a) => a.name === "TC Santander" && !a.deleted);
+                if (!saldoAcc || !tcAcc) return null;
+                const saldoReal = accountBalance(saldoAcc.id, accountTotals) + accountBalance(tcAcc.id, accountTotals) + pendienteTcSum;
+                return (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14, background: "#FDFBF9", fontWeight: 700 }}>
+                    <span>Saldo Real</span>
+                    <span style={{ color: balanceColor(saldoReal) }}>{money(saldoReal, saldoAcc.currency)}</span>
+                  </div>
+                );
+              })()}
               {visibleAccounts.map((a) => {
                 const cc = a.is_credit_card ? computeCreditCardBalance(a.id, ccTx, a.statement_day || 1) : null;
                 return (

@@ -144,21 +144,6 @@ export default function TransactionForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, categories]);
 
-  if (managingCategoryType) {
-    return (
-      <ManageCategories
-        session={session}
-        type={managingCategoryType}
-        categories={categories}
-        reload={reloadCategories}
-        showError={showError}
-        showInfo={showInfo}
-        onBack={() => setManagingCategoryType(null)}
-        initialCreating
-      />
-    );
-  }
-
   // Si la transacción ya tenía una moneda que después se sacó de "Otras
   // monedas" en Ajustes, igual la mostramos acá — si no, el select se queda
   // sin esa opción y no hay forma de mantenerla al editar.
@@ -185,6 +170,26 @@ export default function TransactionForm({
       prevCurrencyRef.current = currency;
     }
   }, [currency, needsRate]);
+
+  // Recién acá (después de TODOS los hooks, no antes) — React exige que se
+  // llamen siempre en el mismo orden en cada render, un "return" anticipado
+  // más arriba se saltearía el useRef/useEffect de arriba y tiraba "Rendered
+  // fewer hooks than expected" (bug real, encontrado al crear una categoría
+  // nueva desde el selector).
+  if (managingCategoryType) {
+    return (
+      <ManageCategories
+        session={session}
+        type={managingCategoryType}
+        categories={categories}
+        reload={reloadCategories}
+        showError={showError}
+        showInfo={showInfo}
+        onBack={() => setManagingCategoryType(null)}
+        initialCreating
+      />
+    );
+  }
 
   const freq = RECURRING_FREQUENCIES.find((f) => f.value === freqValue);
   const customInterval = parseInt(freqInterval, 10);
@@ -536,7 +541,7 @@ export default function TransactionForm({
                 label: null,
                 items: [
                   ...typeCategories.map((c) => ({ value: c.id, label: c.name, icon: c.icon, deleted: c.deleted })),
-                  { value: "__new__", label: "Nuevo", icon: "➕" },
+                  { value: "__new__", label: "Nueva", icon: "➕" },
                 ],
               }]}
             />

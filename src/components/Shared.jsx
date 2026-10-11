@@ -750,7 +750,7 @@ function useKeypadScrollIntoView(open, anchorRef, sheetRef) {
 // lo pendiente. `value`/`onChange` siguen siendo el string plano de siempre
 // (compatible con parseAmountInput), el estado de "qué se está tecleando"
 // es interno y nunca llega al padre a medias.
-export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, placeholder = "0.00", disabled = false, style }) {
+export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, placeholder = "0.00", disabled = false, style, currency }) {
   const [open, setOpen] = useState(false);
   const [tokens, setTokens] = useState([]);
   const idRef = useRef(null);
@@ -852,17 +852,24 @@ export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, 
     // personas" en Split Ledger, que es un <button> entero), ningún toque
     // acá adentro debería llegarle a ese padre.
     <div ref={containerRef} onClick={(e) => e.stopPropagation()}>
-      <input
-        ref={inputElRef}
-        style={{ ...styles.input, width: "100%", boxSizing: "border-box", opacity: disabled ? 0.6 : 1, ...style }}
-        value={displayValue}
-        placeholder={placeholder}
-        readOnly
-        disabled={disabled}
-        onFocus={openEdit}
-        onClick={openEdit}
-        inputMode="none"
-      />
+      <div style={{ position: "relative" }}>
+        <input
+          ref={inputElRef}
+          style={{ ...styles.input, width: "100%", boxSizing: "border-box", opacity: disabled ? 0.6 : 1, ...(currency ? { paddingRight: 46 } : null), ...style }}
+          value={displayValue}
+          placeholder={placeholder}
+          readOnly
+          disabled={disabled}
+          onFocus={openEdit}
+          onClick={openEdit}
+          inputMode="none"
+        />
+        {currency && (
+          <span style={{ position: "absolute", right: 13, top: "50%", transform: "translateY(-50%)", color: "#A89A87", fontSize: 13, pointerEvents: "none" }}>
+            {currency}
+          </span>
+        )}
+      </div>
       {open && (
         // Fijo abajo de toda la pantalla, como un teclado reemplazando al
         // nativo (no un dropdown pegado al campo), con el mismo ancho/centrado

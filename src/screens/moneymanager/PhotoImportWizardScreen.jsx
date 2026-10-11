@@ -276,7 +276,7 @@ function WizardStep({ userId, settings, candidate, savedEntry, rule, categories,
         </Field>
 
         <Field label="Importe" required error={touched && !validAmount ? "Ingresá un importe válido." : ""}>
-          <CalculatorAmountInput value={amount} onChange={setAmount} onBlur={() => setTouched(true)} placeholder="0.00" />
+          <CalculatorAmountInput value={amount} onChange={setAmount} onBlur={() => setTouched(true)} placeholder="0.00" currency={accountCurrency} />
         </Field>
 
         <Field label="Categoría">

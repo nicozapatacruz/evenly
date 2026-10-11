@@ -853,17 +853,22 @@ export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, 
     // acá adentro debería llegarle a ese padre.
     <div ref={containerRef} onClick={(e) => e.stopPropagation()}>
       <div style={{ position: "relative" }}>
-        <input
+        {/* <button>, no <input> — a propósito: un <input> real, aunque sea
+            readOnly con inputMode="none", igual le pide foco a iOS, que a
+            veces reserva espacio para un teclado que nunca llega a mostrar
+            (el nuestro es este mismo panel fijo de abajo) y deja el viewport
+            visual desalineado del real — ahí los toques del teclado propio
+            caían en el botón de abajo del que se veía. Un <button> nunca
+            dispara ese reservado nativo. */}
+        <button
           ref={inputElRef}
-          style={{ ...styles.input, width: "100%", boxSizing: "border-box", opacity: disabled ? 0.6 : 1, ...(currency ? { paddingRight: 46 } : null), ...style }}
-          value={displayValue}
-          placeholder={placeholder}
-          readOnly
-          disabled={disabled}
-          onFocus={openEdit}
+          type="button"
           onClick={openEdit}
-          inputMode="none"
-        />
+          disabled={disabled}
+          style={{ ...styles.input, width: "100%", height: 44, boxSizing: "border-box", textAlign: "left", display: "flex", alignItems: "center", opacity: disabled ? 0.6 : 1, cursor: disabled ? "not-allowed" : "pointer", ...(currency ? { paddingRight: 46 } : null), ...style }}
+        >
+          {displayValue ? displayValue : <span style={{ color: "#A89A87", fontSize: 13 }}>{placeholder}</span>}
+        </button>
         {currency && (
           <span style={{ position: "absolute", right: 13, top: "50%", transform: "translateY(-50%)", color: "#A89A87", fontSize: 13, pointerEvents: "none" }}>
             {currency}

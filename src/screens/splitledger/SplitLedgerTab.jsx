@@ -744,7 +744,7 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
                       <span style={{ display: "block" }}>{m.name}</span>
                       {groupInvites.find((i) => i.memberId === m.id) && (
                         <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#3B6E62", fontFamily: "system-ui, sans-serif" }}>
-                          <Send size={10} /> Invitación enviada a @{groupInvites.find((i) => i.memberId === m.id).username}
+                          Invitación enviada a @{groupInvites.find((i) => i.memberId === m.id).username}
                         </span>
                       )}
                     </div>

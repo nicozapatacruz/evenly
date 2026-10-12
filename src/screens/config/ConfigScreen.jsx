@@ -194,7 +194,12 @@ export default function ConfigScreen({
       />
       <div style={styles.tabRow}>
         <button style={section === "moneymanager" ? styles.tabActive : styles.tab} onClick={() => setSection("moneymanager")}>Money Manager</button>
-        <button style={section === "splitledger" ? styles.tabActive : styles.tab} onClick={() => setSection("splitledger")}>Split Ledger</button>
+        <button style={{ ...(section === "splitledger" ? styles.tabActive : styles.tab), position: "relative" }} onClick={() => setSection("splitledger")}>
+          Split Ledger
+          {invites.length > 0 && (
+            <span style={{ position: "absolute", top: -5, right: -5, width: 12, height: 12, borderRadius: "50%", background: "#C75D3B", border: "2px solid #fff" }} />
+          )}
+        </button>
       </div>
 
       {section === "moneymanager" && (

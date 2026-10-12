@@ -649,6 +649,7 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
             groupName: group.name,
             defaultOwnAccountId: mmOwnAccountId,
             defaultOtherAccountId: mmOtherAccountId,
+            currency: moneyManager.settings.main_currency,
           });
         }
         await moneyManager.reload();

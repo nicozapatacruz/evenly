@@ -32,17 +32,21 @@ const DEFAULT_ACCOUNT_GROUPS = [
   { name: "Tarjetas de crédito", type: "credit_card", account: "Tarjetas de crédito" },
 ];
 
-async function seedDefaults(userId) {
+async function seedDefaults(userId, mainCurrency) {
   const { data: newGroups, error: gError } = await supabase
     .from("mm_account_groups")
     .insert(DEFAULT_ACCOUNT_GROUPS.map((g, i) => ({ user_id: userId, name: g.name, type: g.type, sort_order: i })))
     .select("id, name");
   if (gError || !newGroups) return;
 
+  // "currency" es NOT NULL sin default en mm_accounts -- sin esto, este
+  // insert fallaba en silencio (no se chequea su error acá) y la cuenta de
+  // cada grupo por defecto nunca se llegaba a crear.
   await supabase.from("mm_accounts").insert(
     newGroups.map((g, i) => ({
       user_id: userId, group_id: g.id,
       name: DEFAULT_ACCOUNT_GROUPS.find((d) => d.name === g.name).account,
+      currency: mainCurrency,
       sort_order: i,
     }))
   );
@@ -253,7 +257,7 @@ export function useMoneyManager(userId) {
     // Cuenta recién creada, nunca usada — la sembramos con lo que trae la
     // app original de fábrica, en vez de dejarla completamente vacía.
     if ((g.data || []).length === 0 && (c.data || []).length === 0) {
-      await seedDefaults(userId);
+      await seedDefaults(userId, s.data?.main_currency || DEFAULT_SETTINGS.main_currency);
       const [g2, a2, c2] = await Promise.all([
         supabase.from("mm_account_groups").select("*").eq("user_id", userId).order("sort_order"),
         supabase.from("mm_accounts").select("*").eq("user_id", userId).order("sort_order"),

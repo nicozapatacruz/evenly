@@ -39,7 +39,7 @@ async function ensureSplitLedgerAccountGroup(userId) {
 // perder nada — ver sl_mm_expense_choices (la que fija la cuenta real usada
 // por gasto, para que la transferencia oculta de préstamo siempre viaje
 // junto con el gasto, sin importar qué default tengas hoy).
-export async function linkGroupToAccount({ userId, groupId, memberId, groupName, defaultOwnAccountId, defaultOtherAccountId }) {
+export async function linkGroupToAccount({ userId, groupId, memberId, groupName, defaultOwnAccountId, defaultOtherAccountId, currency }) {
   const sysGroup = await ensureSplitLedgerAccountGroup(userId);
 
   // Si este mismo grupo ya estuvo vinculado antes (y se desvinculó), se
@@ -68,7 +68,7 @@ export async function linkGroupToAccount({ userId, groupId, memberId, groupName,
   if (!pseudoAccountId) {
     const { data: pseudo, error } = await supabase
       .from("mm_accounts")
-      .insert({ user_id: userId, group_id: sysGroup.id, name: groupName, icon: "➗", sort_order: 999, hidden: false })
+      .insert({ user_id: userId, group_id: sysGroup.id, name: groupName, icon: "➗", currency, sort_order: 999, hidden: false })
       .select()
       .single();
     if (error) throw error;

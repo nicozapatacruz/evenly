@@ -2530,8 +2530,18 @@ function InviteScreen({ group, session, groupInvites = [], onBack, onSend, onCan
   const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
 
   const invitableMembers = group.members.filter(m => !m.linkedUserId);
+  const selectableMembers = invitableMembers.filter(m => !groupInvites.find(i => i.memberId === m.id));
   const isSelfInvite = !!targetUsername.trim() && targetUsername.trim().toLowerCase() === session.username;
   const canSend = !!selectedMemberId && !!targetUsername.trim() && !isSelfInvite;
+
+  // Si solo queda un miembro por invitar, no hace falta que el usuario lo
+  // elija a mano.
+  useEffect(() => {
+    if (!selectedMemberId && selectableMembers.length === 1) {
+      setSelectedMemberId(selectableMembers[0].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMemberId, selectableMembers.length, selectableMembers[0]?.id]);
 
   const handle = async () => {
     if (sending) return;

@@ -98,7 +98,11 @@ export function InfoTooltip({ text, blocked }) {
         {blocked ? <Ban size={14} /> : <Info size={14} />}
       </button>
       {open && (
-        <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, width: 210, background: "#2B2620", color: "#fff", fontSize: 12, fontWeight: 400, fontFamily: "system-ui, sans-serif", padding: "8px 10px", borderRadius: 8, lineHeight: 1.4, zIndex: 20 }}>
+        // Anclado desde la derecha del ícono (no desde la izquierda): en los
+        // campos con label largo (ej. "Cuenta por defecto en gastos ajenos")
+        // el ícono queda cerca del borde derecho de la pantalla, y un ancho
+        // fijo creciendo hacia la derecha se salía del viewport en mobile.
+        <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, width: "min(210px, calc(100vw - 40px))", background: "#2B2620", color: "#fff", fontSize: 12, fontWeight: 400, fontFamily: "system-ui, sans-serif", padding: "8px 10px", borderRadius: 8, lineHeight: 1.4, zIndex: 20 }}>
           {text}
         </div>
       )}

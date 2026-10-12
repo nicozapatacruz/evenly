@@ -1045,7 +1045,7 @@ function SplitLedgerMoneyLink({
         <>
           <Field
             label="Cuenta por defecto en gastos propios"
-            info="La cuenta que se usa cuando el gasto del grupo lo cargás vos."
+            info="Se usa cuando pagás vos el gasto del grupo. Ej: comprás algo de €30 para el grupo → se descuentan €30 de esta cuenta, como cualquier gasto normal."
             required
             error={touched.mmOwnAccountId && !ownAccountId ? "Este campo es obligatorio." : ""}
           >
@@ -1059,7 +1059,7 @@ function SplitLedgerMoneyLink({
           </Field>
           <Field
             label="Cuenta por defecto en gastos ajenos"
-            info="La cuenta que se usa cuando el gasto del grupo lo carga otro miembro."
+            info="Se usa cuando paga otro miembro y vos quedás debiéndole tu parte. No se descuenta plata real de acá (esa deuda se salda aparte, cuando le pagás) — solo queda registrado el gasto para tus estadísticas."
             required
             error={touched.mmOtherAccountId && !otherAccountId ? "Este campo es obligatorio." : ""}
           >
@@ -1192,12 +1192,19 @@ function GroupView({ group, session, onBack, onAddExpense, onOpenExpense, onOpen
         <button style={tab === "individual" ? styles.tabActive : styles.tab} onClick={() => setTab("individual")}>Por persona</button>
       </div>
 
-      {/* Mismo texto ("Debes X a Y" / "Y te debe X" / "Saldado") que ya usa
-          la tarjeta de este grupo en "Tus grupos", debajo de los toggles
-          para no tener que volver atrás para verlo. */}
-      <div style={{ padding: "10px 20px 0", fontSize: 15, fontFamily: "system-ui, sans-serif", color: "#544A3C" }}>
-        {groupCardLines(group, session).map((line) => <p key={line.key} style={{ margin: 0 }}>{line.node}</p>)}
-      </div>
+      {/* Mismo texto ("Debes X a Y" / "Y te debe X") que ya usa la tarjeta
+          de este grupo en "Tus grupos", debajo de los toggles para no tener
+          que volver atrás para verlo. Si está saldado no se muestra nada
+          acá (ya lo deja claro el resto de la pantalla). */}
+      {(() => {
+        const lines = groupCardLines(group, session).filter((l) => l.key !== "settled");
+        if (!lines.length) return null;
+        return (
+          <div style={{ padding: "10px 20px 0", fontSize: 15, fontFamily: "system-ui, sans-serif", color: "#544A3C" }}>
+            {lines.map((line) => <p key={line.key} style={{ margin: 0 }}>{line.node}</p>)}
+          </div>
+        );
+      })()}
 
       {tab === "balances" && (() => {
         const totalTxnCount = currencies.reduce((s, c) => s + txnsByCurrency[c].length, 0);

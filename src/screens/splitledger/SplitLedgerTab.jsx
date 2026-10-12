@@ -64,7 +64,7 @@ export default function SplitLedgerTab({
           loading={loading}
           session={session}
           moneyManager={moneyManager}
-          onOpen={(id) => setView({ screen: "group", groupId: id })}
+          onOpen={(id) => { setView({ screen: "group", groupId: id }); reloadGroup(id); }}
           onNewExpense={() => setView({ screen: "newExpense" })}
         />
       )}
@@ -104,6 +104,7 @@ export default function SplitLedgerTab({
         <GroupView
           group={activeGroup}
           session={session}
+          onRefresh={() => reloadGroup(activeGroup.id)}
           onBack={onBackOverride || (() => setView({ screen: "home" }))}
           onAddExpense={() => setView({ screen: "newExpense", groupId: activeGroup.id })}
           onOpenExpense={(expenseId) => setView({ screen: "expenseDetail", groupId: activeGroup.id, expenseId })}
@@ -1141,9 +1142,22 @@ function SortableCategoryRow({ cat, onEditIcon, onChangeLabel, onRemove, draggab
    GROUP VIEW
    ========================================================================= */
 
-function GroupView({ group, session, onBack, onAddExpense, onOpenExpense, onOpenPayment, onSettleUp, onEditGroup, onSoftDeleteExpense }) {
+function GroupView({ group, session, onRefresh, onBack, onAddExpense, onOpenExpense, onOpenPayment, onSettleUp, onEditGroup, onSoftDeleteExpense }) {
   const [tab, setTab] = useState("activity"); // activity | balances | individual
   useScrollToTopOnChange(tab);
+
+  // Otro miembro puede haber agregado/editado un gasto desde su propio
+  // teléfono mientras vos tenías este grupo abierto — sin esto, solo se veía
+  // al salir y volver a entrar a la app.
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === "visible") onRefresh(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [onRefresh]);
   const [selectedMember, setSelectedMember] = useState(group.members.find((m) => !m.deleted)?.id || null);
   const { members, expenses, payments = [] } = group;
 

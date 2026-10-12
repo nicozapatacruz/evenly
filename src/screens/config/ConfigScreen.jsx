@@ -394,6 +394,7 @@ function ChangePasswordScreen({ session, onBack, onSave }) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [pwVisible, setPwVisible] = useState(false);
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
   const [touched, setTouched] = useState({});
@@ -427,7 +428,7 @@ function ChangePasswordScreen({ session, onBack, onSave }) {
             ? (newPassword.length < 4 ? "Debe tener al menos 4 caracteres." : (newPassword === currentPassword && currentPassword ? "Debe ser diferente a la actual." : ""))
             : ""}
         >
-          <PasswordInput style={styles.input} value={newPassword} onChange={e => setNewPassword(e.target.value)} onBlur={() => touch("newPassword")} placeholder="Nueva contraseña" />
+          <PasswordInput style={styles.input} value={newPassword} onChange={e => setNewPassword(e.target.value)} onBlur={() => touch("newPassword")} placeholder="Nueva contraseña" visible={pwVisible} onToggleVisible={() => setPwVisible(v => !v)} />
         </Field>
         <Field
           label="Confirmar nueva contraseña"
@@ -436,7 +437,7 @@ function ChangePasswordScreen({ session, onBack, onSave }) {
             ? (!confirmPassword ? "Este campo es obligatorio." : (newPassword !== confirmPassword ? "Las contraseñas no coinciden." : ""))
             : ""}
         >
-          <PasswordInput style={styles.input} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} onBlur={() => touch("confirmPassword")} placeholder="Confirmar nueva contraseña" />
+          <PasswordInput style={styles.input} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} onBlur={() => touch("confirmPassword")} placeholder="Confirmar nueva contraseña" visible={pwVisible} onToggleVisible={() => setPwVisible(v => !v)} />
         </Field>
         {err && <p style={styles.errText}>{err}</p>}
       </div>

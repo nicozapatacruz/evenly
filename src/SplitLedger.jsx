@@ -327,6 +327,7 @@ function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [pwVisible, setPwVisible] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [err, setErr] = useState("");
   const [info, setInfo] = useState("");
@@ -430,7 +431,7 @@ function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
           </Field>
           {mode !== "forgot" && (
             <Field label="Contraseña" required error={touched.password && !password ? "Este campo es obligatorio." : ""}>
-              <PasswordInput style={styles.input} name={mode === "login" ? "current-password" : "new-password"} value={password} onChange={e => setPassword(e.target.value)} onBlur={() => touch("password")} placeholder="Contraseña" autoComplete={mode === "login" ? "current-password" : "new-password"} />
+              <PasswordInput style={styles.input} name={mode === "login" ? "current-password" : "new-password"} value={password} onChange={e => setPassword(e.target.value)} onBlur={() => touch("password")} placeholder="Contraseña" autoComplete={mode === "login" ? "current-password" : "new-password"} visible={mode === "register" ? pwVisible : undefined} onToggleVisible={mode === "register" ? () => setPwVisible(v => !v) : undefined} />
             </Field>
           )}
           {mode === "login" && (
@@ -450,7 +451,7 @@ function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
                 ? (!confirmPassword ? "Este campo es obligatorio." : (password !== confirmPassword ? "Las contraseñas no coinciden." : ""))
                 : ""}
             >
-              <PasswordInput style={styles.input} name="confirm-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} onBlur={() => touch("confirmPassword")} placeholder="Confirmar contraseña" autoComplete="new-password" />
+              <PasswordInput style={styles.input} name="confirm-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} onBlur={() => touch("confirmPassword")} placeholder="Confirmar contraseña" autoComplete="new-password" visible={pwVisible} onToggleVisible={() => setPwVisible(v => !v)} />
             </Field>
           )}
           {err && <p style={styles.errText}>{err}</p>}
@@ -480,6 +481,7 @@ function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
 function RecoverPasswordScreen({ onComplete, onCancel }) {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [pwVisible, setPwVisible] = useState(false);
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
   const [touched, setTouched] = useState({});
@@ -508,7 +510,7 @@ function RecoverPasswordScreen({ onComplete, onCancel }) {
 
         <form style={{ display: "flex", flexDirection: "column", gap: 12 }} onSubmit={e => { e.preventDefault(); if (!saving) handleSave(); }}>
           <Field label="Nueva contraseña" required error={touched.newPassword && newPassword.length < 4 ? "Debe tener al menos 4 caracteres." : ""}>
-            <PasswordInput style={styles.input} name="new-password" autoComplete="new-password" value={newPassword} onChange={e => setNewPassword(e.target.value)} onBlur={() => touch("newPassword")} placeholder="Nueva contraseña" />
+            <PasswordInput style={styles.input} name="new-password" autoComplete="new-password" value={newPassword} onChange={e => setNewPassword(e.target.value)} onBlur={() => touch("newPassword")} placeholder="Nueva contraseña" visible={pwVisible} onToggleVisible={() => setPwVisible(v => !v)} />
           </Field>
           <Field
             label="Confirmar nueva contraseña"
@@ -517,7 +519,7 @@ function RecoverPasswordScreen({ onComplete, onCancel }) {
               ? (confirmPassword.length < 4 ? "Debe tener al menos 4 caracteres." : (newPassword !== confirmPassword ? "Las contraseñas no coinciden." : ""))
               : ""}
           >
-            <PasswordInput style={styles.input} name="confirm-password" autoComplete="new-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} onBlur={() => touch("confirmPassword")} placeholder="Confirmar nueva contraseña" />
+            <PasswordInput style={styles.input} name="confirm-password" autoComplete="new-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} onBlur={() => touch("confirmPassword")} placeholder="Confirmar nueva contraseña" visible={pwVisible} onToggleVisible={() => setPwVisible(v => !v)} />
           </Field>
           {err && <p style={styles.errText}>{err}</p>}
           <button type="submit" style={{ ...styles.btnPrimary, marginTop: 4, opacity: (saving || !canSave) ? 0.5 : 1 }} disabled={saving}>

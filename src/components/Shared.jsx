@@ -148,14 +148,19 @@ export function Field({ label, info, infoBlocked, required, error, style, childr
 // Input de contraseña con el "ojito" para mostrar/ocultar en texto plano —
 // mismo <input> de siempre, solo le agrega el ícono superpuesto y el padding
 // para que el texto no quede debajo del botón.
-export function PasswordInput({ style, ...rest }) {
-  const [visible, setVisible] = useState(false);
+export function PasswordInput({ style, visible: visibleProp, onToggleVisible, ...rest }) {
+  // Sin visible/onToggleVisible (el caso de siempre), cada campo maneja su
+  // propio mostrar/ocultar. Pasándolos, varios campos (ej. "nueva contraseña"
+  // + "confirmar") comparten un solo mostrar/ocultar entre los dos.
+  const [visibleState, setVisibleState] = useState(false);
+  const visible = visibleProp !== undefined ? visibleProp : visibleState;
+  const toggleVisible = onToggleVisible || (() => setVisibleState((v) => !v));
   return (
     <div style={{ position: "relative" }}>
       <input {...rest} type={visible ? "text" : "password"} style={{ ...style, width: "100%", boxSizing: "border-box", paddingRight: 38 }} />
       <button
         type="button"
-        onClick={() => setVisible((v) => !v)}
+        onClick={toggleVisible}
         aria-label={visible ? "Ocultar contraseña" : "Mostrar contraseña"}
         style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", padding: 4, display: "flex", color: "#A89A87", cursor: "pointer" }}
       >

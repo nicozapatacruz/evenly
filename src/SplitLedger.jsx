@@ -837,6 +837,15 @@ function AppShell({ session, onLogout, refreshProfile }) {
       // pestaña, no solo cambia el mes.
       if (tab.key === "stats") setStatsView({ screen: "list" });
       if (tab.key === "accounts") setAccountsView({ screen: "list" });
+      // Mismo gesto en Split Ledger y Config: re-tocar la tab te saca de
+      // cualquier drill-down/sub-pantalla y te deja en la principal.
+      if (tab.key === "splitledger") setSplitLedgerView({ screen: "home" });
+      if (tab.key === "config") {
+        setChangingPassword(false);
+        setViewingProfile(false);
+        setCreatingRecurring(false);
+        setMoneyManagerScreen(null);
+      }
       return;
     }
     setActiveTab(tab.key);

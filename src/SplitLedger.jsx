@@ -269,7 +269,14 @@ function useGroups(userId) {
         .eq("deleted", false)
         .order("created_at", { ascending: true });
       if (error) throw error;
-      setGroups(sortGroupsForUser(data.map((row) => toClientGroup(row, userId)), userId));
+      // La RLS de "groups" también deja ver (para que la bandeja de
+      // invitaciones pueda mostrar el nombre) un grupo donde solo tengo una
+      // invitación pendiente, no solo donde ya soy miembro vinculado — sin
+      // este filtro, ese grupo aparecía en "Tus grupos" antes de aceptar.
+      const mine = data
+        .map((row) => toClientGroup(row, userId))
+        .filter((g) => g.members.some((m) => m.linkedUserId === userId));
+      setGroups(sortGroupsForUser(mine, userId));
     } catch {
       setGroups([]);
     } finally {
@@ -723,6 +730,19 @@ function AppShell({ session, onLogout, refreshProfile }) {
 
   useEffect(() => { loadInvites(); }, [loadInvites]);
 
+  // Volver a la webapp (cambiar de app y volver, o desbloquear el celular)
+  // es otro momento en que una invitación nueva puede haber llegado mientras
+  // no mirábamos — sin esto, solo se veía recargando la página entera.
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === "visible") loadInvites(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [loadInvites]);
+
   const handleAcceptInvite = useCallback(async (invite) => {
     try {
       const { error: e1 } = await supabase
@@ -847,9 +867,13 @@ function AppShell({ session, onLogout, refreshProfile }) {
         setViewingProfile(false);
         setCreatingRecurring(false);
         setMoneyManagerScreen(null);
+        loadInvites();
       }
       return;
     }
+    // Entrar a Config (desde otra tab) es también el momento de refrescar la
+    // bandeja de invitaciones — si no, solo se actualiza al recargar la página.
+    if (tab.key === "config") loadInvites();
     setActiveTab(tab.key);
   };
 

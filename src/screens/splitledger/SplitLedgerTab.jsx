@@ -291,7 +291,12 @@ export default function SplitLedgerTab({
                 .eq("id", activeGroup.id);
               if (e1) throw e1;
               if (memberIdsToRemove.length) {
-                const { error } = await supabase.from("group_members").delete().in("id", memberIdsToRemove);
+                // Soft-delete: un borrado real choca con la FK de payments/
+                // expenses hacia esta fila en cuanto esa persona tuvo algún
+                // gasto o pago (incluso ya saldado) — la fila se queda para
+                // que el historial siga mostrando su nombre, solo se la deja
+                // de ofrecer para gastos/pagos nuevos.
+                const { error } = await supabase.from("group_members").update({ deleted: true }).in("id", memberIdsToRemove);
                 if (error) throw error;
               }
               if (membersToAdd.length) {
@@ -536,7 +541,7 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
   };
 
   // --- Solo para editar: integrantes reales, categorías, borrar ---
-  const [members, setMembers] = useState(group?.members || []);
+  const [members, setMembers] = useState(() => (group?.members || []).filter((m) => !m.deleted));
   const [newMemberName, setNewMemberName] = useState("");
   const [confirmRemoveMemberId, setConfirmRemoveMemberId] = useState(null);
   const [categories, setCategories] = useState(() => (group ? groupCategories(group).map(c => ({ ...c })) : []));
@@ -551,7 +556,7 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
     if (name.trim() !== group.name) return true;
     if (baseCurrency !== group.baseCurrency) return true;
     if (pendingFile || removed) return true;
-    const origMemberIds = new Set(group.members.map((m) => m.id));
+    const origMemberIds = new Set(group.members.filter((m) => !m.deleted).map((m) => m.id));
     const curMemberIds = new Set(members.map((m) => m.id));
     if (origMemberIds.size !== curMemberIds.size || [...origMemberIds].some((id) => !curMemberIds.has(id))) return true;
     const origCats = groupCategories(group);
@@ -616,10 +621,10 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
     try {
       const resolvedPhotoUrl = await resolvePhotoUrl({ pendingFile, removed, currentUrl: group.photoUrl });
 
-      const originalMemberIds = new Set(group.members.map((m) => m.id));
+      const originalMemberIds = new Set(group.members.filter((m) => !m.deleted).map((m) => m.id));
       const currentMemberIds = new Set(members.map((m) => m.id));
       const membersToAdd = members.filter((m) => !originalMemberIds.has(m.id));
-      const memberIdsToRemove = group.members.filter((m) => !currentMemberIds.has(m.id)).map((m) => m.id);
+      const memberIdsToRemove = group.members.filter((m) => !m.deleted && !currentMemberIds.has(m.id)).map((m) => m.id);
 
       const originalCatsById = new Map(groupCategories(group).map((c, i) => [c.id, { label: c.label, iconKey: c.iconKey, sortOrder: i }]));
       const currentCategoryIds = new Set(categories.map((c) => c.id));
@@ -1138,7 +1143,7 @@ function SortableCategoryRow({ cat, onEditIcon, onChangeLabel, onRemove, draggab
 function GroupView({ group, session, onBack, onAddExpense, onOpenExpense, onOpenPayment, onSettleUp, onEditGroup, onSoftDeleteExpense }) {
   const [tab, setTab] = useState("activity"); // activity | balances | individual
   useScrollToTopOnChange(tab);
-  const [selectedMember, setSelectedMember] = useState(group.members[0]?.id || null);
+  const [selectedMember, setSelectedMember] = useState(group.members.find((m) => !m.deleted)?.id || null);
   const { members, expenses, payments = [] } = group;
 
   // Un balance (y su lista de deudas simplificada) por cada moneda usada en el grupo —
@@ -1240,7 +1245,7 @@ function GroupView({ group, session, onBack, onAddExpense, onOpenExpense, onOpen
       {tab === "individual" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 6 }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "0 20px" }}>
-            {members.map((m) => (
+            {members.filter((m) => !m.deleted).map((m) => (
               <button key={m.id} onClick={() => setSelectedMember(m.id)} style={{
                 display: "flex", alignItems: "center", gap: 6,
                 padding: "6px 12px 6px 6px", borderRadius: 20,
@@ -1569,8 +1574,16 @@ function ExpenseDetail({ group, expenseId, onBack, onEdit }) {
 // dado (abierto desde dentro de un grupo) o hay que elegirlo primero (abierto
 // desde el FAB del listado principal, sin grupo en contexto).
 function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onDelete, session, moneyManager }) {
-  const { members, baseCurrency } = group;
+  const { baseCurrency } = group;
   const existing = expenseId ? group.expenses.find((e) => e.id === expenseId) : null;
+  // Alguien ya quitado del grupo no se ofrece como pagador/participante nuevo,
+  // pero si este gasto (uno viejo, se está editando) ya lo incluía, se lo
+  // sigue mostrando para no perder su parte al guardar.
+  const existingMemberIds = new Set(existing ? [
+    ...Object.keys(existing.payers || (existing.paidBy ? { [existing.paidBy]: existing.amount } : {})),
+    ...Object.keys(existing.shares || {}),
+  ] : []);
+  const members = group.members.filter((m) => !m.deleted || existingMemberIds.has(m.id));
   const myMemberId = group.members.find((m) => m.linkedUserId === session?.userId)?.id;
 
   const [description, setDescription] = useState(existing?.description || "");
@@ -2309,8 +2322,12 @@ function PaymentDetail({ group, paymentId, onBack, onEdit }) {
    ========================================================================= */
 
 function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, session, moneyManager }) {
-  const { members, baseCurrency } = group;
+  const { baseCurrency } = group;
   const existing = paymentId ? group.payments.find((p) => p.id === paymentId) : null;
+  // Mismo motivo que en ExpenseForm: alguien ya quitado del grupo no se
+  // ofrece para un pago nuevo, pero si este pago (uno viejo, se está
+  // editando) ya lo incluía como from/to, se lo sigue mostrando.
+  const members = group.members.filter((m) => !m.deleted || m.id === existing?.from || m.id === existing?.to);
   const myMemberId = members.find((m) => m.linkedUserId === session?.userId)?.id;
 
   const [from, setFrom] = useState(existing?.from || prefill?.from || members[0]?.id || "");
@@ -2529,7 +2546,7 @@ function InviteScreen({ group, session, groupInvites = [], onBack, onSend, onCan
   const [touched, setTouched] = useState({});
   const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
 
-  const invitableMembers = group.members.filter(m => !m.linkedUserId);
+  const invitableMembers = group.members.filter(m => !m.linkedUserId && !m.deleted);
   const selectableMembers = invitableMembers.filter(m => !groupInvites.find(i => i.memberId === m.id));
   const isSelfInvite = !!targetUsername.trim() && targetUsername.trim().toLowerCase() === session.username;
   const canSend = !!selectedMemberId && !!targetUsername.trim() && !isSelfInvite;

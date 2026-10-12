@@ -178,7 +178,7 @@ function useAuth() {
 // de esa tabla hija (is_group_member en todas), así que basta con pedir "groups".
 const GROUP_SELECT = `
   id, name, base_currency, rates, photo_url, creator_id, created_at,
-  group_members(id, name, linked_user_id, sort_order),
+  group_members(id, name, linked_user_id, sort_order, deleted),
   categories(id, label, icon_key, sort_order),
   expenses(id, description, amount, currency, category_id, date, notes, image_url, split_mode, payers, shares, deleted, created_at),
   payments(id, from_member_id, to_member_id, amount, currency, date, note, deleted, created_at)
@@ -190,15 +190,22 @@ function toClientGroup(row, userId) {
   // Vos siempre primero en la lista de integrantes (pagadores, participantes,
   // "Integrantes" en Editar grupo, etc.) — `sort_order` acá NO sirve para
   // esto (es el orden de TUS grupos en la lista, guardado en tu propia fila
-  // de group_members, no el orden de los miembros dentro de un grupo). Sort
-  // estable: todos los demás quedan en el orden que ya traía el servidor.
+  // de group_members, no el orden de los miembros dentro de un grupo). El
+  // resto, alfabético: sin esto, quedaban en el orden que Postgres devolviera
+  // (sin ORDER BY en el embed de PostgREST), que no está garantizado y podía
+  // cambiar de una consulta a otra sin motivo aparente.
   const members = (row.group_members || []).map((m) => ({
     id: m.id,
     name: m.name,
     linkedUserId: m.linked_user_id,
     sortOrder: m.sort_order,
+    deleted: m.deleted,
   }));
-  members.sort((a, b) => (a.linkedUserId === userId ? -1 : b.linkedUserId === userId ? 1 : 0));
+  members.sort((a, b) => {
+    if (a.linkedUserId === userId) return -1;
+    if (b.linkedUserId === userId) return 1;
+    return a.name.localeCompare(b.name, "es");
+  });
   return {
     id: row.id,
     name: row.name,

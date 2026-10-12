@@ -103,6 +103,7 @@ export default function SplitLedgerTab({
       {view.screen === "group" && activeGroup && (
         <GroupView
           group={activeGroup}
+          session={session}
           onBack={onBackOverride || (() => setView({ screen: "home" }))}
           onAddExpense={() => setView({ screen: "newExpense", groupId: activeGroup.id })}
           onOpenExpense={(expenseId) => setView({ screen: "expenseDetail", groupId: activeGroup.id, expenseId })}
@@ -1134,7 +1135,7 @@ function SortableCategoryRow({ cat, onEditIcon, onChangeLabel, onRemove, draggab
    GROUP VIEW
    ========================================================================= */
 
-function GroupView({ group, onBack, onAddExpense, onOpenExpense, onOpenPayment, onSettleUp, onEditGroup, onSoftDeleteExpense }) {
+function GroupView({ group, session, onBack, onAddExpense, onOpenExpense, onOpenPayment, onSettleUp, onEditGroup, onSoftDeleteExpense }) {
   const [tab, setTab] = useState("activity"); // activity | balances | individual
   useScrollToTopOnChange(tab);
   const [selectedMember, setSelectedMember] = useState(group.members[0]?.id || null);
@@ -1179,52 +1180,17 @@ function GroupView({ group, onBack, onAddExpense, onOpenExpense, onOpenPayment, 
         }
       />
 
-      {/* Fila de miembros con avatares coloreados y expandible */}
-      {(() => {
-        const [showAll, setShowAll] = React.useState(false);
-        const visible = showAll ? members : members.slice(0, 4);
-        const extra = members.length - 4;
-        return (
-          <div style={{ padding: "12px 20px 4px" }}>
-            <div style={{ display: "flex", alignItems: showAll ? "flex-start" : "center", flexWrap: showAll ? "wrap" : "nowrap", gap: showAll ? 10 : 0 }}>
-              {visible.map((m, idx) => (
-                <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, width: showAll ? 44 : "auto", marginLeft: showAll ? 0 : idx === 0 ? 0 : -6, zIndex: showAll ? 0 : 10 - idx, flexShrink: 0 }}>
-                  <span style={{ ...styles.avatar, background: colorFor(m.id), width: 34, height: 34, fontSize: 12, boxShadow: showAll ? "none" : "0 0 0 2px #FBF8F2" }}>
-                    {initials(m.name)}
-                  </span>
-                  {showAll && (
-                    <span style={{ fontSize: 10, color: "#6B6355", fontFamily: "system-ui, sans-serif", width: 44, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{m.name}</span>
-                  )}
-                </div>
-              ))}
-              {!showAll && extra > 0 && (
-                <button
-                  onClick={() => setShowAll(true)}
-                  style={{ width: 34, height: 34, borderRadius: "50%", border: "1.5px dashed #C9BBA0", background: "#F0EBE2", fontSize: 11, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#8A7253", display: "flex", alignItems: "center", justifyContent: "center", marginLeft: -6, zIndex: 1, cursor: "pointer", flexShrink: 0 }}
-                >
-                  +{extra}
-                </button>
-              )}
-              {showAll && (
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, width: 44, flexShrink: 0 }}>
-                  <button
-                    onClick={() => setShowAll(false)}
-                    style={{ width: 34, height: 34, borderRadius: "50%", border: "1.5px dashed #C9BBA0", background: "#F0EBE2", fontSize: 20, fontWeight: 300, fontFamily: "system-ui, sans-serif", color: "#8A7253", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, lineHeight: 1, paddingBottom: 2 }}
-                  >
-                    −
-                  </button>
-                  <span style={{ fontSize: 10, color: "#6B6355", fontFamily: "system-ui, sans-serif", width: 44, textAlign: "center" }}> </span>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })()}
-
-      <div style={styles.tabRow}>
+      <div style={{ ...styles.tabRow, marginTop: 12 }}>
         <button style={tab === "activity" ? styles.tabActive : styles.tab} onClick={() => setTab("activity")}>Actividad</button>
         <button style={tab === "balances" ? styles.tabActive : styles.tab} onClick={() => setTab("balances")}>Balances</button>
         <button style={tab === "individual" ? styles.tabActive : styles.tab} onClick={() => setTab("individual")}>Por persona</button>
+      </div>
+
+      {/* Mismo texto ("Debes X a Y" / "Y te debe X" / "Saldado") que ya usa
+          la tarjeta de este grupo en "Tus grupos", debajo de los toggles
+          para no tener que volver atrás para verlo. */}
+      <div style={{ padding: "10px 20px 0", fontSize: 15, fontFamily: "system-ui, sans-serif", color: "#544A3C" }}>
+        {groupCardLines(group, session).map((line) => <p key={line.key} style={{ margin: 0 }}>{line.node}</p>)}
       </div>
 
       {tab === "balances" && (() => {

@@ -306,7 +306,7 @@ export default function TransactionForm({
                 onClick={() => onOpenSplitLedgerExpense(splitGroupId, editingTransaction.sl_source_kind, editingTransaction.sl_source_id)}
               >
                 <Divide size={13} color="#A8754A" />
-                Ver original
+                Original
               </button>
             )}
             {onBookmark && !isSynced && (

@@ -578,14 +578,28 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
   const [mmLinked, setMmLinked] = useState(!!activeMmLink);
   const [mmOwnAccountId, setMmOwnAccountId] = useState(activeMmLink?.default_own_account_id || "");
   const [mmOtherAccountId, setMmOtherAccountId] = useState(activeMmLink?.default_other_account_id || "");
+  // La cuenta pseudo/"lo que prestás" vive, por defecto, en el grupo de
+  // cuentas invisible del sistema -- si ya está ahí, el campo arranca vacío
+  // ("automática"); si el usuario ya la había apuntado a una cuenta real
+  // suya, arranca con esa.
+  const isAutoPseudoAccount = (accountId) => {
+    const acc = moneyManager.accounts.find((a) => a.id === accountId);
+    const grp = acc && moneyManager.groups.find((g) => g.id === acc.group_id);
+    return !acc || grp?.system_key === "split_ledger";
+  };
+  const initialLoanAccountId = activeMmLink && !isAutoPseudoAccount(activeMmLink.pseudo_account_id)
+    ? activeMmLink.pseudo_account_id : "";
+  const [mmLoanAccountId, setMmLoanAccountId] = useState(initialLoanAccountId);
   useEffect(() => {
     setMmLinked(!!activeMmLink);
     setMmOwnAccountId(activeMmLink?.default_own_account_id || "");
     setMmOtherAccountId(activeMmLink?.default_other_account_id || "");
-  }, [activeMmLink?.id, activeMmLink?.default_own_account_id, activeMmLink?.default_other_account_id]);
+    setMmLoanAccountId(initialLoanAccountId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeMmLink?.id, activeMmLink?.default_own_account_id, activeMmLink?.default_other_account_id, activeMmLink?.pseudo_account_id]);
   const mmNeedsAccounts = mmLinked && (!mmOwnAccountId || !mmOtherAccountId);
   const mmDirty = !!myMemberId && (activeMmLink
-    ? (mmOwnAccountId !== activeMmLink.default_own_account_id || mmOtherAccountId !== activeMmLink.default_other_account_id)
+    ? (mmOwnAccountId !== activeMmLink.default_own_account_id || mmOtherAccountId !== activeMmLink.default_other_account_id || mmLoanAccountId !== initialLoanAccountId)
     : (mmLinked && !!mmOwnAccountId && !!mmOtherAccountId));
 
   const canSaveEdit = name.trim() && members.length >= 2 && !hasEmptyCategory && !mmNeedsAccounts;
@@ -641,7 +655,14 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
 
       if (mmDirty) {
         if (activeMmLink) {
-          await updateLinkDefaults(activeMmLink.id, { defaultOwnAccountId: mmOwnAccountId, defaultOtherAccountId: mmOtherAccountId });
+          const loanAccountChanged = mmLoanAccountId !== initialLoanAccountId;
+          await updateLinkDefaults(activeMmLink.id, {
+            defaultOwnAccountId: mmOwnAccountId,
+            defaultOtherAccountId: mmOtherAccountId,
+            loanAccountId: loanAccountChanged ? mmLoanAccountId : undefined,
+            groupName: group.name,
+            currency: moneyManager.settings.main_currency,
+          });
         } else {
           await linkGroupToAccount({
             userId: session.userId,
@@ -650,6 +671,7 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
             groupName: group.name,
             defaultOwnAccountId: mmOwnAccountId,
             defaultOtherAccountId: mmOtherAccountId,
+            loanAccountId: mmLoanAccountId || undefined,
             currency: moneyManager.settings.main_currency,
           });
         }
@@ -886,6 +908,8 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
             onOwnAccountChange={setMmOwnAccountId}
             otherAccountId={mmOtherAccountId}
             onOtherAccountChange={setMmOtherAccountId}
+            loanAccountId={mmLoanAccountId}
+            onLoanAccountChange={setMmLoanAccountId}
             touched={touched}
             touch={touch}
             disabled={saving}
@@ -966,6 +990,7 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
 function SplitLedgerMoneyLink({
   group, session, moneyManager, showError,
   linked, onToggle, ownAccountId, onOwnAccountChange, otherAccountId, onOtherAccountChange,
+  loanAccountId, onLoanAccountChange,
   touched, touch, disabled,
 }) {
   const [unlinking, setUnlinking] = useState(false);
@@ -1046,7 +1071,7 @@ function SplitLedgerMoneyLink({
         <>
           <Field
             label="Cuenta por defecto en gastos propios"
-            info="Se usa cuando pagás vos el gasto del grupo. Ej: comprás algo de €30 para el grupo → se descuentan €30 de esta cuenta, como cualquier gasto normal."
+            info={"Cuenta que se usa para tu parte cuando vos creás un gasto en el grupo.\nEj: creás un gasto de €100 del que €50 son tuyos y €50 son de otra persona. Los €50 tuyos salen de esta cuenta."}
             required
             error={touched.mmOwnAccountId && !ownAccountId ? "Este campo es obligatorio." : ""}
           >
@@ -1059,8 +1084,20 @@ function SplitLedgerMoneyLink({
             />
           </Field>
           <Field
+            label="Cuenta por defecto para lo que prestás"
+            info={"Cuenta para lo que prestás o te prestan en el grupo.\nEj: en un gasto de €100 (tu parte €50), acá se registra el préstamo: lo que le prestás si lo creás vos, o lo que te prestan si lo crea otro miembro.\nSi lo dejás vacío, Evenly crea una cuenta aparte, invisible, para trackearlo sola (no es la misma que 'gastos propios')."}
+          >
+            <PickerField
+              value={loanAccountId}
+              onChange={onLoanAccountChange}
+              onClear={() => onLoanAccountChange("")}
+              groups={accountGroups}
+              placeholder="Automática (cuenta aparte, invisible)"
+            />
+          </Field>
+          <Field
             label="Cuenta por defecto en gastos ajenos"
-            info="Se usa cuando paga otro miembro y vos quedás debiéndole tu parte. No se descuenta plata real de acá (esa deuda se salda aparte, cuando le pagás) — solo queda registrado el gasto para tus estadísticas."
+            info={"Cuenta que se usa para tu parte cuando otro miembro crea un gasto en el grupo.\nEj: alguien crea un gasto de €100 del que €50 son tuyos y €50 son de otra persona. Los €50 tuyos que pediste prestado salen de esta cuenta (se anula con una transferencia automática invisible para marcar la deuda, ya que el dinero no salió de tu cuenta)."}
             required
             error={touched.mmOtherAccountId && !otherAccountId ? "Este campo es obligatorio." : ""}
           >

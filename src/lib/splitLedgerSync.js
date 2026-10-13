@@ -36,15 +36,19 @@ async function loadLinkContext(link, userId) {
     .maybeSingle();
   if (!member || member.linked_user_id !== userId) return null;
 
+  // loan_account_id es opcional (si nunca se configuró, la transferencia de
+  // préstamo sigue usando "propios"/"ajenos" como siempre) -- por eso no
+  // entra en el .in(...) cuando es null, ni se exige que exista.
   const { data: accounts } = await supabase
     .from("mm_accounts")
     .select("id, deleted")
-    .in("id", [link.default_own_account_id, link.default_other_account_id, link.pseudo_account_id]);
+    .in("id", [link.default_own_account_id, link.default_other_account_id, link.pseudo_account_id, link.loan_account_id].filter(Boolean));
   const byId = new Map((accounts || []).map((a) => [a.id, a]));
   const own = byId.get(link.default_own_account_id);
   const other = byId.get(link.default_other_account_id);
   const pseudo = byId.get(link.pseudo_account_id);
-  if (!own || own.deleted || !other || other.deleted || !pseudo || pseudo.deleted) return null;
+  const loan = link.loan_account_id ? byId.get(link.loan_account_id) : null;
+  if (!own || own.deleted || !other || other.deleted || !pseudo || pseudo.deleted || (link.loan_account_id && (!loan || loan.deleted))) return null;
 
   // Desde que se vinculó (por created_at, no por la fecha propia del gasto —
   // "nada retroactivo" es sobre cuándo se CARGÓ el dato, no sobre qué fecha
@@ -90,13 +94,15 @@ function paymentInvolvesMe(p, memberId) {
 // La cuenta/categoría de un gasto puntual se fija la primera vez que se
 // sincroniza (acá, si nadie la tocó todavía desde el picker de Split
 // Ledger) y nunca más se recalcula sola — así cambiar los defaults del
-// vínculo más tarde no mueve nada ya sincronizado.
+// vínculo más tarde no mueve nada ya sincronizado. loan_account_id sigue el
+// mismo principio: se siembra con el default del vínculo en ese momento,
+// y de ahí en más es editable aparte, por transacción.
 async function ensureExpenseChoices(link, involvedKeys, choicesBySourceKey) {
   const missing = involvedKeys.filter((k) => !choicesBySourceKey.has(k));
   if (!missing.length) return;
   const rows = missing.map((key) => {
     const [source_kind, source_id] = key.split(":");
-    return { link_id: link.id, source_kind, source_id, account_id: link.default_other_account_id, category_id: null };
+    return { link_id: link.id, source_kind, source_id, account_id: link.default_other_account_id, category_id: null, loan_account_id: link.loan_account_id || null };
   });
   const { data: inserted } = await supabase
     .from("sl_mm_expense_choices")
@@ -125,6 +131,11 @@ function computeDesiredTransactions(link, ctx, choicesBySourceKey) {
     const paidAmt = Number(e.payers?.[ctx.memberId] || 0);
     const choice = choicesBySourceKey.get(`expense:${e.id}`);
     const accountId = choice?.account_id || link.default_other_account_id;
+    // La pata de préstamo usa "lo que prestás" en vez de "propios"/"ajenos"
+    // cuando está configurada (global o por transacción) -- la cuenta
+    // pseudo (link.pseudo_account_id) sigue siendo siempre la contraparte
+    // fija del lado del grupo, nunca se reemplaza.
+    const loanAccountId = choice?.loan_account_id || accountId;
     const categoryId = choice?.category_id || null;
     const common = { source_kind: "expense", source_id: e.id, currency: e.currency, title: e.description || null, memo: ctx.groupName, date: e.date };
 
@@ -133,9 +144,9 @@ function computeDesiredTransactions(link, ctx, choicesBySourceKey) {
     }
     const diff = paidAmt - shareAmt;
     if (diff > EPSILON) {
-      desired.push({ ...common, key: `expense:${e.id}:loan`, role: "loan", type: "transfer", account_id: accountId, to_account_id: link.pseudo_account_id, amount: diff, category_id: null });
+      desired.push({ ...common, key: `expense:${e.id}:loan`, role: "loan", type: "transfer", account_id: loanAccountId, to_account_id: link.pseudo_account_id, amount: diff, category_id: null });
     } else if (diff < -EPSILON) {
-      desired.push({ ...common, key: `expense:${e.id}:loan`, role: "loan", type: "transfer", account_id: link.pseudo_account_id, to_account_id: accountId, amount: -diff, category_id: null });
+      desired.push({ ...common, key: `expense:${e.id}:loan`, role: "loan", type: "transfer", account_id: link.pseudo_account_id, to_account_id: loanAccountId, amount: -diff, category_id: null });
     }
   }
 
@@ -144,10 +155,15 @@ function computeDesiredTransactions(link, ctx, choicesBySourceKey) {
     const isFrom = p.from_member_id === ctx.memberId;
     const choice = choicesBySourceKey.get(`payment:${p.id}`);
     const accountId = choice?.account_id || link.default_other_account_id;
+    // Mismo reemplazo que en gastos: un pago es, en esencia, saldar esa
+    // misma pata de préstamo -- si cobro, entra a "lo que prestás" (en vez
+    // de a "ajenos"); si pago, sale de "lo que prestás" (en vez de
+    // "propios"/"ajenos"), revirtiendo justo la transferencia original.
+    const loanAccountId = choice?.loan_account_id || accountId;
     desired.push({
       key: `payment:${p.id}:loan`, source_kind: "payment", source_id: p.id, role: "loan", type: "transfer",
-      account_id: isFrom ? accountId : link.pseudo_account_id,
-      to_account_id: isFrom ? link.pseudo_account_id : accountId,
+      account_id: isFrom ? loanAccountId : link.pseudo_account_id,
+      to_account_id: isFrom ? link.pseudo_account_id : loanAccountId,
       amount: Number(p.amount), currency: p.currency, category_id: null,
       title: p.note || "Pago", memo: ctx.groupName, date: p.date,
     });

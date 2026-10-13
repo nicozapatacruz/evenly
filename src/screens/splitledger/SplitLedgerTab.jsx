@@ -584,28 +584,19 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
   const [mmLinked, setMmLinked] = useState(!!activeMmLink);
   const [mmOwnAccountId, setMmOwnAccountId] = useState(activeMmLink?.default_own_account_id || "");
   const [mmOtherAccountId, setMmOtherAccountId] = useState(activeMmLink?.default_other_account_id || "");
-  // La cuenta pseudo/"lo que prestás" vive, por defecto, en el grupo de
-  // cuentas invisible del sistema -- si ya está ahí, el campo arranca vacío
-  // ("automática"); si el usuario ya la había apuntado a una cuenta real
-  // suya, arranca con esa.
-  const isAutoPseudoAccount = (accountId) => {
-    const acc = moneyManager.accounts.find((a) => a.id === accountId);
-    const grp = acc && moneyManager.groups.find((g) => g.id === acc.group_id);
-    return !acc || grp?.system_key === "split_ledger";
-  };
-  const initialLoanAccountId = activeMmLink && !isAutoPseudoAccount(activeMmLink.pseudo_account_id)
-    ? activeMmLink.pseudo_account_id : "";
-  const [mmLoanAccountId, setMmLoanAccountId] = useState(initialLoanAccountId);
+  // "Lo que prestás" (loan_account_id) es independiente de la cuenta pseudo
+  // (esa sigue siempre auto-manejada, invisible) -- vacío = la pata de
+  // préstamo sigue usando "propios"/"ajenos" como hasta ahora.
+  const [mmLoanAccountId, setMmLoanAccountId] = useState(activeMmLink?.loan_account_id || "");
   useEffect(() => {
     setMmLinked(!!activeMmLink);
     setMmOwnAccountId(activeMmLink?.default_own_account_id || "");
     setMmOtherAccountId(activeMmLink?.default_other_account_id || "");
-    setMmLoanAccountId(initialLoanAccountId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeMmLink?.id, activeMmLink?.default_own_account_id, activeMmLink?.default_other_account_id, activeMmLink?.pseudo_account_id]);
+    setMmLoanAccountId(activeMmLink?.loan_account_id || "");
+  }, [activeMmLink?.id, activeMmLink?.default_own_account_id, activeMmLink?.default_other_account_id, activeMmLink?.loan_account_id]);
   const mmNeedsAccounts = mmLinked && (!mmOwnAccountId || !mmOtherAccountId);
   const mmDirty = !!myMemberId && (activeMmLink
-    ? (mmOwnAccountId !== activeMmLink.default_own_account_id || mmOtherAccountId !== activeMmLink.default_other_account_id || mmLoanAccountId !== initialLoanAccountId)
+    ? (mmOwnAccountId !== activeMmLink.default_own_account_id || mmOtherAccountId !== activeMmLink.default_other_account_id || mmLoanAccountId !== (activeMmLink.loan_account_id || ""))
     : (mmLinked && !!mmOwnAccountId && !!mmOtherAccountId));
 
   const canSaveEdit = name.trim() && members.length >= 2 && !hasEmptyCategory && !mmNeedsAccounts;
@@ -661,13 +652,10 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
 
       if (mmDirty) {
         if (activeMmLink) {
-          const loanAccountChanged = mmLoanAccountId !== initialLoanAccountId;
           await updateLinkDefaults(activeMmLink.id, {
             defaultOwnAccountId: mmOwnAccountId,
             defaultOtherAccountId: mmOtherAccountId,
-            loanAccountId: loanAccountChanged ? mmLoanAccountId : undefined,
-            groupName: group.name,
-            currency: moneyManager.settings.main_currency,
+            loanAccountId: mmLoanAccountId || null,
           });
         } else {
           await linkGroupToAccount({
@@ -677,7 +665,7 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
             groupName: group.name,
             defaultOwnAccountId: mmOwnAccountId,
             defaultOtherAccountId: mmOtherAccountId,
-            loanAccountId: mmLoanAccountId || undefined,
+            loanAccountId: mmLoanAccountId || null,
             currency: moneyManager.settings.main_currency,
           });
         }
@@ -1091,19 +1079,19 @@ function SplitLedgerMoneyLink({
           </Field>
           <Field
             label="Cuenta por defecto para lo que prestás"
-            info={"Cuenta para lo que prestás o te prestan en el grupo.\nEj: en un gasto de €100 (tu parte €50), acá se registra el préstamo: lo que le prestás si lo creás vos, o lo que te prestan si lo crea otro miembro.\nSi lo dejás vacío, Evenly crea una cuenta aparte, invisible, para trackearlo sola (no es la misma que 'gastos propios')."}
+            info={"Cuenta aparte para lo que prestás o te prestan en el grupo (en gastos y en pagos/saldar), separada de 'propios'/'ajenos' (esas siguen siendo tu parte del gasto).\nEj: en un gasto de €100 (tu parte €50), si vos pagás, los €50 prestados salen de esta cuenta en vez de 'propios'; si alguien más paga, esos €50 entran acá al mismo tiempo que se registra tu parte en 'ajenos'.\nSi lo dejás vacío, el préstamo sigue mezclado con 'propios'/'ajenos', como hasta ahora."}
           >
             <PickerField
               value={loanAccountId}
               onChange={onLoanAccountChange}
               onClear={() => onLoanAccountChange("")}
               groups={accountGroups}
-              placeholder="Automática (cuenta aparte, invisible)"
+              placeholder="Sin cuenta aparte"
             />
           </Field>
           <Field
             label="Cuenta por defecto en gastos ajenos"
-            info={"Cuenta que se usa para tu parte cuando otro miembro crea un gasto en el grupo.\nEj: alguien crea un gasto de €100 del que €50 son tuyos y €50 son de otra persona. Los €50 tuyos que pediste prestado salen de esta cuenta (se anula con una transferencia automática invisible para marcar la deuda, ya que el dinero no salió de tu cuenta)."}
+            info={"Cuenta que se usa para tu parte cuando otro miembro crea un gasto en el grupo.\nEj: alguien crea un gasto de €100 del que €50 son tuyos y €50 son de otra persona. Los €50 tuyos que pediste prestado salen de esta cuenta, pero se anulan con una transferencia automática por el mismo monto, así que el dinero no sale de verdad.\nEsa transferencia va a una cuenta invisible, o a 'lo que prestás' si la configuraste."}
             required
             error={touched.mmOtherAccountId && !otherAccountId ? "Este campo es obligatorio." : ""}
           >
@@ -1703,6 +1691,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
   const activeLink = moneyManager?.slLinks?.find((l) => l.active && l.group_id === group.id && l.user_id === session?.userId);
   const [mmAccountId, setMmAccountId] = useState("");
   const [mmCategoryId, setMmCategoryId] = useState("");
+  const [mmLoanAccountId, setMmLoanAccountId] = useState("");
   const savedMmChoiceRef = useRef(null); // null = todavía no se chequeó; {} = se chequeó y no había nada guardado
 
   const numericAmount = parseAmountInput(amount || "");
@@ -1797,7 +1786,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
       if (existing) {
         const { data } = await supabase
           .from("sl_mm_expense_choices")
-          .select("account_id, category_id")
+          .select("account_id, category_id, loan_account_id")
           .eq("link_id", activeLink.id).eq("source_kind", "expense").eq("source_id", existing.id)
           .maybeSingle();
         choice = data;
@@ -1806,6 +1795,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
       savedMmChoiceRef.current = choice || {};
       setMmAccountId(choice?.account_id || (iPay ? activeLink.default_own_account_id : activeLink.default_other_account_id));
       setMmCategoryId(choice?.category_id || "");
+      setMmLoanAccountId(choice?.loan_account_id || activeLink.loan_account_id || "");
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1865,7 +1855,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
       if (mmInvolved && savedId) {
         const finalId = existing?.id || savedId;
         await supabase.from("sl_mm_expense_choices").upsert(
-          { link_id: activeLink.id, source_kind: "expense", source_id: finalId, account_id: mmAccountId, category_id: mmCategoryId || null },
+          { link_id: activeLink.id, source_kind: "expense", source_id: finalId, account_id: mmAccountId, category_id: mmCategoryId || null, loan_account_id: mmLoanAccountId || null },
           { onConflict: "link_id,source_kind,source_id" }
         );
         await moneyManager.reload();
@@ -1961,6 +1951,24 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
                 <SplitLedgerIcon size={26} />
               </span>
             </div>
+          </Field>
+        )}
+
+        {mmInvolved && (
+          <Field label="Cuenta de lo prestado" info="Para este gasto puntual: de dónde sale (o adónde entra) lo que prestás, si tu grupo tiene configurada una cuenta para eso. Dejalo vacío para usar 'Cuenta' de arriba, como siempre.">
+            <PickerField
+              value={mmLoanAccountId}
+              onChange={setMmLoanAccountId}
+              onClear={() => setMmLoanAccountId("")}
+              placeholder="Misma que 'Cuenta'"
+              groups={moneyManager.groups
+                .filter((g) => !g.deleted && g.system_key !== "split_ledger")
+                .map((g) => ({
+                  label: g.name,
+                  items: moneyManager.accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
+                }))
+                .filter((g) => g.items.length > 0)}
+            />
           </Field>
         )}
 
@@ -2424,6 +2432,7 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
   // MULTI_CURRENCY_PLAN.md / conversación 2026-10-08).
   const activeLink = moneyManager?.slLinks?.find((l) => l.active && l.group_id === group.id && l.user_id === session?.userId);
   const [mmAccountId, setMmAccountId] = useState("");
+  const [mmLoanAccountId, setMmLoanAccountId] = useState("");
   const [touched, setTouched] = useState({});
   const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
   const savedMmChoiceRef = useRef(null);
@@ -2441,7 +2450,7 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
       if (existing) {
         const { data } = await supabase
           .from("sl_mm_expense_choices")
-          .select("account_id")
+          .select("account_id, loan_account_id")
           .eq("link_id", activeLink.id).eq("source_kind", "payment").eq("source_id", existing.id)
           .maybeSingle();
         choice = data;
@@ -2449,6 +2458,7 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
       if (cancelled) return;
       savedMmChoiceRef.current = choice || {};
       setMmAccountId(choice?.account_id || (isFrom ? activeLink.default_own_account_id : activeLink.default_other_account_id));
+      setMmLoanAccountId(choice?.loan_account_id || activeLink.loan_account_id || "");
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2486,7 +2496,7 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
       if (mmInvolved && savedId) {
         const finalId = existing?.id || savedId;
         await supabase.from("sl_mm_expense_choices").upsert(
-          { link_id: activeLink.id, source_kind: "payment", source_id: finalId, account_id: mmAccountId },
+          { link_id: activeLink.id, source_kind: "payment", source_id: finalId, account_id: mmAccountId, loan_account_id: mmLoanAccountId || null },
           { onConflict: "link_id,source_kind,source_id" }
         );
         await moneyManager.reload();
@@ -2610,6 +2620,24 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
                 <SplitLedgerIcon size={26} />
               </span>
             </div>
+          </Field>
+        )}
+
+        {mmInvolved && (
+          <Field label="Cuenta de lo prestado" info="Para este pago puntual: de dónde sale (o adónde entra) lo que se salda, si tu grupo tiene configurada una cuenta para eso. Dejalo vacío para usar 'Cuenta' de arriba, como siempre.">
+            <PickerField
+              value={mmLoanAccountId}
+              onChange={setMmLoanAccountId}
+              onClear={() => setMmLoanAccountId("")}
+              placeholder="Misma que 'Cuenta'"
+              groups={moneyManager.groups
+                .filter((g) => !g.deleted && g.system_key !== "split_ledger")
+                .map((g) => ({
+                  label: g.name,
+                  items: moneyManager.accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
+                }))
+                .filter((g) => g.items.length > 0)}
+            />
           </Field>
         )}
 

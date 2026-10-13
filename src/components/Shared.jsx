@@ -64,21 +64,29 @@ let infoTooltipInstanceCounter = 0;
 export function InfoTooltip({ text, blocked }) {
   const [open, setOpen] = useState(false);
   const [openUpward, setOpenUpward] = useState(false);
+  const [horizontalShift, setHorizontalShift] = useState(0);
   const ref = useRef(null);
   const boxRef = useRef(null);
   const idRef = useRef(null);
   if (idRef.current === null) idRef.current = ++infoTooltipInstanceCounter;
 
-  // Si el campo está muy abajo en la pantalla, abrir hacia abajo lo saca
-  // del viewport (mismo problema que ya resolvimos con el ancho, ahora con
-  // el alto, que varía según cuánto texto tenga cada tooltip, así que no se
-  // puede saber de antemano si entra). useLayoutEffect (no useEffect) mide
-  // apenas se pinta hacia abajo, ANTES de que el navegador muestre ese
-  // frame, así que si hay que voltearlo no se alcanza a ver el salto.
+  // Se ancla desde la derecha del ícono por defecto (ver más abajo), lo que
+  // asume que el ícono está cerca del borde derecho — cierto con labels
+  // largos ("Cuenta por defecto en gastos ajenos"), pero con uno corto
+  // ("Cuenta de lo prestado") el ícono queda más a la izquierda y el mismo
+  // ancho fijo se sale por el borde IZQUIERDO en vez del derecho. Por eso
+  // se mide (alto Y ancho) después de pintarlo en su posición default, y se
+  // corrige para cualquiera de los dos bordes, sin asumir en cuál label cae.
+  // useLayoutEffect (no useEffect): mide ANTES de que el navegador pinte ese
+  // frame, así que si hay que corregirlo no se alcanza a ver el salto.
   useLayoutEffect(() => {
-    if (!open) { setOpenUpward(false); return; }
+    if (!open) { setOpenUpward(false); setHorizontalShift(0); return; }
     const rect = boxRef.current?.getBoundingClientRect();
-    if (rect && rect.bottom > window.innerHeight) setOpenUpward(true);
+    if (!rect) return;
+    if (rect.bottom > window.innerHeight) setOpenUpward(true);
+    const PADDING = 8;
+    if (rect.left < PADDING) setHorizontalShift(PADDING - rect.left);
+    else if (rect.right > window.innerWidth - PADDING) setHorizontalShift(window.innerWidth - PADDING - rect.right);
   }, [open]);
 
   // Si se abre OTRO tooltip, este se cierra solo — mismo mecanismo que
@@ -116,7 +124,7 @@ export function InfoTooltip({ text, blocked }) {
         // campos con label largo (ej. "Cuenta por defecto en gastos ajenos")
         // el ícono queda cerca del borde derecho de la pantalla, y un ancho
         // fijo creciendo hacia la derecha se salía del viewport en mobile.
-        <div ref={boxRef} style={{ position: "absolute", ...(openUpward ? { bottom: "calc(100% + 6px)" } : { top: "calc(100% + 6px)" }), right: 0, width: "min(210px, calc(100vw - 40px))", background: "#2B2620", color: "#fff", fontSize: 12, fontWeight: 400, fontFamily: "system-ui, sans-serif", padding: "8px 10px", borderRadius: 8, lineHeight: 1.4, whiteSpace: "pre-line", zIndex: 20 }}>
+        <div ref={boxRef} style={{ position: "absolute", ...(openUpward ? { bottom: "calc(100% + 6px)" } : { top: "calc(100% + 6px)" }), right: 0, transform: horizontalShift ? `translateX(${horizontalShift}px)` : undefined, width: "min(210px, calc(100vw - 40px))", background: "#2B2620", color: "#fff", fontSize: 12, fontWeight: 400, fontFamily: "system-ui, sans-serif", padding: "8px 10px", borderRadius: 8, lineHeight: 1.4, whiteSpace: "pre-line", zIndex: 20 }}>
           {text}
         </div>
       )}

@@ -228,8 +228,11 @@ async function reconcileLink(link, userId, mainCurrency) {
     // Monto/cuenta/fecha/tipo son lo único que la reconciliación controla
     // para siempre — categoría, título y nota se setean solo al crearla acá
     // abajo (toInsert) y después quedan libres: un cambio de categoría hecho
-    // a mano en Money Manager (o vía el picker de Split Ledger, que escribe
-    // aparte en sl_mm_expense_choices) nunca se pisa solo en la próxima vuelta.
+    // a mano en Money Manager nunca se pisa solo en la próxima vuelta.
+    // EXCEPCIÓN: si todavía no tiene ninguna (null, nunca se eligió una al
+    // crearla) y ahora sí hay una elegida en "Categoría personal", se rellena
+    // -- si no, elegirla ahí después de guardar el gasto no hacía nada.
+    const categoryNeedsFill = !existing.category_id && d.category_id;
     const amountMain = amountMainFor(d, existing);
     const needsUpdate = existing.deleted
       || existing.account_id !== d.account_id
@@ -237,7 +240,8 @@ async function reconcileLink(link, userId, mainCurrency) {
       || Number(existing.amount) !== d.amount
       || existing.currency !== d.currency
       || Number(existing.amount_main) !== amountMain
-      || new Date(existing.date).getTime() !== new Date(d.date).getTime();
+      || new Date(existing.date).getTime() !== new Date(d.date).getTime()
+      || categoryNeedsFill;
     if (needsUpdate) {
       const currencyChanged = existing.currency !== d.currency;
       toUpdate.push({
@@ -247,6 +251,7 @@ async function reconcileLink(link, userId, mainCurrency) {
           currency: d.currency, amount: d.amount, amount_main: amountMain,
           date: new Date(d.date).toISOString(), deleted: false,
           ...(currencyChanged ? { exchange_rate: null } : {}),
+          ...(categoryNeedsFill ? { category_id: d.category_id } : {}),
         },
       });
     }

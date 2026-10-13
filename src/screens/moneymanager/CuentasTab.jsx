@@ -18,6 +18,14 @@ import TransactionForm from "./TransactionForm.jsx";
    manageGroups / manageAccounts: pantallas de edición (TopBar).
    ========================================================================= */
 
+// Ver el comentario junto a su uso (más abajo, dentro de CuentasTab) para el
+// porqué de "Saldo Real" y por qué es una config por email en vez de algo
+// genérico.
+const REAL_BALANCE_CONFIG = {
+  "nicozapatacruz@gmail.com": { group: "Santander", saldoName: "Saldo", tcName: "TC Santander", pendienteName: "Pendiente" },
+  "paulina.sanchezbt@gmail.com": { group: "Santander", saldoName: "Saldo", tcName: "Tarjeta", pendienteName: "Pendiente" },
+};
+
 export default function CuentasTab({ session, settings, groups, accounts, accountTotals, categories, slLinks, onOpenSplitLedgerGroup, onOpenSplitLedgerExpense, reload, reloadCategories, showError, showInfo, view, setView, onSaveMoneyTransaction, onDeleteMoneyTransaction, onBookmarkMoneyTransaction }) {
   const balanceColor = (n) => (n > 0.004 ? "#3B6E62" : n < -0.004 ? "#B0473A" : "#6B6355");
   const [deletedOpen, setDeletedOpen] = useState(false);
@@ -28,26 +36,26 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
   const creditCardIds = accounts.filter((a) => a.is_credit_card && !a.deleted).map((a) => a.id);
   const { transactions: ccTx } = useCreditCardActivity(session.userId, creditCardIds);
 
-  // "Saldo Real" — solo para Nico, solo tiene sentido con SU setup puntual
-  // de cuentas (Saldo/TC Santander/Pendiente), por eso hardcodeado por
-  // nombre en vez de una regla genérica. Fórmula: el balance de "Saldo" más
-  // el de "TC Santander" (ya negativo, es deuda) más lo que de esa deuda en
-  // realidad no es suya — las transferencias puntuales que hace a fin de
-  // mes de "TC Santander" a "Pendiente" para separar gastos compartidos
-  // (ej. pagarle algo a alguien o un gasto de Split Ledger). "Pendiente"
-  // como CUENTA no sirve para esto (mezcla esas transferencias con otras
-  // cosas sueltas, como un regalo o efectivo por sacar) — por eso se suma
-  // la transferencia puntual, no el balance de la cuenta entera.
-  const isNico = session.email === "nicozapatacruz@gmail.com";
+  // "Saldo Real" — solo para quienes usan este patrón puntual de reconciliar
+  // a mano (Nico y Paulina, cada uno con sus propios nombres de cuenta, ver
+  // REAL_BALANCE_CONFIG arriba). Fórmula: el balance de "Saldo" más el de la
+  // tarjeta (ya negativo, es deuda) más lo que de esa deuda en realidad no
+  // es suyo — las transferencias puntuales que hacen a fin de mes de la
+  // tarjeta a "Pendiente" para separar gastos compartidos (ej. pagarle algo
+  // a alguien o un gasto de Split Ledger). "Pendiente" como CUENTA no sirve
+  // para esto (mezcla esas transferencias con otras cosas sueltas, como un
+  // regalo o efectivo por sacar) — por eso se suma la transferencia
+  // puntual, no el balance de la cuenta entera.
+  const realBalanceConfig = REAL_BALANCE_CONFIG[session.email];
   const [pendienteTcSum, setPendienteTcSum] = useState(0);
   // Arranca en null (no en 0) a propósito: mientras no se sabe el valor
   // real todavía, mejor no mostrar la fila "Saldo Real" que mostrar un
   // número de entrada que es incompleto y después salta solo.
   const [pendienteTcLoaded, setPendienteTcLoaded] = useState(false);
   useEffect(() => {
-    if (!isNico) return;
-    const tcId = accounts.find((a) => a.name === "TC Santander" && !a.deleted)?.id;
-    const pendienteId = accounts.find((a) => a.name === "Pendiente" && !a.deleted)?.id;
+    if (!realBalanceConfig) return;
+    const tcId = accounts.find((a) => a.name === realBalanceConfig.tcName && !a.deleted)?.id;
+    const pendienteId = accounts.find((a) => a.name === realBalanceConfig.pendienteName && !a.deleted)?.id;
     if (!tcId || !pendienteId) return;
     supabase
       .from("mm_transactions")
@@ -62,7 +70,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
         setPendienteTcSum((data || []).reduce((s, t) => s + t.amount, 0));
         setPendienteTcLoaded(true);
       });
-  }, [isNico, accounts, session.userId]);
+  }, [realBalanceConfig, accounts, session.userId]);
 
   if (view.screen === "manageAllAccounts") {
     return (
@@ -229,9 +237,9 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
                   ))}
                 </span>
               </div>
-              {isNico && g.name === "Santander" && (() => {
-                const saldoAcc = accounts.find((a) => a.name === "Saldo" && !a.deleted);
-                const tcAcc = accounts.find((a) => a.name === "TC Santander" && !a.deleted);
+              {realBalanceConfig && g.name === realBalanceConfig.group && (() => {
+                const saldoAcc = accounts.find((a) => a.name === realBalanceConfig.saldoName && !a.deleted);
+                const tcAcc = accounts.find((a) => a.name === realBalanceConfig.tcName && !a.deleted);
                 if (!saldoAcc || !tcAcc) return null;
                 const saldoReal = accountBalance(saldoAcc.id, accountTotals) + accountBalance(tcAcc.id, accountTotals) + pendienteTcSum;
                 return (

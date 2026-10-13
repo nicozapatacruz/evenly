@@ -204,7 +204,11 @@ export default function SplitLedgerTab({
           }}
           onDelete={async (expenseId) => {
             try {
-              const { error } = await supabase.from("expenses").delete().eq("id", expenseId);
+              // Soft-delete, no DELETE real: un gasto ya sincronizado hacia
+              // Money Manager (de cualquier miembro vinculado) guarda este id
+              // en sl_source_id -- borrarlo de verdad rompe "Ver original"
+              // para siempre, sin ningún error visible.
+              const { error } = await supabase.from("expenses").update({ deleted: true }).eq("id", expenseId);
               if (error) throw error;
               await reloadGroup(activeGroup.id);
               await moneyManager?.reload();
@@ -266,7 +270,9 @@ export default function SplitLedgerTab({
           }}
           onDelete={async (paymentId) => {
             try {
-              const { error } = await supabase.from("payments").delete().eq("id", paymentId);
+              // Mismo motivo que el soft-delete de gastos: no romper "Ver
+              // original" para un pago ya sincronizado hacia Money Manager.
+              const { error } = await supabase.from("payments").update({ deleted: true }).eq("id", paymentId);
               if (error) throw error;
               await reloadGroup(activeGroup.id);
               await moneyManager?.reload();
@@ -1503,11 +1509,11 @@ function ExpenseDetail({ group, expenseId, onBack, onEdit }) {
   const e = group.expenses.find((x) => x.id === expenseId);
   const [showFullPhoto, setShowFullPhoto] = useState(false);
 
-  if (!e) {
+  if (!e || e.deleted) {
     return (
       <div style={styles.screen}>
         <TopBar title="Gasto" onBack={onBack} />
-        <EmptyState icon={<Trash2 size={28} strokeWidth={1.5} />} title="Este gasto ya no existe" />
+        <EmptyState icon={<Trash2 size={28} strokeWidth={1.5} />} title={e ? "Este gasto fue eliminado" : "Este gasto ya no existe"} />
       </div>
     );
   }
@@ -1870,6 +1876,18 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
       setSaving(false);
     }
   };
+
+  // Después de todos los hooks (ver el bug de orden de hooks ya corregido
+  // en TransactionForm.jsx) -- llegar acá por "Ver original" a un gasto ya
+  // borrado no debería dejarlo editar como si siguiera activo.
+  if (existing?.deleted) {
+    return (
+      <div style={styles.screen}>
+        <TopBar title="Gasto" onBack={onCancel} />
+        <EmptyState icon={<Trash2 size={28} strokeWidth={1.5} />} title="Este gasto fue eliminado" />
+      </div>
+    );
+  }
 
   return (
     <div style={styles.screen}>
@@ -2322,11 +2340,11 @@ function PaymentDetail({ group, paymentId, onBack, onEdit }) {
   const { members } = group;
   const p = group.payments.find((x) => x.id === paymentId);
 
-  if (!p) {
+  if (!p || p.deleted) {
     return (
       <div style={styles.screen}>
         <TopBar title="Pago" onBack={onBack} />
-        <EmptyState icon={<Trash2 size={28} strokeWidth={1.5} />} title="Este pago ya no existe" />
+        <EmptyState icon={<Trash2 size={28} strokeWidth={1.5} />} title={p ? "Este pago fue eliminado" : "Este pago ya no existe"} />
       </div>
     );
   }
@@ -2477,6 +2495,17 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
       setSaving(false);
     }
   };
+
+  // Mismo motivo que ExpenseForm: "Ver original" a un pago ya borrado no
+  // debería dejarlo editar como si siguiera activo.
+  if (existing?.deleted) {
+    return (
+      <div style={styles.screen}>
+        <TopBar title="Pago" onBack={onCancel} />
+        <EmptyState icon={<Trash2 size={28} strokeWidth={1.5} />} title="Este pago fue eliminado" />
+      </div>
+    );
+  }
 
   return (
     <div style={styles.screen}>

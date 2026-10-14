@@ -571,7 +571,7 @@ const TABS = [
 
 function AppShell({ session, onLogout, refreshProfile }) {
   const { groups, loading, reloadGroup, deleteGroup, reload: reloadGroups } = useGroups(session.userId);
-  const moneyManager = useMoneyManager(session.userId);
+  const moneyManager = useMoneyManager(session.userId, session.email);
   // Se guarda en localStorage para que sobreviva a cerrar y reabrir la app
   // (no solo pasar a segundo plano) — un recarga de página en frío siempre
   // vuelve a correr este useState desde cero, perdiendo cualquier estado en
@@ -1038,6 +1038,8 @@ function AppShell({ session, onLogout, refreshProfile }) {
           filters={diarioFilters}
           onOpenFilters={() => setLedgerView({ screen: "filters" })}
           onClearFilters={() => setDiarioFilters(EMPTY_FILTERS)}
+          pendienteTcReview={moneyManager.pendienteTcReview}
+          onAcknowledgePendienteTcReview={moneyManager.acknowledgePendienteTcReview}
         />
       )}
 

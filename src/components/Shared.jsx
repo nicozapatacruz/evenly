@@ -325,6 +325,21 @@ export function PendingRateBanner({ count, onOpen }) {
   );
 }
 
+// Aviso de "Pendiente TC" (ver applyPendienteTcAutoSum en splitLedgerSync.js,
+// solo le sale a quien tiene esa automatización custom): un gasto de Split
+// Ledger que ya había sumado algo ahí se borró después, y esa suma nunca se
+// revierte sola (podría ya estar mezclada con otro mes). Un solo tap marca
+// todo como revisado, no hay sub-pantalla: el usuario va a corregir el
+// monto él mismo en Pendiente TC, esto solo es el recordatorio.
+export function PendienteTcReviewBanner({ items, onAcknowledgeAll }) {
+  const total = items.reduce((s, item) => s + Number(item.amount), 0);
+  return (
+    <button type="button" onClick={onAcknowledgeAll} style={{ display: "flex", width: "100%", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 20, background: "#FBEDE7", border: "1px solid #EBC9BA", textAlign: "left", fontSize: 13, fontWeight: 600, fontFamily: "system-ui, sans-serif", color: "#C75D3B", cursor: "pointer" }}>
+      Revisá Pendiente TC: se borró {items.length === 1 ? "un gasto" : `${items.length} gastos`} que ya le había sumado {money(total, "EUR")} (toca para marcar como revisado)
+    </button>
+  );
+}
+
 export function TodayButton({ viewMonth, setViewMonth }) {
   const now = new Date();
   const isCurrentMonth = viewMonth.getFullYear() === now.getFullYear() && viewMonth.getMonth() === now.getMonth();

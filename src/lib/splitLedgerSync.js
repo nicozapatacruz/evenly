@@ -1,5 +1,6 @@
 import { supabase } from "./supabaseClient.js";
 import { fetchAllRows } from "./moneyManagerData.js";
+import { CUSTOM_USER_CONFIG } from "./customUserConfig.js";
 
 /* =========================================================================
    SINCRONIZACIÓN SPLIT LEDGER → MONEY MANAGER — reconciliación completa del
@@ -172,7 +173,98 @@ function computeDesiredTransactions(link, ctx, choicesBySourceKey) {
   return desired;
 }
 
-async function reconcileLink(link, userId, mainCurrency) {
+// Hecho a medida para un usuario puntual (ver customUserConfig.js) -- no es
+// parte de la sincronización genérica, vive aparte a propósito para no
+// contaminar la lógica de todos con un hábito personal de uno solo. Cuando
+// ese usuario crea un gasto en el grupo de Split Ledger indicado, pagado con
+// la cuenta indicada, y presta una parte, esa parte se suma a la
+// transacción manual "Pendiente TC" que ya maneja él mismo mes a mes (en vez
+// de que tenga que sumarla a mano cada vez).
+//
+// Nunca resta ni resetea nada sola, y nunca crea la fila "Pendiente TC" si
+// no existe todavía (la maneja el usuario) -- solo suma, una vez por gasto
+// (ver sl_mm_pendiente_tc_contributions, evita sumar dos veces si esto
+// corre de nuevo para el mismo gasto). Si el gasto se borra después de ya
+// haber sumado, NO se resta solo (podría ya haber movido/reseteado esa fila
+// a un mes nuevo) -- ver la pantalla que avisa de esto para que lo corrija
+// a mano.
+async function applyPendienteTcAutoSum(link, userId, userEmail, ctx, choicesBySourceKey) {
+  const config = CUSTOM_USER_CONFIG[userEmail]?.pendienteTcAutoSum;
+  if (!config || ctx.groupName !== config.splitGroupName) return;
+
+  const { data: accounts } = await supabase
+    .from("mm_accounts")
+    .select("id, name")
+    .eq("user_id", userId)
+    .eq("deleted", false)
+    .in("name", [config.tcAccountName, config.pendienteAccountName]);
+  const tcAccount = (accounts || []).find((a) => a.name === config.tcAccountName);
+  const pendienteAccount = (accounts || []).find((a) => a.name === config.pendienteAccountName);
+  if (!tcAccount || !pendienteAccount) return;
+
+  for (const e of ctx.expenses) {
+    if (e.deleted || !expenseInvolvesMe(e, ctx.memberId)) continue;
+    const shareAmt = Number(e.shares?.[ctx.memberId] || 0);
+    const paidAmt = Number(e.payers?.[ctx.memberId] || 0);
+    const diff = paidAmt - shareAmt;
+    if (diff <= EPSILON) continue; // solo cuando presto (pago de más), no cuando me prestan
+
+    const choice = choicesBySourceKey.get(`expense:${e.id}`);
+    const accountId = choice?.account_id || link.default_other_account_id;
+    if (accountId !== tcAccount.id) continue; // este gasto puntual no se pagó con esa cuenta
+
+    const { data: already } = await supabase
+      .from("sl_mm_pendiente_tc_contributions")
+      .select("id")
+      .eq("link_id", link.id).eq("source_kind", "expense").eq("source_id", e.id)
+      .maybeSingle();
+    if (already) continue;
+
+    const { data: pendienteTcTx } = await supabase
+      .from("mm_transactions")
+      .select("id, amount")
+      .eq("user_id", userId).eq("account_id", tcAccount.id).eq("to_account_id", pendienteAccount.id)
+      .eq("title", config.pendienteTcTitle).eq("deleted", false)
+      .maybeSingle();
+    if (!pendienteTcTx) continue; // no existe todavía esa fila -- la maneja el usuario, no se auto-crea
+
+    const { error: updateError } = await supabase
+      .from("mm_transactions")
+      .update({ amount: Number(pendienteTcTx.amount) + diff })
+      .eq("id", pendienteTcTx.id);
+    if (updateError) { console.error("applyPendienteTcAutoSum: no se pudo sumar", updateError); continue; }
+
+    const { error: insertError } = await supabase
+      .from("sl_mm_pendiente_tc_contributions")
+      .insert({ link_id: link.id, source_kind: "expense", source_id: e.id, amount: diff });
+    if (insertError) { console.error("applyPendienteTcAutoSum: no se pudo registrar el aporte", insertError); continue; }
+
+    await updatePendienteTcNote(link, pendienteTcTx.id);
+  }
+}
+
+// Nota de "Pendiente TC" con los últimos 5 aportes automáticos (fecha +
+// monto) -- se regenera entera desde sl_mm_pendiente_tc_contributions cada
+// vez (nunca se parsea/edita el texto anterior), así nunca se puede romper
+// el formato ni duplicar una línea.
+async function updatePendienteTcNote(link, pendienteTcTxId) {
+  const { data: recent } = await supabase
+    .from("sl_mm_pendiente_tc_contributions")
+    .select("amount, created_at")
+    .eq("link_id", link.id)
+    .order("created_at", { ascending: false })
+    .limit(5);
+  if (!recent?.length) return;
+  const lines = recent.map((c) => {
+    const date = new Date(c.created_at).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
+    return `${date}: +€${Number(c.amount).toFixed(2)}`;
+  });
+  const memo = "Últimos aportes automáticos:\n" + lines.join("\n");
+  const { error } = await supabase.from("mm_transactions").update({ memo }).eq("id", pendienteTcTxId);
+  if (error) console.error("updatePendienteTcNote: no se pudo actualizar la nota", error);
+}
+
+async function reconcileLink(link, userId, userEmail, mainCurrency) {
   const ctx = await loadLinkContext(link, userId);
   if (!ctx) return; // vínculo congelado, no se toca nada
 
@@ -279,9 +371,11 @@ async function reconcileLink(link, userId, mainCurrency) {
     const { error } = await supabase.from("mm_transactions").update({ deleted: true }).in("id", toDelete);
     if (error) console.error("reconcileSplitLedger: no se pudo borrar", error);
   }
+
+  await applyPendienteTcAutoSum(link, userId, userEmail, ctx, choicesBySourceKey);
 }
 
-export async function reconcileSplitLedger(userId) {
+export async function reconcileSplitLedger(userId, userEmail) {
   if (!userId) return;
   const { data: links } = await supabase.from("sl_mm_links").select("*").eq("user_id", userId).eq("active", true);
   if (!links?.length) return;
@@ -290,7 +384,43 @@ export async function reconcileSplitLedger(userId) {
   const mainCurrency = settingsRow?.main_currency || "EUR";
 
   for (const link of links) {
-    try { await reconcileLink(link, userId, mainCurrency); }
+    try { await reconcileLink(link, userId, userEmail, mainCurrency); }
     catch (e) { console.error("reconcileSplitLedger: falló el vínculo", link.id, e); }
   }
+}
+
+// Aportes a "Pendiente TC" (ver applyPendienteTcAutoSum) cuyo gasto de
+// origen ya fue borrado en Split Ledger -- como esa suma nunca se revierte
+// sola, esto es lo que alimenta el aviso para que el usuario la corrija a
+// mano. `acknowledged` los saca de la lista sin borrar el historial.
+export async function getPendienteTcReviewItems(userId, userEmail) {
+  const config = CUSTOM_USER_CONFIG[userEmail]?.pendienteTcAutoSum;
+  if (!config) return [];
+
+  const { data: links } = await supabase.from("sl_mm_links").select("id").eq("user_id", userId);
+  const linkIds = (links || []).map((l) => l.id);
+  if (!linkIds.length) return [];
+
+  const { data: contributions } = await supabase
+    .from("sl_mm_pendiente_tc_contributions")
+    .select("id, source_kind, source_id, amount, created_at")
+    .in("link_id", linkIds)
+    .eq("acknowledged", false);
+  if (!contributions?.length) return [];
+
+  const expenseIds = contributions.filter((c) => c.source_kind === "expense").map((c) => c.source_id);
+  const { data: expenses } = await supabase.from("expenses").select("id, deleted, description").in("id", expenseIds);
+  const expenseById = new Map((expenses || []).map((e) => [e.id, e]));
+
+  return contributions
+    .filter((c) => {
+      const e = expenseById.get(c.source_id);
+      return !e || e.deleted;
+    })
+    .map((c) => ({ ...c, expenseDescription: expenseById.get(c.source_id)?.description || null }));
+}
+
+export async function acknowledgePendienteTcReviewItem(id) {
+  const { error } = await supabase.from("sl_mm_pendiente_tc_contributions").update({ acknowledged: true }).eq("id", id);
+  if (error) throw error;
 }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabaseClient.js";
 import { dateInputValueInZone, parseAmountInput } from "./helpers.jsx";
 import { hasActiveFilters, matchesFilters } from "./filterHelpers.js";
-import { reconcileSplitLedger } from "./splitLedgerSync.js";
+import { reconcileSplitLedger, getPendienteTcReviewItems, acknowledgePendienteTcReviewItem } from "./splitLedgerSync.js";
 
 // Todo lo de Money Manager vive en tablas con prefijo mm_, separadas de las
 // de Split Ledger a propósito (ver memoria "money-manager-categories-merge-pending":
@@ -209,7 +209,7 @@ export function computeCreditCardBalance(accountId, transactions, statementDay, 
   return { pasado, actual };
 }
 
-export function useMoneyManager(userId) {
+export function useMoneyManager(userId, userEmail) {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [groups, setGroups] = useState([]);
   const [accounts, setAccounts] = useState([]);
@@ -217,6 +217,7 @@ export function useMoneyManager(userId) {
   const [accountTotals, setAccountTotals] = useState([]);
   const [recurring, setRecurring] = useState([]);
   const [slLinks, setSlLinks] = useState([]);
+  const [pendienteTcReview, setPendienteTcReview] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -224,7 +225,7 @@ export function useMoneyManager(userId) {
     await generateDueRecurring(userId);
     // Antes del auto-pago: puede haber transferencias de préstamo (Split
     // Ledger) que recién se crean acá y afectan el saldo de una tarjeta.
-    await reconcileSplitLedger(userId);
+    await reconcileSplitLedger(userId, userEmail);
     await runCreditCardAutoPay(userId);
     // Los balances se agregan del lado del servidor (vista mm_account_totals,
     // ver .mm_views.sql) en vez de traer cada transacción y sumar acá — así
@@ -253,6 +254,7 @@ export function useMoneyManager(userId) {
     setAccountTotals(at.data || []);
     setRecurring(r.data || []);
     setSlLinks(sl.data || []);
+    setPendienteTcReview(await getPendienteTcReviewItems(userId, userEmail));
 
     // Cuenta recién creada, nunca usada — la sembramos con lo que trae la
     // app original de fábrica, en vez de dejarla completamente vacía.
@@ -272,11 +274,19 @@ export function useMoneyManager(userId) {
       setCategories(c.data || []);
     }
     setLoading(false);
-  }, [userId]);
+  }, [userId, userEmail]);
 
   useEffect(() => { load(); }, [load]);
 
-  return { settings, groups, accounts, categories, accountTotals, recurring, slLinks, loading, reload: load };
+  const acknowledgePendienteTcReview = useCallback(async (id) => {
+    await acknowledgePendienteTcReviewItem(id);
+    setPendienteTcReview((prev) => prev.filter((item) => item.id !== id));
+  }, []);
+
+  return {
+    settings, groups, accounts, categories, accountTotals, recurring, slLinks, loading, reload: load,
+    pendienteTcReview, acknowledgePendienteTcReview,
+  };
 }
 
 // Transacciones del mes visible (Transacciones/Diario) — se pide acotado por

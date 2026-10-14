@@ -1,7 +1,7 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
 import { Plus, Search, SlidersHorizontal, Star, Camera } from "lucide-react";
 import { styles } from "../../lib/styles.js";
-import { RootHeader, MonthNav, TodayButton, FiltersActiveBanner, PendingRateBanner, HeaderMenu, EmptyState, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
+import { RootHeader, MonthNav, TodayButton, FiltersActiveBanner, PendingRateBanner, PendienteTcReviewBanner, HeaderMenu, EmptyState, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
 import { money, todayInputValue } from "../../lib/helpers.jsx";
 import { useMonthTransactions, usePendingRateTransactions, currenciesInUse } from "../../lib/moneyManagerData.js";
 import { hasActiveFilters, matchesFilters } from "../../lib/filterHelpers.js";
@@ -14,7 +14,7 @@ import { TransactionDayGroups } from "./TransactionDayGroups.jsx";
    Resumen que acá no replicamos.
    ========================================================================= */
 
-export default function DiarioTab({ userId, settings, groups, accounts, categories, slLinks, viewMonth, setViewMonth, onNewTransaction, onEditTransaction, onOpenSearch, onOpenBookmarks, onOpenPhotoImport, filters, onOpenFilters, onClearFilters }) {
+export default function DiarioTab({ userId, settings, groups, accounts, categories, slLinks, viewMonth, setViewMonth, onNewTransaction, onEditTransaction, onOpenSearch, onOpenBookmarks, onOpenPhotoImport, filters, onOpenFilters, onClearFilters, pendienteTcReview = [], onAcknowledgePendienteTcReview }) {
   // Solo pedimos las transacciones del mes visible (no toda la tabla) — se
   // refetchea solo cuando cambiás de mes.
   const { transactions: monthTx, loading } = useMonthTransactions(userId, viewMonth);
@@ -142,6 +142,12 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
             marginBottom extra de 4 (8 del gap + 4 = 12). */}
         <div ref={listRef} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {hasActiveFilters(filters) && <FiltersActiveBanner onOpen={onOpenFilters} onClear={onClearFilters} />}
+          {pendienteTcReview.length > 0 && (
+            <PendienteTcReviewBanner
+              items={pendienteTcReview}
+              onAcknowledgeAll={() => pendienteTcReview.forEach((item) => onAcknowledgePendienteTcReview(item.id))}
+            />
+          )}
           {loading ? (
             <EmptyState title="Cargando transacciones…" />
           ) : filtered.length === 0 ? (

@@ -8,6 +8,7 @@ import { styles } from "../../lib/styles.js";
 import { RootHeader, TopBar, ConfirmInline, Footer, Field, EmptyState } from "../../components/Shared.jsx";
 import { money, useScrollToTopOnChange } from "../../lib/helpers.jsx";
 import { accountBalance, computeCreditCardBalance, disableAutoPayForDeletedAccounts, useCreditCardActivity } from "../../lib/moneyManagerData.js";
+import { CUSTOM_USER_CONFIG } from "../../lib/customUserConfig.js";
 import AccountDetailScreen from "./AccountDetailScreen.jsx";
 import AccountActivityScreen from "./AccountActivityScreen.jsx";
 import TransactionForm from "./TransactionForm.jsx";
@@ -17,14 +18,6 @@ import TransactionForm from "./TransactionForm.jsx";
    list: pantalla raíz (RootHeader, igual que Config/Tus Grupos).
    manageGroups / manageAccounts: pantallas de edición (TopBar).
    ========================================================================= */
-
-// Ver el comentario junto a su uso (más abajo, dentro de CuentasTab) para el
-// porqué de "Saldo Real" y por qué es una config por email en vez de algo
-// genérico.
-const REAL_BALANCE_CONFIG = {
-  "nicozapatacruz@gmail.com": { group: "Santander", saldoName: "Saldo", tcName: "TC Santander", pendienteName: "Pendiente" },
-  "paulina.sanchezbt@gmail.com": { group: "Santander", saldoName: "Saldo", tcName: "Tarjeta", pendienteName: "Pendiente" },
-};
 
 export default function CuentasTab({ session, settings, groups, accounts, accountTotals, categories, slLinks, onOpenSplitLedgerGroup, onOpenSplitLedgerExpense, reload, reloadCategories, showError, showInfo, view, setView, onSaveMoneyTransaction, onDeleteMoneyTransaction, onBookmarkMoneyTransaction }) {
   const balanceColor = (n) => (n > 0.004 ? "#3B6E62" : n < -0.004 ? "#B0473A" : "#6B6355");
@@ -38,7 +31,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
 
   // "Saldo Real" — solo para quienes usan este patrón puntual de reconciliar
   // a mano (Nico y Paulina, cada uno con sus propios nombres de cuenta, ver
-  // REAL_BALANCE_CONFIG arriba). Fórmula: el balance de "Saldo" más el de la
+  // customUserConfig.js). Fórmula: el balance de "Saldo" más el de la
   // tarjeta (ya negativo, es deuda) más lo que de esa deuda en realidad no
   // es suyo — las transferencias puntuales que hacen a fin de mes de la
   // tarjeta a "Pendiente" para separar gastos compartidos (ej. pagarle algo
@@ -46,7 +39,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
   // para esto (mezcla esas transferencias con otras cosas sueltas, como un
   // regalo o efectivo por sacar) — por eso se suma la transferencia
   // puntual, no el balance de la cuenta entera.
-  const realBalanceConfig = REAL_BALANCE_CONFIG[session.email];
+  const realBalanceConfig = CUSTOM_USER_CONFIG[session.email]?.realBalance;
   const [pendienteTcSum, setPendienteTcSum] = useState(0);
   // Arranca en null (no en 0) a propósito: mientras no se sabe el valor
   // real todavía, mejor no mostrar la fila "Saldo Real" que mostrar un

@@ -213,31 +213,38 @@ async function applyPendienteTcAutoSum(link, userId, userEmail, ctx, choicesBySo
     const accountId = choice?.account_id || link.default_other_account_id;
     if (accountId !== tcAccount.id) continue; // este gasto puntual no se pagó con esa cuenta
 
-    const { data: already } = await supabase
-      .from("sl_mm_pendiente_tc_contributions")
-      .select("id")
-      .eq("link_id", link.id).eq("source_kind", "expense").eq("source_id", e.id)
-      .maybeSingle();
-    if (already) continue;
-
     const { data: pendienteTcTx } = await supabase
       .from("mm_transactions")
-      .select("id, amount")
+      .select("id, amount, amount_main")
       .eq("user_id", userId).eq("account_id", tcAccount.id).eq("to_account_id", pendienteAccount.id)
       .eq("title", config.pendienteTcTitle).eq("deleted", false)
       .maybeSingle();
     if (!pendienteTcTx) continue; // no existe todavía esa fila -- la maneja el usuario, no se auto-crea
 
-    const { error: updateError } = await supabase
-      .from("mm_transactions")
-      .update({ amount: Number(pendienteTcTx.amount) + diff })
-      .eq("id", pendienteTcTx.id);
-    if (updateError) { console.error("applyPendienteTcAutoSum: no se pudo sumar", updateError); continue; }
-
+    // Primero RESERVAR el registro (insert liso, no upsert -- si ya existe,
+    // la restricción unique lo rechaza) y recién DESPUÉS sumar el monto. Al
+    // revés (como estaba antes) dos corridas casi al mismo tiempo podían
+    // sumar las dos antes de que ninguna llegara a guardar el registro,
+    // duplicando la suma sin que quedara ningún rastro de que pasó.
     const { error: insertError } = await supabase
       .from("sl_mm_pendiente_tc_contributions")
       .insert({ link_id: link.id, source_kind: "expense", source_id: e.id, amount: diff });
-    if (insertError) { console.error("applyPendienteTcAutoSum: no se pudo registrar el aporte", insertError); continue; }
+    if (insertError) {
+      if (insertError.code !== "23505") console.error("applyPendienteTcAutoSum: no se pudo registrar el aporte", insertError);
+      continue; // 23505 = unique violation: ya se aplicó (esta misma corrida u otra), no sumar de nuevo
+    }
+
+    // amount_main (no solo amount) es lo que usa el saldo corriente de la
+    // cuenta (AccountActivityScreen.jsx) -- quedarse corto acá hace que la
+    // fila muestre el monto nuevo pero el saldo arrastrado siga el viejo.
+    const { error: updateError } = await supabase
+      .from("mm_transactions")
+      .update({
+        amount: Number(pendienteTcTx.amount) + diff,
+        amount_main: Number(pendienteTcTx.amount_main) + diff,
+      })
+      .eq("id", pendienteTcTx.id);
+    if (updateError) { console.error("applyPendienteTcAutoSum: no se pudo sumar", updateError); continue; }
 
     await updatePendienteTcNote(link, pendienteTcTx.id);
   }
@@ -250,14 +257,26 @@ async function applyPendienteTcAutoSum(link, userId, userEmail, ctx, choicesBySo
 async function updatePendienteTcNote(link, pendienteTcTxId) {
   const { data: recent } = await supabase
     .from("sl_mm_pendiente_tc_contributions")
-    .select("amount, created_at")
+    .select("source_kind, source_id, amount, created_at")
     .eq("link_id", link.id)
     .order("created_at", { ascending: false })
     .limit(5);
   if (!recent?.length) return;
+
+  // Descripción del gasto de origen, para que la nota diga de qué fue cada
+  // aporte -- se lee al vuelo (no se guarda duplicada en la tabla de
+  // aportes), así que si el gasto se renombra después, la nota sigue la
+  // descripción actual, no la de cuando se aplicó.
+  const expenseIds = recent.filter((c) => c.source_kind === "expense").map((c) => c.source_id);
+  const { data: expenses } = expenseIds.length
+    ? await supabase.from("expenses").select("id, description").in("id", expenseIds)
+    : { data: [] };
+  const descriptionById = new Map((expenses || []).map((e) => [e.id, e.description]));
+
   const lines = recent.map((c) => {
     const date = new Date(c.created_at).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
-    return `${date}: +€${Number(c.amount).toFixed(2)}`;
+    const description = descriptionById.get(c.source_id);
+    return `${date}: +€${Number(c.amount).toFixed(2)}${description ? ` ${description}` : ""}`;
   });
   const memo = "Últimos aportes automáticos:\n" + lines.join("\n");
   const { error } = await supabase.from("mm_transactions").update({ memo }).eq("id", pendienteTcTxId);

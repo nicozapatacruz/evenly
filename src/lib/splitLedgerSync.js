@@ -255,12 +255,16 @@ async function applyPendienteTcAutoSum(link, userId, userEmail, ctx, choicesBySo
 // vez (nunca se parsea/edita el texto anterior), así nunca se puede romper
 // el formato ni duplicar una línea.
 async function updatePendienteTcNote(link, pendienteTcTxId) {
+  // Más de 5 a propósito: un gasto de prueba borrado después (ver el aviso
+  // de "Pendiente TC" en Transacciones) no debería seguir ocupando un lugar
+  // en "los últimos 5" solo porque su aporte sigue registrado -- se trae de
+  // más y se filtra, para quedarse con los últimos 5 de verdad vigentes.
   const { data: recent } = await supabase
     .from("sl_mm_pendiente_tc_contributions")
     .select("source_kind, source_id, amount, created_at")
     .eq("link_id", link.id)
     .order("created_at", { ascending: false })
-    .limit(5);
+    .limit(20);
   if (!recent?.length) return;
 
   // Descripción del gasto de origen, para que la nota diga de qué fue cada
@@ -269,13 +273,16 @@ async function updatePendienteTcNote(link, pendienteTcTxId) {
   // descripción actual, no la de cuando se aplicó.
   const expenseIds = recent.filter((c) => c.source_kind === "expense").map((c) => c.source_id);
   const { data: expenses } = expenseIds.length
-    ? await supabase.from("expenses").select("id, description").in("id", expenseIds)
+    ? await supabase.from("expenses").select("id, description, deleted").in("id", expenseIds)
     : { data: [] };
-  const descriptionById = new Map((expenses || []).map((e) => [e.id, e.description]));
+  const expenseById = new Map((expenses || []).map((e) => [e.id, e]));
 
-  const lines = recent.map((c) => {
+  const active = recent.filter((c) => !expenseById.get(c.source_id)?.deleted).slice(0, 5);
+  if (!active.length) return;
+
+  const lines = active.map((c) => {
     const date = new Date(c.created_at).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
-    const description = descriptionById.get(c.source_id);
+    const description = expenseById.get(c.source_id)?.description;
     return `${date}: +€${Number(c.amount).toFixed(2)}${description ? ` ${description}` : ""}`;
   });
   const memo = "Últimos aportes automáticos:\n" + lines.join("\n");

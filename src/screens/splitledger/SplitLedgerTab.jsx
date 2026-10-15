@@ -1871,6 +1871,18 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
           { link_id: activeLink.id, source_kind: "expense", source_id: finalId, account_id: mmAccountId, category_id: mmCategoryId || null, loan_account_id: mmLoanAccountId || null },
           { onConflict: "link_id,source_kind,source_id" }
         );
+        // Custom para Nico/Paulina (ver sync_split_category_to_other_members
+        // en la base, y customUserConfig.js): tu "Categoría personal" se le
+        // sugiere al otro miembro vinculado del grupo, buscando el nombre
+        // equivalente en SU propio Money Manager -- no pisa una categoría
+        // que el otro ya tenga elegida, solo la rellena si está vacía.
+        const categoryName = moneyManager.categories.find((c) => c.id === mmCategoryId)?.name;
+        if (categoryName) {
+          const { error: syncError } = await supabase.rpc("sync_split_category_to_other_members", {
+            p_link_id: activeLink.id, p_source_kind: "expense", p_source_id: finalId, p_category_name: categoryName,
+          });
+          if (syncError) console.error("No se pudo sincronizar la categoría con el otro miembro", syncError);
+        }
         await moneyManager.reload();
       }
     } catch (e) {

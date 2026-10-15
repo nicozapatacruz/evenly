@@ -11,6 +11,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { styles } from "../../lib/styles.js";
 import { TopBar, RootHeader, ConfirmInline, Modal, Footer, PhotoPicker, Field, ToggleField, PickerField, SplitLedgerIcon, EmptyState, CalculatorAmountInput } from "../../components/Shared.jsx";
 import { linkGroupToAccount, updateLinkDefaults, unlinkGroup } from "../../lib/splitLedgerLink.js";
+import { useRecentNoteTitles } from "../../lib/moneyManagerData.js";
 import {
   uid, CURRENCIES, CURRENCY_LIST, money, parseAmountInput, ICON_KEYS, IconComp,
   DEFAULT_CATEGORIES, groupCategories, catInfo, colorFor, initials, shortName, nameOf,
@@ -1640,6 +1641,15 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
   const myMemberId = group.members.find((m) => m.linkedUserId === session?.userId)?.id;
 
   const [description, setDescription] = useState(existing?.description || "");
+  // Autocompletado de Descripción con lo que ya tenés en Money Manager (no
+  // con otros gastos de Split Ledger -- se pensó y se descartó a propósito)
+  // cuando el grupo está vinculado, igual que ya hace el campo "Descripción"
+  // de un gasto de Money Manager (mismo hook, mismo criterio de "activado
+  // en Config"). Mismas 2 banderas que allá: "Focused" sigue el foco real,
+  // "Dismissed" se prende solo al elegir una sugerencia.
+  const [descriptionFocused, setDescriptionFocused] = useState(false);
+  const [descriptionDismissed, setDescriptionDismissed] = useState(false);
+  const recentNoteTitles = useRecentNoteTitles(session?.userId);
   const [amount, setAmount] = useState(existing ? String(existing.amount) : "");
   const [currency, setCurrency] = useState(existing?.currency || baseCurrency);
   const [category, setCategory] = useState(existing?.category || groupCategories(group)[0]?.id);
@@ -1772,6 +1782,9 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
   const iParticipate = participants.has(myMemberId);
   const mmInvolved = !!(activeLink && myMemberId && (iPay || iParticipate));
   const showMmCategory = !!(activeLink && myMemberId && iParticipate);
+  const descriptionSuggestions = activeLink && moneyManager.settings.autocomplete_notes && description.trim()
+    ? recentNoteTitles.filter((t) => t.toLowerCase().includes(description.trim().toLowerCase()) && t.toLowerCase() !== description.trim().toLowerCase()).slice(0, 5)
+    : [];
 
   // La primera vez (por vínculo/gasto): trae la elección ya guardada para
   // ESTE gasto puntual, si existe (nunca se pisa después). Si no hay
@@ -2014,7 +2027,30 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
 
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
           <Field label="Descripción" required style={{ flex: 1 }}>
-            <input style={{ ...styles.input, height: 44, boxSizing: "border-box" }} value={description} onChange={(e) => setDescription(e.target.value)} onBlur={() => touch("description")} placeholder="Cena, taxi, supermercado…" />
+            <div style={{ position: "relative" }}>
+              <input
+                style={{ ...styles.input, width: "100%", height: 44, boxSizing: "border-box" }}
+                value={description}
+                onChange={(e) => { setDescription(e.target.value); setDescriptionDismissed(false); }}
+                onFocus={() => setDescriptionFocused(true)}
+                onBlur={() => { setDescriptionFocused(false); touch("description"); }}
+                placeholder="Cena, taxi, supermercado…"
+              />
+              {descriptionFocused && !descriptionDismissed && descriptionSuggestions.length > 0 && (
+                <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, zIndex: 5, border: "1px solid #DDD2BE", borderRadius: 10, background: "#fff", overflow: "hidden", boxShadow: "0 4px 10px rgba(0,0,0,0.08)" }}>
+                  {descriptionSuggestions.map((s) => (
+                    <button
+                      type="button"
+                      key={s}
+                      onMouseDown={(e) => { e.preventDefault(); setDescription(s); setDescriptionDismissed(true); }}
+                      style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 12px", fontSize: 13, fontFamily: "system-ui, sans-serif", border: "none", background: "#fff", color: "#2B2620", cursor: "pointer" }}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </Field>
           <label title="Añadir foto" style={{ width: 44, height: 44, boxSizing: "border-box", borderRadius: 10, border: `1px solid ${imageUrl ? "#C75D3B" : "#DDD2BE"}`, background: imageUrl ? "#C75D3B1a" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, color: imageUrl ? "#C75D3B" : "#6B6355" }}>
             <Camera size={18} />

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Trash2 } from "lucide-react";
-import { supabase } from "../../lib/supabaseClient.js";
+import { offlineSupabase as supabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, Footer, ConfirmInline, IconInput, PickerField, ToggleField, Field } from "../../components/Shared.jsx";
 import { money, CURRENCIES, CURRENCY_LIST } from "../../lib/helpers.jsx";

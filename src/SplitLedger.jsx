@@ -1,8 +1,13 @@
-import React, { useState, useEffect, useLayoutEffect, useCallback } from "react";
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import { supabase } from "./lib/supabaseClient.js";
+import { offlineSupabase } from "./lib/offlineSupabase.js";
+import { db } from "./lib/localDb.js";
+import { useConnectivity, getIsOnline } from "./lib/connectivity.js";
+import { runFullSync } from "./lib/syncEngine.js";
 import { BookOpen, BarChart3, Coins, Divide, MoreHorizontal, MailCheck } from "lucide-react";
 import { styles, globalCss } from "./lib/styles.js";
 import { Field, PasswordInput } from "./components/Shared.jsx";
+import ReconnectSyncGate from "./components/ReconnectSyncGate.jsx";
 import SplitLedgerTab from "./screens/splitledger/SplitLedgerTab.jsx";
 import ConfigScreen from "./screens/config/ConfigScreen.jsx";
 import CuentasTab from "./screens/moneymanager/CuentasTab.jsx";
@@ -47,12 +52,21 @@ function DiarioFiltersScreen({ filters, setFilters, groups, accounts, categories
    AUTH — usuarios, sesión, invitaciones
    ========================================================================= */
 
+// Acotada a 1.8s (mismo criterio que probeOnline en connectivity.js): sin
+// esto, sin señal, esta consulta agotaba sola los 3 reintentos automáticos
+// de supabase-js (1s + 2s + 4s = 7s) antes de rendirse — la pantalla de
+// "Cargando…" se quedaba pegada esos 7s enteros antes de poder caer al
+// fallback de sesión cacheada (ver resolveSession).
 async function fetchProfile(userId) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1800);
   const { data, error } = await supabase
     .from("profiles")
     .select("username, display_name, photo_url, default_group_id, split_ledger_enabled")
     .eq("id", userId)
-    .single();
+    .single()
+    .abortSignal(controller.signal);
+  clearTimeout(timeout);
   if (error) throw error;
   return data;
 }
@@ -67,6 +81,44 @@ function toSession(authUser, profile) {
     defaultGroupId: profile.default_group_id || null,
     splitLedgerEnabled: profile.split_ledger_enabled !== false,
   };
+}
+
+// Último `session` armado con éxito, para poder entrar a la app offline sin
+// depender de que `fetchProfile` (una consulta de red) responda — sin esto,
+// abrir la app sin señal te mandaba al login aunque tu sesión de Supabase
+// (el JWT, que sí vive local) siguiera siendo válida.
+const CACHED_SESSION_KEY = "evenly_cachedSession";
+
+function loadCachedSession(userId) {
+  try {
+    const cached = JSON.parse(localStorage.getItem(CACHED_SESSION_KEY) || "null");
+    return cached && cached.userId === userId ? cached : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveCachedSession(session) {
+  try { localStorage.setItem(CACHED_SESSION_KEY, JSON.stringify(session)); } catch { /* storage lleno o deshabilitado, no es crítico */ }
+}
+
+// `fetchProfile` + `toSession`, con fallback a la última sesión cacheada de
+// ESTE mismo usuario si la consulta falla (sin señal, o cualquier otro error
+// de red) — nunca se usa el cache de un usuario distinto al que ya autenticó
+// Supabase. Si nunca hubo una sesión cacheada para este usuario (primera vez
+// en este dispositivo, sin señal), no hay nada mejor que mostrar: se
+// propaga el error y el caller cae al comportamiento de siempre.
+async function resolveSession(authUser) {
+  try {
+    const profile = await fetchProfile(authUser.id);
+    const session = toSession(authUser, profile);
+    saveCachedSession(session);
+    return session;
+  } catch (e) {
+    const cached = loadCachedSession(authUser.id);
+    if (cached) return cached;
+    throw e;
+  }
 }
 
 function useAuth() {
@@ -85,9 +137,9 @@ function useAuth() {
       const { data: { session: authSession } } = await supabase.auth.getSession();
       if (authSession?.user) {
         try {
-          const profile = await fetchProfile(authSession.user.id);
-          if (!cancelled) setSession(toSession(authSession.user, profile));
-        } catch { /* perfil aún no creado por el trigger, o error de red */ }
+          const session = await resolveSession(authSession.user);
+          if (!cancelled) setSession(session);
+        } catch { /* perfil aún no creado por el trigger, sin cache y sin señal */ }
       }
       if (!cancelled) setAuthLoading(false);
     })();
@@ -96,8 +148,7 @@ function useAuth() {
       if (event === "PASSWORD_RECOVERY") setRecovering(true);
       if (!authSession?.user) { setSession(null); return; }
       try {
-        const profile = await fetchProfile(authSession.user.id);
-        setSession(toSession(authSession.user, profile));
+        setSession(await resolveSession(authSession.user));
       } catch { /* ignorar, se resuelve en el próximo evento */ }
     });
 
@@ -171,7 +222,22 @@ function useAuth() {
     setSession(toSession(authSession.user, profile));
   }, []);
 
-  return { session, authLoading, register, login, logout, refreshProfile, recovering, resetPassword, completeRecovery, cancelRecovery };
+  // Para los campos de "perfil" que ahora son offline-capaces (nombre
+  // visible, toggle de Split Ledger, grupo por defecto) — actualiza la
+  // sesión en memoria y el cache directo, sin pasar por fetchProfile (que
+  // necesita red). El caller ya mandó la escritura real por offlineSupabase
+  // (online de una, o encolada) antes de llamar esto; acá solo se refleja
+  // localmente lo que ya se sabe que va a quedar así.
+  const patchSession = useCallback((patch) => {
+    setSession((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+      saveCachedSession(next);
+      return next;
+    });
+  }, []);
+
+  return { session, authLoading, register, login, logout, refreshProfile, patchSession, recovering, resetPassword, completeRecovery, cancelRecovery };
 }
 
 // Select con resource embedding: PostgREST expande cada FK respetando la RLS propia
@@ -267,8 +333,21 @@ function useGroups(userId) {
   const [groups, setGroups] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const useCache = useCallback(async () => {
+    // Sin señal (u otro error de red): último estado cacheado, de solo
+    // lectura — nunca se escribe contra esta copia.
+    const cached = await db.sl_groups_cache.toArray().catch(() => []);
+    setGroups(cached);
+  }, []);
+
   const load = useCallback(async () => {
     if (!userId) { setGroups([]); setLoading(false); return; }
+    // getIsOnline() (no navigator.onLine): evita intentar la red cuando ya
+    // sabemos que está caída — una consulta fallida reintenta sola hasta 3
+    // veces con espera creciente (1s, 2s, 4s) antes de darse por vencida, y
+    // esto se llama seguido (al montar, al volver a la pestaña, etc.) — sin
+    // este freno, cada llamada de esas tarda ~7s en vez de resolverse al toque.
+    if (!getIsOnline()) { await useCache(); setLoading(false); return; }
     try {
       const { data, error } = await supabase
         .from("groups")
@@ -283,13 +362,19 @@ function useGroups(userId) {
       const mine = data
         .map((row) => toClientGroup(row, userId))
         .filter((g) => g.members.some((m) => m.linkedUserId === userId));
-      setGroups(sortGroupsForUser(mine, userId));
+      const sorted = sortGroupsForUser(mine, userId);
+      setGroups(sorted);
+      // Split Ledger es online-preferred: este snapshot ya traducido es el
+      // único cache (sl_groups_cache), solo se lee offline como último
+      // recurso — ver fallback más abajo.
+      await db.sl_groups_cache.clear();
+      await db.sl_groups_cache.bulkPut(sorted);
     } catch {
-      setGroups([]);
+      await useCache();
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, useCache]);
 
   useEffect(() => {
     load();
@@ -569,9 +654,42 @@ const TABS = [
    Ledger, las invitaciones y los toasts; reparte todo eso a los tabs.
    ========================================================================= */
 
-function AppShell({ session, onLogout, refreshProfile }) {
+function AppShell({ session, onLogout, refreshProfile, patchSession }) {
   const { groups, loading, reloadGroup, deleteGroup, reload: reloadGroups } = useGroups(session.userId);
   const moneyManager = useMoneyManager(session.userId, session.email);
+  const isOnline = useConnectivity();
+  // Tapa toda la app mientras sincroniza — al arrancar (si hay señal) y en
+  // toda transición offline→online. El efecto de abajo reacciona solo a
+  // CAMBIOS de isOnline (incluido el primer render): arranca sincronizando
+  // si ya hay señal, no hace nada si arranca sin ella, y vuelve a
+  // sincronizar apenas isOnline pasa de false a true.
+  const [syncing, setSyncing] = useState(isOnline);
+  // Token (no un booleano "cancelled"): si isOnline parpadea (se va y vuelve
+  // más de una vez seguida) y dos sincronizaciones quedan superpuestas, solo
+  // la ÚLTIMA que arrancó puede apagar el cartel al terminar — así, sea cual
+  // sea el orden real en que las dos terminen, la más vieja nunca apaga el
+  // cartel mientras la más nueva todavía sigue corriendo. Un booleano
+  // "cancelled" (lo que había antes) tiene el problema contrario: bloquea
+  // TAMBIÉN el caso normal de una sola sincronización en curso cuando
+  // isOnline pasa a false a mitad de camino (el caso de todos los días,
+  // offline) -- bug real encontrado en vivo, el cartel se quedaba pegado
+  // para siempre. AppShell no se desmonta en este flujo (confirmado), así
+  // que no hace falta protegerse de eso acá tampoco.
+  const syncTokenRef = useRef(0);
+  useEffect(() => {
+    if (!isOnline) return;
+    const myToken = ++syncTokenRef.current;
+    (async () => {
+      setSyncing(true);
+      try {
+        await runFullSync(session.userId, session.email);
+        await reloadGroups();
+      } finally {
+        if (syncTokenRef.current === myToken) setSyncing(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOnline]);
   // Se guarda en localStorage para que sobreviva a cerrar y reabrir la app
   // (no solo pasar a segundo plano) — un recarga de página en frío siempre
   // vuelve a correr este useState desde cero, perdiendo cualquier estado en
@@ -653,14 +771,17 @@ function AppShell({ session, onLogout, refreshProfile }) {
     try {
       const payload = { ...tx, date: new Date(tx.date).toISOString() };
       const { error } = id
-        ? await supabase.from("mm_transactions").update(payload).eq("id", id)
+        ? await offlineSupabase.from("mm_transactions").update(payload).eq("id", id)
         // timezone solo se fija al crear, nunca al editar — es "dónde estabas
         // cuando pasó esto", no algo que deba cambiar si corregís el monto
         // de una transacción vieja desde otro país.
-        : await supabase.from("mm_transactions").insert({ user_id: session.userId, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, ...payload });
+        : await offlineSupabase.from("mm_transactions").insert({ user_id: session.userId, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, ...payload });
       if (error) throw error;
       if (recurring) {
-        const { error: recError } = await supabase.from("mm_recurring").insert({
+        // mm_recurring es de un solo escritor (igual que el resto de Money
+        // Manager) y ya se lee local-first -- no hay motivo real para que
+        // esto sea online-only, se encola igual que cualquier otra escritura.
+        const { error: recError } = await offlineSupabase.from("mm_recurring").insert({
           user_id: session.userId,
           type: tx.type,
           account_id: tx.account_id,
@@ -688,7 +809,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
   // ya es lo que filtran todas las vistas/consultas existentes.
   const deleteMoneyTransaction = async (id) => {
     try {
-      const { error } = await supabase.from("mm_transactions").update({ deleted: true }).eq("id", id);
+      const { error } = await offlineSupabase.from("mm_transactions").update({ deleted: true }).eq("id", id);
       if (error) throw error;
       await moneyManager.reload();
       showInfo("Transacción eliminada.");
@@ -719,12 +840,16 @@ function AppShell({ session, onLogout, refreshProfile }) {
   }, [toast]);
 
   const loadInvites = useCallback(async () => {
+    // Sin señal, no se toca — se deja lo que ya había en pantalla en vez de
+    // reintentar contra la red (ver mismo criterio en useGroups.load más
+    // arriba) y de vaciar la bandeja sin motivo real.
+    if (!getIsOnline()) return;
     const { data, error } = await supabase
       .from("invites")
       .select("id, group_id, member_id, groups(name), group_members(name), profiles!from_user_id(username)")
       .eq("to_user_id", session.userId)
       .eq("status", "pending");
-    if (error) { setInvites([]); return; }
+    if (error) return;
     setInvites(data.map((i) => ({
       inviteId: i.id,
       groupId: i.group_id,
@@ -751,6 +876,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
   }, [loadInvites]);
 
   const handleAcceptInvite = useCallback(async (invite) => {
+    if (!isOnline) { showError("Estás offline, no podés aceptar invitaciones ahora."); return; }
     try {
       const { error: e1 } = await supabase
         .from("group_members")
@@ -764,7 +890,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
       setActiveTab("splitledger");
       setSplitLedgerView({ screen: "group", groupId: invite.groupId });
     } catch (e) { showError(`No se pudo aceptar la invitación: ${e?.message || e}`); }
-  }, [session.userId, session.displayName, reloadGroup, loadInvites]);
+  }, [session.userId, session.displayName, reloadGroup, loadInvites, isOnline]);
 
   // De dónde vinimos al saltar de pestaña "de golpe" (Cuentas o una
   // transacción sincronizada → Split Ledger; Estadísticas → Buscador) — para
@@ -897,6 +1023,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
 
   return (
     <div style={styles.app}>
+      {syncing && <ReconnectSyncGate />}
       {toast && (
         <div
           style={{ ...styles.toast, background: toast.type === "success" ? "#3B6E62" : "#2B2620" }}
@@ -920,6 +1047,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           showInfo={showInfo}
           moneyManager={moneyManager}
           onBackOverride={deepLinkBack}
+          isOnline={isOnline}
         />
       )}
 
@@ -943,6 +1071,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           onSaveMoneyTransaction={saveMoneyTransaction}
           onDeleteMoneyTransaction={deleteMoneyTransaction}
           onBookmarkMoneyTransaction={bookmarkMoneyTransaction}
+          isOnline={isOnline}
         />
       )}
 
@@ -1005,6 +1134,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           reloadCategories={moneyManager.reload}
           showError={showError}
           showInfo={showInfo}
+          isOnline={isOnline}
           editingTransaction={statsView.transaction}
           defaultDate={statsView.date}
           onCancel={() => setStatsView({ screen: "drilldown", categoryId: statsView.categoryId, categoryName: statsView.categoryName, categoryIcon: statsView.categoryIcon, type: statsView.type })}
@@ -1123,6 +1253,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           reloadCategories={moneyManager.reload}
           showError={showError}
           showInfo={showInfo}
+          isOnline={isOnline}
           editingTransaction={ledgerView.transaction}
           defaultDate={ledgerView.date}
           prefillBookmark={ledgerView.prefillBookmark}
@@ -1147,6 +1278,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           onRejectInvite={handleRejectInvite}
           onLogout={onLogout}
           refreshProfile={refreshProfile}
+          patchSession={patchSession}
           groups={groups}
           reloadGroups={reloadGroups}
           onCreateGroup={() => goToSplitLedger("newGroup")}
@@ -1165,6 +1297,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
           moneyManagerScreen={moneyManagerScreen}
           setMoneyManagerScreen={setMoneyManagerScreen}
           onOpenSplitLedgerGroup={openSplitLedgerGroup}
+          isOnline={isOnline}
         />
       )}
 
@@ -1193,7 +1326,7 @@ function AppShell({ session, onLogout, refreshProfile }) {
 
 export default function SplitLedger() {
   const {
-    session, authLoading, register, login, logout, refreshProfile,
+    session, authLoading, register, login, logout, refreshProfile, patchSession,
     recovering, resetPassword, completeRecovery, cancelRecovery,
   } = useAuth();
 
@@ -1210,7 +1343,7 @@ export default function SplitLedger() {
           ? <RecoverPasswordScreen onComplete={completeRecovery} onCancel={cancelRecovery} />
           : !session
             ? <AuthScreen onLogin={login} onRegister={register} onForgotPassword={resetPassword} />
-            : <AppShell session={session} onLogout={logout} refreshProfile={refreshProfile} />}
+            : <AppShell session={session} onLogout={logout} refreshProfile={refreshProfile} patchSession={patchSession} />}
     </>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { supabase } from "../../lib/supabaseClient.js";
+import { offlineSupabase as supabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, ToggleField, Field } from "../../components/Shared.jsx";
 import { WEEKDAY_OPTIONS } from "../../lib/moneyManagerData.js";

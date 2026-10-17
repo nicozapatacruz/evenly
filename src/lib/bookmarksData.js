@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { supabase } from "./supabaseClient.js";
+import { useLiveQuery } from "dexie-react-hooks";
+import { db } from "./localDb.js";
+import { offlineSupabase as supabase } from "./offlineSupabase.js";
 
 /* =========================================================================
    MARCADORES — plantillas de transacción reutilizables (Money Manager, no
@@ -10,46 +11,28 @@ import { supabase } from "./supabaseClient.js";
    mirando solo sus propias filas.
    ========================================================================= */
 
+// Lectura local-first, igual que el resto de Money Manager (ver
+// moneyManagerData.js) — la copia local la trae syncEngine.js.
 export function useBookmarks(userId) {
-  const [bookmarks, setBookmarks] = useState([]);
-  const [loading, setLoading] = useState(true);
-  // Solo la carga inicial debe mostrar "Cargando…" — un reload() después de
-  // borrar/reordenar no debería, porque ya hay datos en pantalla (mostrar y
-  // esconder el texto empuja todo el contenido de abajo, un salto feo).
-  const loadedOnceRef = useRef(false);
-
-  const load = useCallback(async () => {
-    if (!userId) { setLoading(false); return; }
-    if (!loadedOnceRef.current) setLoading(true);
-    const { data } = await supabase
-      .from("mm_bookmarks")
-      .select("*")
-      .eq("user_id", userId)
-      .order("sort_order");
-    setBookmarks(data || []);
-    setLoading(false);
-    loadedOnceRef.current = true;
-  }, [userId]);
-
-  useEffect(() => { load(); }, [load]);
-
-  return { bookmarks, loading, reload: load };
+  const rows = useLiveQuery(
+    () => (userId ? db.mm_bookmarks.where("user_id").equals(userId).sortBy("sort_order") : []),
+    [userId],
+    undefined
+  );
+  return { bookmarks: rows || [], loading: rows === undefined, reload: () => {} };
 }
 
 // Crea un marcador a partir de una transacción (ya guardada, o lo que haya
 // en el formulario en este momento) — va al final de su propio grupo (type).
-// No depende de tener la lista ya cargada (se puede llamar desde cualquier
-// formulario de transacción, no solo desde la propia pantalla de Marcadores).
-// La tabla tiene un índice único (mm_bookmarks_unique, con coalesce para las
-// columnas que aceptan null) que rechaza un duplicado exacto — acá solo se
-// traduce ese error (23505) a { duplicate: true } en vez de tirarlo.
+// El conteo para decidir sort_order se calcula contra la copia local (no un
+// COUNT a Supabase): funciona igual con o sin señal, y Dexie siempre está al
+// día con lo que el usuario ya tiene (incluido lo creado offline todavía sin
+// sincronizar). La tabla tiene un índice único del lado del servidor
+// (mm_bookmarks_unique, con coalesce) que rechaza un duplicado exacto — eso
+// solo se detecta de verdad con señal real (ver error.code 23505 abajo); un
+// duplicado creado offline simplemente se sube igual al reconectar.
 export async function createBookmark(userId, tx) {
-  const { count } = await supabase
-    .from("mm_bookmarks")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("type", tx.type);
-  const sortOrder = count || 0;
+  const sortOrder = await db.mm_bookmarks.where({ user_id: userId, type: tx.type }).count();
   const { error } = await supabase.from("mm_bookmarks").insert({
     user_id: userId,
     type: tx.type,

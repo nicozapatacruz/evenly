@@ -1379,25 +1379,50 @@ export function MultiPickerField({ value, onChange, groups, placeholder = "Elegi
   );
 }
 
+// Para fotos guardadas en Supabase Storage (grupos, perfil): si la imagen no
+// carga (ej. sin señal, nunca la cacheamos) muestra el mismo fallback de
+// "sin foto" en vez del ícono roto del navegador.
+export function ImageWithFallback({ src, alt = "", style, fallback }) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) return fallback;
+  return <img src={src} alt={alt} style={style} onError={() => setFailed(true)} />;
+}
+
 // Foto + botones de cambiar/quitar — compartido por NewGroup/EditGroup (foto de grupo,
 // shape="square") y Perfil (foto de usuario, shape="circle"). Los dos botones van en fila,
 // mismo ancho cada uno.
-export function PhotoPicker({ previewUrl, onChange, onClear, shape = "square" }) {
+// `onDisabledClick`: igual que el resto de los botones bloqueados offline
+// (dejan el click llegar y recién ahí avisan) — con `pointer-events: none`
+// (lo que había antes) el click ni siquiera llega a disparar el aviso, se
+// ve bloqueado pero sin ninguna explicación. `disabled` real en el <input>
+// tendría el mismo problema (algunos navegadores ni dejan que el <label>
+// reciba el click), por eso el bloqueo de verdad pasa por `preventDefault`
+// en el click del <label>, no por el atributo disabled.
+export function PhotoPicker({ previewUrl, onChange, onClear, shape = "square", disabled = false, onDisabledClick }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 14, opacity: disabled ? 0.5 : 1 }}>
       <div style={{ width: 72, height: 72, minWidth: 72, borderRadius: shape === "circle" ? "50%" : 16, overflow: "hidden", background: previewUrl ? "transparent" : "#E8DFD0", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #DDD2BE" }}>
-        {previewUrl
-          ? <img src={previewUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          : <User size={28} color="#A89A87" />
-        }
+        <ImageWithFallback
+          src={previewUrl}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          fallback={<User size={28} color="#A89A87" />}
+        />
       </div>
       <div style={{ display: "flex", gap: 6, flex: 1 }}>
-        <label style={{ ...styles.btnDashed, cursor: "pointer", fontSize: 13, flex: 1 }}>
+        <label
+          style={{ ...styles.btnDashed, cursor: disabled ? "default" : "pointer", fontSize: 13, flex: 1 }}
+          onClick={(e) => { if (disabled) { e.preventDefault(); onDisabledClick?.(); } }}
+        >
           <Camera size={14} /> {previewUrl ? "Cambiar foto" : "Añadir foto"}
           <input type="file" accept="image/*" style={{ display: "none" }} onChange={onChange} />
         </label>
         {previewUrl && (
-          <button style={{ ...styles.btnGhostSmall, fontSize: 12, flex: 1, justifyContent: "center" }} onClick={onClear}>Quitar foto</button>
+          <button
+            style={{ ...styles.btnGhostSmall, fontSize: 12, flex: 1, justifyContent: "center" }}
+            onClick={() => { if (disabled) { onDisabledClick?.(); return; } onClear(); }}
+          >
+            Quitar foto
+          </button>
         )}
       </div>
     </div>

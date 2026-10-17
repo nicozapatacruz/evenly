@@ -1,14 +1,25 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import { supabase } from "./supabaseClient.js";
+import { db } from "./localDb.js";
 import { dateInputValueInZone, parseAmountInput } from "./helpers.jsx";
 import { hasActiveFilters, matchesFilters } from "./filterHelpers.js";
 import { reconcileSplitLedger, getPendienteTcReviewItems, acknowledgePendienteTcReviewItem } from "./splitLedgerSync.js";
+import { computeAccountTotals, computeCategoryMonthTotals, computeAccountMonthTotals } from "./localAggregates.js";
+import { offlineSupabase } from "./offlineSupabase.js";
+import { getIsOnline } from "./connectivity.js";
 
 // Todo lo de Money Manager vive en tablas con prefijo mm_, separadas de las
 // de Split Ledger a propósito (ver memoria "money-manager-categories-merge-pending":
 // unificar categorías es una decisión pendiente, no algo ya resuelto).
+//
+// Lectura local-first (ver OFFLINE_PLAN): todos los hooks de acá abajo leen
+// SIEMPRE de Dexie (localDb.js) vía useLiveQuery, nunca de Supabase directo
+// — el único que trae datos frescos del servidor es syncEngine.js
+// (runFullSync), disparado por `reload()`. Las escrituras pasan por
+// offlineSupabase.js (ver ese archivo), nunca por `supabase` acá.
 
-const DEFAULT_SETTINGS = {
+export const DEFAULT_SETTINGS = {
   main_currency: "EUR", other_currencies: [],
   month_start_day: 1, week_start_day: "sunday", autocomplete_notes: true, startup_tab: null,
 };
@@ -32,7 +43,11 @@ const DEFAULT_ACCOUNT_GROUPS = [
   { name: "Tarjetas de crédito", type: "credit_card", account: "Tarjetas de crédito" },
 ];
 
-async function seedDefaults(userId, mainCurrency) {
+// Exportada: la llama syncEngine.js (solo durante un sync online real, nunca
+// desde el cliente offline — sembrar cuentas/categorías por defecto no tiene
+// sentido encolarlo, se hace una sola vez al confirmar que el usuario nunca
+// tuvo nada en el servidor).
+export async function seedDefaults(userId, mainCurrency) {
   const { data: newGroups, error: gError } = await supabase
     .from("mm_account_groups")
     .insert(DEFAULT_ACCOUNT_GROUPS.map((g, i) => ({ user_id: userId, name: g.name, type: g.type, sort_order: i })))
@@ -209,259 +224,146 @@ export function computeCreditCardBalance(accountId, transactions, statementDay, 
   return { pasado, actual };
 }
 
+const LOADING = Symbol("loading");
+
+// `loading` acá significa "esta consulta todavía no resolvió ni una vez
+// contra Dexie" (no "no hay datos" — un mes sin transacciones también
+// resuelve a [] y cuenta como "ya cargó"). Una vez resuelta, queda en
+// false para siempre, aunque useLiveQuery siga re-emitiendo valores nuevos
+// cada vez que algo escribe en la tabla.
+function useLocalTable(table, userId, sortKey) {
+  const result = useLiveQuery(() => {
+    if (!userId) return [];
+    const q = db.table(table).where("user_id").equals(userId);
+    return sortKey ? q.sortBy(sortKey) : q.toArray();
+  }, [table, userId, sortKey], LOADING);
+  return result === LOADING ? { rows: [], loading: true } : { rows: result, loading: false };
+}
+
 export function useMoneyManager(userId, userEmail) {
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
-  const [groups, setGroups] = useState([]);
-  const [accounts, setAccounts] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [accountTotals, setAccountTotals] = useState([]);
-  const [recurring, setRecurring] = useState([]);
-  const [slLinks, setSlLinks] = useState([]);
-  const [pendienteTcReview, setPendienteTcReview] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const settingsRow = useLiveQuery(() => (userId ? db.mm_settings.get(userId) : undefined), [userId], LOADING);
+  const { rows: groups } = useLocalTable("mm_account_groups", userId, "sort_order");
+  const { rows: accounts } = useLocalTable("mm_accounts", userId, "sort_order");
+  const { rows: categories } = useLocalTable("mm_categories", userId, "sort_order");
+  const { rows: recurring } = useLocalTable("mm_recurring", userId, "next_date");
+  const { rows: slLinks } = useLocalTable("sl_mm_links", userId);
+  const { rows: allTransactions } = useLocalTable("mm_transactions", userId);
+  const reviewMeta = useLiveQuery(() => db.sync_meta.get("pendienteTcReview"), [], undefined);
 
-  const load = useCallback(async () => {
-    if (!userId) { setLoading(false); return; }
-    await generateDueRecurring(userId);
-    // Antes del auto-pago: puede haber transferencias de préstamo (Split
-    // Ledger) que recién se crean acá y afectan el saldo de una tarjeta.
-    await reconcileSplitLedger(userId, userEmail);
-    await runCreditCardAutoPay(userId);
-    // Los balances se agregan del lado del servidor (vista mm_account_totals,
-    // ver .mm_views.sql) en vez de traer cada transacción y sumar acá — así
-    // esta consulta siempre trae unas pocas filas (una por cuenta×moneda),
-    // sin importar si tenés 2 mil o 20 mil transacciones.
-    const [s, g, a, c, at, r, sl] = await Promise.all([
-      supabase.from("mm_settings").select("*").eq("user_id", userId).maybeSingle(),
-      // Ninguna de las 3 (grupos/cuentas/categorías) filtra deleted acá a
-      // propósito: un elemento eliminado tiene que seguir disponible en el
-      // cliente para poder mostrar su nombre/ícono en transacciones viejas
-      // que ya lo tenían asignado, y ahora también para la sección
-      // "Cuentas eliminadas" de Cuentas. El filtrado de "no ofrecerlo para
-      // elegir de nuevo" / "no sumar al balance" / "no listarlo como activo"
-      // se hace más abajo, elemento por elemento, no acá.
-      supabase.from("mm_account_groups").select("*").eq("user_id", userId).order("sort_order"),
-      supabase.from("mm_accounts").select("*").eq("user_id", userId).order("sort_order"),
-      supabase.from("mm_categories").select("*").eq("user_id", userId).order("sort_order"),
-      supabase.from("mm_account_totals").select("*").eq("user_id", userId),
-      supabase.from("mm_recurring").select("*").eq("user_id", userId).order("next_date"),
-      // Activos e inactivos — un vínculo desvinculado sigue haciendo falta
-      // para resolver el nombre de cuentas pseudo viejas y para reutilizar
-      // la misma cuenta pseudo si se vuelve a vincular el mismo grupo.
-      supabase.from("sl_mm_links").select("*").eq("user_id", userId),
-    ]);
-    setSettings(s.data || DEFAULT_SETTINGS);
-    setAccountTotals(at.data || []);
-    setRecurring(r.data || []);
-    setSlLinks(sl.data || []);
-    setPendienteTcReview(await getPendienteTcReviewItems(userId, userEmail));
+  const loading = settingsRow === LOADING;
+  const settings = loading || !settingsRow ? DEFAULT_SETTINGS : settingsRow;
+  const accountTotals = useMemo(() => computeAccountTotals(allTransactions), [allTransactions]);
+  const pendienteTcReview = reviewMeta?.value || [];
 
-    // Cuenta recién creada, nunca usada — la sembramos con lo que trae la
-    // app original de fábrica, en vez de dejarla completamente vacía.
-    if ((g.data || []).length === 0 && (c.data || []).length === 0) {
-      await seedDefaults(userId, s.data?.main_currency || DEFAULT_SETTINGS.main_currency);
-      const [g2, a2, c2] = await Promise.all([
-        supabase.from("mm_account_groups").select("*").eq("user_id", userId).order("sort_order"),
-        supabase.from("mm_accounts").select("*").eq("user_id", userId).order("sort_order"),
-        supabase.from("mm_categories").select("*").eq("user_id", userId).order("sort_order"),
-      ]);
-      setGroups(g2.data || []);
-      setAccounts(a2.data || []);
-      setCategories(c2.data || []);
-    } else {
-      setGroups(g.data || []);
-      setAccounts(a.data || []);
-      setCategories(c.data || []);
-    }
-    setLoading(false);
+  // Dispara un sync completo contra el servidor (drena la cola offline,
+  // corre mantenimiento, trae todo fresco) — no hace nada si no hay señal,
+  // en cuyo caso los datos ya mostrados son los de Dexie (último sync).
+  // Import dinámico (no estático) para no crear un ciclo de módulos:
+  // syncEngine.js importa de acá (generateDueRecurring/runCreditCardAutoPay/
+  // seedDefaults/fetchAllRows).
+  // No se dispara sola al montar (eso lo hace AppShell una sola vez, con el
+  // gate de "Trayendo datos" — ver ReconnectSyncGate en SplitLedger.jsx):
+  // acá queda como función para que cada pantalla la siga llamando después
+  // de guardar, igual que ya hacía antes.
+  const reload = useCallback(async () => {
+    if (!userId || !getIsOnline()) return;
+    const { runFullSync } = await import("./syncEngine.js");
+    await runFullSync(userId, userEmail);
   }, [userId, userEmail]);
 
-  useEffect(() => { load(); }, [load]);
-
+  // Online-only (toca una tabla de Split Ledger, no de Money Manager) — sin
+  // señal falla en silencio (el aviso del banner se queda tal cual, sin
+  // romper nada) en vez de quedar como una promesa rechazada sin atrapar,
+  // mismo criterio que ya usa handleRejectInvite en SplitLedger.jsx.
   const acknowledgePendienteTcReview = useCallback(async (id) => {
-    await acknowledgePendienteTcReviewItem(id);
-    setPendienteTcReview((prev) => prev.filter((item) => item.id !== id));
+    try {
+      await acknowledgePendienteTcReviewItem(id);
+      const current = (await db.sync_meta.get("pendienteTcReview"))?.value || [];
+      await db.sync_meta.put({ key: "pendienteTcReview", value: current.filter((item) => item.id !== id) });
+    } catch (e) {
+      console.error("acknowledgePendienteTcReview: no se pudo confirmar (sin señal?)", e);
+    }
   }, []);
 
   return {
-    settings, groups, accounts, categories, accountTotals, recurring, slLinks, loading, reload: load,
+    settings, groups, accounts, categories, accountTotals, recurring, slLinks, loading, reload,
     pendienteTcReview, acknowledgePendienteTcReview,
   };
 }
 
-// Transacciones del mes visible (Transacciones/Diario) — se pide acotado por
-// rango de fechas en vez de traer toda la tabla y filtrar en el navegador.
-// Se refetchea cuando cambia el mes.
-// `enabled=false` (ej. Estadísticas cuando NO hay filtros activos, que usa
-// la vista agregada en vez de esto) evita pedir datos que no se van a usar —
-// tiene que seguir siendo un hook llamado siempre (reglas de hooks), solo que
-// no dispara la consulta real.
+// Mes exacto de una transacción según SU propia zona horaria (columna
+// timezone), no la del navegador de quien mira — mismo criterio en todos
+// los hooks de abajo que filtran por mes.
+function inMonth(t, year, month) {
+  const monthKey = `${year}-${String(month + 1).padStart(2, "0")}`;
+  return dateInputValueInZone(new Date(t.date).getTime(), t.timezone).startsWith(monthKey);
+}
+
+// Transacciones del mes visible (Transacciones/Diario), leídas de Dexie.
+// `enabled=false` (ej. Estadísticas cuando NO hay filtros activos) evita
+// calcular algo que no se va a usar — tiene que seguir siendo un hook
+// llamado siempre (reglas de hooks), solo que no hace el filtrado real.
 export function useMonthTransactions(userId, viewMonth, enabled = true) {
   const year = viewMonth.getFullYear();
   const month = viewMonth.getMonth();
-  const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { rows: all, loading } = useLocalTable("mm_transactions", userId);
+  const transactions = useMemo(() => {
+    if (!enabled) return [];
+    return all
+      .filter((t) => !t.deleted && !t.sl_hidden && inMonth(t, year, month))
+      .sort((a, b) => (new Date(b.date) - new Date(a.date)) || (new Date(b.created_at) - new Date(a.created_at)));
+  }, [all, enabled, year, month]);
 
-  // Se limpia apenas cambia el mes visible (antes de que llegue la
-  // respuesta) — si no, se alcanza a ver la data del mes anterior "pegada"
-  // un instante mientras carga la del mes nuevo.
-  useEffect(() => { setTransactions([]); }, [year, month]);
-
-  const load = useCallback(async () => {
-    if (!userId || !enabled) { setLoading(false); return; }
-    setLoading(true);
-    // Rango ampliado ±1 día: a qué mes/día pertenece cada transacción se
-    // decide más abajo por SU PROPIA zona horaria (columna timezone), no por
-    // la del navegador de quien está mirando — este rango solo tiene que
-    // cubrir de sobra el mes pedido para no perder alguna transacción justo
-    // en el borde (nunca puede desplazarse más de un día por diferencia de
-    // huso horario).
-    const start = new Date(year, month, 1);
-    start.setDate(start.getDate() - 1);
-    const end = new Date(year, month + 1, 1);
-    end.setDate(end.getDate() + 1);
-    const { data } = await supabase
-      .from("mm_transactions")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("deleted", false)
-      // Las transferencias de préstamo de Split Ledger (Presté/Me prestaron)
-      // nunca aparecen acá — sí en el extracto de cuenta (useAccountMonthTransactions,
-      // sin este filtro a propósito).
-      .eq("sl_hidden", false)
-      .gte("date", start.toISOString())
-      .lt("date", end.toISOString())
-      // Dentro de un mismo día, "date" solo no alcanza para ordenar (todas
-      // las creadas a mano quedan ancladas al mediodía) — created_at
-      // desempata para que la más nueva quede arriba.
-      .order("date", { ascending: false })
-      .order("created_at", { ascending: false });
-    // Re-acotar al mes exacto usando la zona propia de cada fila.
-    const monthKey = `${year}-${String(month + 1).padStart(2, "0")}`;
-    const filtered = (data || []).filter((t) => dateInputValueInZone(new Date(t.date).getTime(), t.timezone).startsWith(monthKey));
-    setTransactions(filtered);
-    setLoading(false);
-  }, [userId, year, month, enabled]);
-
-  useEffect(() => { load(); }, [load]);
-
-  return { transactions, loading, reload: load };
+  return { transactions, loading: enabled && loading, reload: () => {} };
 }
 
 // Transacciones de una cuenta puntual (origen o destino de una
-// transferencia) del mes visible — mismo criterio de rango ±1 día + recorte
-// por zona horaria propia que useMonthTransactions, acotado además a la cuenta.
+// transferencia) del mes visible.
 export function useAccountMonthTransactions(userId, accountId, viewMonth) {
   const year = viewMonth.getFullYear();
   const month = viewMonth.getMonth();
-  const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { rows: all, loading } = useLocalTable("mm_transactions", userId);
+  const transactions = useMemo(() => {
+    if (!accountId) return [];
+    return all
+      .filter((t) => !t.deleted && (t.account_id === accountId || t.to_account_id === accountId) && inMonth(t, year, month))
+      .sort((a, b) => (new Date(b.date) - new Date(a.date)) || (new Date(b.created_at) - new Date(a.created_at)));
+  }, [all, accountId, year, month]);
 
-  useEffect(() => { setTransactions([]); }, [year, month, accountId]);
-
-  const load = useCallback(async () => {
-    if (!userId || !accountId) { setLoading(false); return; }
-    setLoading(true);
-    const start = new Date(year, month, 1);
-    start.setDate(start.getDate() - 1);
-    const end = new Date(year, month + 1, 1);
-    end.setDate(end.getDate() + 1);
-    const { data } = await supabase
-      .from("mm_transactions")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("deleted", false)
-      .or(`account_id.eq.${accountId},to_account_id.eq.${accountId}`)
-      .gte("date", start.toISOString())
-      .lt("date", end.toISOString())
-      .order("date", { ascending: false })
-      .order("created_at", { ascending: false });
-    const monthKey = `${year}-${String(month + 1).padStart(2, "0")}`;
-    const filtered = (data || []).filter((t) => dateInputValueInZone(new Date(t.date).getTime(), t.timezone).startsWith(monthKey));
-    setTransactions(filtered);
-    setLoading(false);
-  }, [userId, accountId, year, month]);
-
-  useEffect(() => { load(); }, [load]);
-
-  return { transactions, loading };
+  return { transactions, loading: !!accountId && loading };
 }
 
-// Depósitos/retiros/neto de una cuenta, agregados por mes del lado del
-// servidor (vista mm_account_month_totals) — trae TODOS los meses con
-// movimiento (son pocas filas, una por mes) para poder armar Mensual, Anual,
-// y el saldo inicial de Diario sin traer nunca el historial completo
-// transacción por transacción.
+// Depósitos/retiros/neto de una cuenta, agregados por mes — antes una vista
+// de Postgres (mm_account_month_totals), ahora recalculado en JS desde la
+// copia local completa de transacciones (ver localAggregates.js).
 export function useAccountMonthTotals(userId, accountId) {
-  const [totals, setTotals] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    if (!userId || !accountId) { setLoading(false); return; }
-    setLoading(true);
-    const { data } = await supabase
-      .from("mm_account_month_totals")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("account_id", accountId);
-    setTotals(data || []);
-    setLoading(false);
-  }, [userId, accountId]);
-
-  useEffect(() => { load(); }, [load]);
-
-  return { totals, loading };
+  const { rows: all, loading } = useLocalTable("mm_transactions", userId);
+  const totals = useMemo(() => (accountId ? computeAccountMonthTotals(all, accountId) : []), [all, accountId]);
+  return { totals, loading: !!accountId && loading };
 }
 
-// Totales por categoría del mes visible (Estadísticas) — agregados del lado
-// del servidor (vista mm_category_month_totals, ver .mm_views.sql), filtrados
-// por tipo (ingreso/gasto) + año/mes. Se refetchea al cambiar mes o tipo.
-// `enabled=false` (Estadísticas cuando SÍ hay filtros activos, que usa
-// useMonthTransactions + agregación en el cliente en vez de esta vista) evita
-// pedir datos que no se van a usar — ver la nota de enabled en
-// useMonthTransactions, mismo criterio.
-// `mainCurrency`: la moneda elegida en el selector de Estadísticas (Fase 2 de
-// multi-moneda, ver MULTI_CURRENCY_PLAN.md) — la vista ya trae `currency`
-// por fila (agrupada por la moneda de CADA cuenta, no blendeada), así que
-// acá nos quedamos solo con las de esa moneda para no mezclar números de
-// monedas distintas en una sola torta.
+// Totales por categoría del mes visible (Estadísticas) — antes la vista
+// mm_category_month_totals (sin filtros) o una agregación en el cliente
+// (con filtros); ahora siempre se calcula en el cliente desde Dexie, ambos
+// caminos quedan iguales.
 export function useCategoryMonthTotals(userId, viewMonth, type, mainCurrency, enabled = true) {
   const year = viewMonth.getFullYear();
   const month = viewMonth.getMonth() + 1;
-  const [totals, setTotals] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { rows: all, loading } = useLocalTable("mm_transactions", userId);
+  const { rows: accounts } = useLocalTable("mm_accounts", userId);
+  const totals = useMemo(() => {
+    if (!enabled) return [];
+    return computeCategoryMonthTotals(all, accounts, type, mainCurrency)
+      .filter((r) => r.year === year && r.month === month)
+      .map(({ category_id, total }) => ({ category_id, total }));
+  }, [all, accounts, type, mainCurrency, enabled, year, month]);
 
-  // Mismo fix que useMonthTransactions: se limpia apenas cambia mes/tipo,
-  // antes de que llegue la respuesta — si no, se alcanza a ver la torta del
-  // mes anterior "pegada" un instante mientras carga la del mes nuevo.
-  useEffect(() => { setTotals([]); }, [year, month, type]);
-
-  const load = useCallback(async () => {
-    if (!userId || !enabled) { setLoading(false); return; }
-    setLoading(true);
-    const { data } = await supabase
-      .from("mm_category_month_totals")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("type", type)
-      .eq("year", year)
-      .eq("month", month)
-      .eq("currency", mainCurrency);
-    setTotals(data || []);
-    setLoading(false);
-  }, [userId, year, month, type, enabled, mainCurrency]);
-
-  useEffect(() => { load(); }, [load]);
-
-  return { totals, loading };
+  return { totals, loading: enabled && loading };
 }
 
-// Agrega transacciones ya traídas (crudo) por categoría — mismo shape
-// {category_id, total} que devuelve mm_category_month_totals, para que
-// quien consuma el resultado no tenga que saber de dónde vino el dato.
-// Filtra por la moneda de la cuenta de cada transacción (mismo criterio
-// que useCategoryMonthTotals del lado del servidor) — Fase 2 de
-// multi-moneda, ver MULTI_CURRENCY_PLAN.md.
+// Agrega transacciones ya traídas (crudo) por categoría — usado por
+// useStatsCategoryTotals cuando hay filtros activos (fecha/cuenta/categoría/
+// importe) que no contempla computeCategoryMonthTotals.
 function aggregateByCategory(transactions, type, accounts, mainCurrency) {
   const map = new Map();
   for (const t of transactions) {
@@ -474,12 +376,8 @@ function aggregateByCategory(transactions, type, accounts, mainCurrency) {
 }
 
 // Totales por categoría para Estadísticas, con soporte de filtros (cuenta/
-// categoría/importe/fecha) que la vista agregada no contempla. Sin filtros:
-// usa mm_category_month_totals (rápido, no trae transacción por
-// transacción). Con filtros activos: trae el mes crudo (useMonthTransactions)
-// y agrega acá — cada camino deshabilita el que no usa, para no pedir datos
-// de más en ningún caso. `monthTxCount` se expone para distinguir "no hay
-// nada este mes" de "el filtro no dejó nada" en la UI.
+// categoría/importe/fecha). `monthTxCount` distingue "no hay nada este mes"
+// de "el filtro no dejó nada" en la UI.
 export function useStatsCategoryTotals(userId, viewMonth, filters, mainCurrency, accounts) {
   const filtering = hasActiveFilters(filters);
   const { totals: incomeAgg, loading: incomeAggLoading } = useCategoryMonthTotals(userId, viewMonth, "income", mainCurrency, !filtering);
@@ -489,118 +387,78 @@ export function useStatsCategoryTotals(userId, viewMonth, filters, mainCurrency,
 
   const incomeTotals = filtering ? aggregateByCategory(filteredTx, "income", accounts, mainCurrency) : incomeAgg;
   const expenseTotals = filtering ? aggregateByCategory(filteredTx, "expense", accounts, mainCurrency) : expenseAgg;
-  // Separado por tipo (no combinado) — así el que mira "Gastos" no se queda
-  // esperando a que termine "Ingreso" si ese todavía no llegó, y viceversa.
   const incomeLoading = filtering ? monthTxLoading : incomeAggLoading;
   const expenseLoading = filtering ? monthTxLoading : expenseAggLoading;
 
   return { incomeTotals, expenseTotals, incomeLoading, expenseLoading, monthTxCount: monthTx.length };
 }
 
-// Serie mensual de una sola categoría (drill-down de Estadísticas) — trae
-// TODOS los meses con movimiento de esa categoría (son pocas filas, una por
-// mes, no hace falta acotar por rango) y el componente arma la ventana de
-// meses a mostrar alrededor del mes elegido. `categoryId` puede ser null
+// Serie mensual de una sola categoría (drill-down de Estadísticas) — todos
+// los meses con movimiento de esa categoría. `categoryId` puede ser null
 // ("Sin categoría").
-// `mainCurrency`: la moneda elegida en el drill-down (arranca en la que
-// estaba elegida en Estadísticas, ver nota en useCategoryMonthTotals).
 export function useCategoryTimeline(userId, type, categoryId, mainCurrency) {
-  const [totals, setTotals] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    if (!userId) { setLoading(false); return; }
-    setLoading(true);
-    let query = supabase.from("mm_category_month_totals").select("*").eq("user_id", userId).eq("type", type).eq("currency", mainCurrency);
-    query = categoryId ? query.eq("category_id", categoryId) : query.is("category_id", null);
-    const { data } = await query;
-    setTotals(data || []);
-    setLoading(false);
-  }, [userId, type, categoryId, mainCurrency]);
-
-  useEffect(() => { load(); }, [load]);
+  const { rows: all, loading } = useLocalTable("mm_transactions", userId);
+  const { rows: accounts } = useLocalTable("mm_accounts", userId);
+  const totals = useMemo(() => computeCategoryMonthTotals(all, accounts, type, mainCurrency)
+    .filter((r) => r.category_id === (categoryId ?? null)), [all, accounts, type, mainCurrency, categoryId]);
 
   return { totals, loading };
 }
 
-// Títulos (campo "Descripción", columna title) de transacciones recientes, para el autocompletado
-// del formulario — una sola consulta al abrir el formulario, no una por
-// tecla. Se trae un lote acotado (las últimas 300 con nota) en vez de toda la
-// tabla, y se dedupe en el cliente preservando el orden (más reciente primero).
+// Títulos (campo "Descripción", columna title) de transacciones recientes,
+// para el autocompletado del formulario — se trae un lote acotado (las
+// últimas 300 con nota) y se dedupe preservando el orden (más reciente
+// primero).
 export function useRecentNoteTitles(userId) {
-  const [titles, setTitles] = useState([]);
-
-  useEffect(() => {
-    if (!userId) return;
-    let cancelled = false;
-    (async () => {
-      const { data } = await supabase
-        .from("mm_transactions")
-        .select("title")
-        .eq("user_id", userId)
-        .eq("deleted", false)
-        .not("title", "is", null)
-        // Las sincronizadas desde Split Ledger no son notas tuyas — son la
-        // descripción del gasto compartido, no deberían ensuciar tus
-        // sugerencias de autocompletado.
-        .is("sl_link_id", null)
-        .order("date", { ascending: false })
-        .limit(300);
-      if (cancelled) return;
-      setTitles([...new Set((data || []).map((t) => t.title).filter(Boolean))]);
-    })();
-    return () => { cancelled = true; };
-  }, [userId]);
-
-  return titles;
+  const { rows: all } = useLocalTable("mm_transactions", userId);
+  return useMemo(() => {
+    const sorted = all
+      .filter((t) => !t.deleted && t.title && !t.sl_link_id)
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, 300);
+    return [...new Set(sorted.map((t) => t.title))];
+  }, [all]);
 }
 
-// Buscador de gastos: filtros server-side (no se trae todo el historial al
-// cliente). Función imperativa, no un hook — se dispara a demanda (Enter /
-// tocar una sugerencia), no reactiva a cada tecla.
-// `filters`: { query, accountIds, categoryIds, dateFrom, dateTo, amountMin, amountMax }
+// Buscador de gastos — antes filtros server-side, ahora filtra la copia
+// local completa (unos pocos miles de filas como mucho, trivial en JS).
+// Sigue siendo una función imperativa (no un hook): se dispara a demanda
+// (Enter / tocar una sugerencia), no reactiva a cada tecla.
 export async function searchTransactions(userId, filters) {
-  let query = supabase.from("mm_transactions").select("*").eq("user_id", userId).eq("deleted", false).eq("sl_hidden", false);
+  const all = await db.mm_transactions.where("user_id").equals(userId).toArray();
+  let rows = all.filter((t) => !t.deleted && !t.sl_hidden);
 
-  const text = filters.query?.trim();
-  if (text) {
-    // Entre comillas dobles (sintaxis de PostgREST para valores con
-    // comas/paréntesis adentro, que si no romperían el parseo de ".or()") —
-    // el "%" del patrón ilike no necesita escaparse, funciona igual adentro
-    // de las comillas.
-    const quoted = `"%${text.replace(/"/g, '\\"')}%"`;
-    query = query.or(`title.ilike.${quoted},memo.ilike.${quoted}`);
-  }
+  const text = filters.query?.trim().toLowerCase();
+  if (text) rows = rows.filter((t) => t.title?.toLowerCase().includes(text) || t.memo?.toLowerCase().includes(text));
   if (filters.accountIds?.length) {
-    const ids = filters.accountIds.join(",");
-    // Una transferencia matchea tanto si la cuenta elegida es el origen
-    // como el destino — "movimientos de esta cuenta", no solo "de donde sale".
-    query = query.or(`account_id.in.(${ids}),to_account_id.in.(${ids})`);
+    const ids = new Set(filters.accountIds);
+    rows = rows.filter((t) => ids.has(t.account_id) || ids.has(t.to_account_id));
   }
-  if (filters.categoryIds?.length) query = query.in("category_id", filters.categoryIds);
-  if (filters.dateFrom) query = query.gte("date", new Date(filters.dateFrom).toISOString());
+  if (filters.categoryIds?.length) {
+    const ids = new Set(filters.categoryIds);
+    rows = rows.filter((t) => ids.has(t.category_id));
+  }
+  if (filters.dateFrom) rows = rows.filter((t) => new Date(t.date) >= new Date(filters.dateFrom));
   if (filters.dateTo) {
     const end = new Date(filters.dateTo);
     end.setDate(end.getDate() + 1);
-    query = query.lt("date", end.toISOString());
+    rows = rows.filter((t) => new Date(t.date) < end);
   }
-  if (filters.amountMin) query = query.gte("amount_main", parseAmountInput(filters.amountMin));
-  if (filters.amountMax) query = query.lte("amount_main", parseAmountInput(filters.amountMax));
+  if (filters.amountMin) { const min = parseAmountInput(filters.amountMin); rows = rows.filter((t) => t.amount_main >= min); }
+  if (filters.amountMax) { const max = parseAmountInput(filters.amountMax); rows = rows.filter((t) => t.amount_main <= max); }
 
-  query = query.order("date", { ascending: false }).order("created_at", { ascending: false }).limit(500);
-  const { data, error } = await query;
-  if (error) throw error;
-  return data || [];
+  rows.sort((a, b) => (new Date(b.date) - new Date(a.date)) || (new Date(b.created_at) - new Date(a.created_at)));
+  return rows.slice(0, 500);
 }
 
 // PostgREST limita cada consulta a 1000 filas por defecto — para una cuenta
-// con más historial que eso (cualquier cuenta usada activamente durante
-// varios años), un `.select` sin paginar trae una porción ARBITRARIA (sin
-// `.order`, ni siquiera se sabe cuál) y descarta el resto en silencio, sin
-// ningún error. Bug real encontrado 2026-10-06: una tarjeta/cuenta con más
-// de 1000 movimientos calculaba su saldo con datos incompletos. Esta
-// función pagina con `.range()` hasta traer todo — `buildQuery(from, to)`
-// tiene que devolver la MISMA consulta cada vez, solo cambiando el rango.
+// con más historial que eso, un `.select` sin paginar trae una porción
+// ARBITRARIA y descarta el resto en silencio. Esta función pagina con
+// `.range()` hasta traer todo — sigue usándose desde syncEngine.js (el pull
+// completo de mm_transactions) y runCreditCardAutoPay (necesita el
+// historial real de Supabase, no la copia local, para no reintroducir la
+// misma clase de bug). `buildQuery(from, to)` tiene que devolver la MISMA
+// consulta cada vez, solo cambiando el rango.
 export async function fetchAllRows(buildQuery) {
   const pageSize = 1000;
   let all = [];
@@ -615,46 +473,27 @@ export async function fetchAllRows(buildQuery) {
   return all;
 }
 
-// Transacciones relevantes para calcular "saldo a pagar"/"restante" de las
-// tarjetas de crédito — una sola consulta acotada a las cuentas que son
-// tarjeta (no toda la tabla), sin límite de fecha (el balde "pasado" no
-// tiene techo de cuánto tiempo atrás puede venir la deuda).
+// Historial completo (todas las fechas) de una o varias tarjetas, leído de
+// la copia local — antes era un fetchAllRows contra Supabase, ahora Dexie ya
+// tiene todo el historial (lo trajo syncEngine.js), no hace falta paginar.
 export function useCreditCardActivity(userId, creditCardIds) {
   const idsKey = [...creditCardIds].sort().join(",");
-  const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    if (!userId || !idsKey) { setTransactions([]); setLoading(false); return; }
-    setLoading(true);
-    const idList = idsKey;
-    try {
-      const data = await fetchAllRows((from, to) => supabase
-        .from("mm_transactions")
-        .select("*")
-        .eq("user_id", userId)
-        .eq("deleted", false)
-        .or(`account_id.in.(${idList}),to_account_id.in.(${idList})`)
-        .order("id", { ascending: true })
-        .range(from, to));
-      setTransactions(data);
-    } catch (e) {
-      console.error("useCreditCardActivity: no se pudo traer el historial completo", e);
-      setTransactions([]);
-    }
-    setLoading(false);
+  const { rows: all, loading } = useLocalTable("mm_transactions", userId);
+  const transactions = useMemo(() => {
+    if (!idsKey) return [];
+    const ids = new Set(idsKey.split(","));
+    return all.filter((t) => !t.deleted && (ids.has(t.account_id) || ids.has(t.to_account_id)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, idsKey]);
+  }, [all, idsKey]);
 
-  useEffect(() => { load(); }, [load]);
-
-  return { transactions, loading, reload: load };
+  return { transactions, loading: !!idsKey && loading, reload: () => {} };
 }
 
-// Se corre en silencio antes de cada carga: por cada recurrente vencida,
-// crea la transacción real y avanza next_date (repite si quedaron varias
-// vencidas mientras tanto), hasta ponerse al día o pasar end_date.
-async function generateDueRecurring(userId) {
+// Se corre en silencio antes de cada sync (syncEngine.js), nunca desde el
+// cliente offline: por cada recurrente vencida, crea la transacción real y
+// avanza next_date (repite si quedaron varias vencidas mientras tanto),
+// hasta ponerse al día o pasar end_date.
+export async function generateDueRecurring(userId) {
   const { data: due } = await supabase
     .from("mm_recurring")
     .select("*")
@@ -690,15 +529,15 @@ async function generateDueRecurring(userId) {
   }
 }
 
-// Se corre en silencio antes de cada carga, después de generar las
-// recurrentes vencidas (una recurrente puede ser justo un gasto de la
-// tarjeta, tiene que quedar reflejada antes de calcular cuánto pagarle).
-// Por cada tarjeta con auto_pay activado y next_payment_date vencida: paga el
-// "saldo a pagar" de ese ciclo (transferencia real desde payment_account_id),
-// fechada en el día que correspondía (no en el día en que corre el job) y
-// avanza next_payment_date — mismo criterio de catch-up que generateDueRecurring
-// si pasaron varios meses sin abrir la app.
-async function runCreditCardAutoPay(userId) {
+// Se corre en silencio antes de cada sync (syncEngine.js), después de
+// generar las recurrentes vencidas (una recurrente puede ser justo un gasto
+// de la tarjeta, tiene que quedar reflejada antes de calcular cuánto
+// pagarle). Por cada tarjeta con auto_pay activado y next_payment_date
+// vencida: paga el "saldo a pagar" de ese ciclo (transferencia real desde
+// payment_account_id), fechada en el día que correspondía (no en el día en
+// que corre el job) y avanza next_payment_date — mismo criterio de catch-up
+// que generateDueRecurring si pasaron varios meses sin sincronizar.
+export async function runCreditCardAutoPay(userId) {
   const { data: allCards } = await supabase
     .from("mm_accounts")
     .select("*")
@@ -712,9 +551,9 @@ async function runCreditCardAutoPay(userId) {
   // que existiera esta columna, o cualquier otro caso en que no quedó
   // sembrada) — arrancan desde hoy, sin generar de golpe pagos retroactivos
   // de meses en los que el auto-pago en realidad nunca estuvo funcionando.
-  // El `.is(...)` de la condición hace que, si dos cargas concurrentes
-  // (StrictMode, dos pestañas) intentan sembrarla a la vez, solo la primera
-  // gane — la segunda no encuentra la fila en null y no pisa nada.
+  // El `.is(...)` de la condición hace que, si dos corridas concurrentes
+  // intentan sembrarla a la vez, solo la primera gane — la segunda no
+  // encuentra la fila en null y no pisa nada.
   const uninitialized = allCards.filter((c) => !c.next_payment_date);
   if (uninitialized.length) {
     await Promise.all(uninitialized.map((c) =>
@@ -770,10 +609,9 @@ async function runCreditCardAutoPay(userId) {
     while (next <= new Date() && guard < 60) {
       const upcoming = creditCardNextPaymentDate(card.payment_day, new Date(next.getTime() + 86400000));
       // Reclamo atómico de este ciclo antes de generar nada: si otra corrida
-      // concurrente ya adelantó next_payment_date (dos pestañas, StrictMode
-      // duplicando el efecto de carga), esta condición ya no matchea ninguna
-      // fila y cortamos acá — sin esto, las dos corridas generarían el mismo
-      // pago dos veces (justo lo que pasó en la prueba manual).
+      // concurrente ya adelantó next_payment_date, esta condición ya no
+      // matchea ninguna fila y cortamos acá — sin esto, dos corridas
+      // generarían el mismo pago dos veces.
       const { data: claimed } = await supabase
         .from("mm_accounts")
         .update({ next_payment_date: upcoming.toISOString() })
@@ -814,9 +652,15 @@ async function runCreditCardAutoPay(userId) {
 // vez de dejarlo "colgado" apuntando a una cuenta inexistente.
 export async function disableAutoPayForDeletedAccounts(deletedAccountIds) {
   if (!deletedAccountIds || deletedAccountIds.length === 0) return;
-  await supabase.from("mm_accounts")
+  // `.in()` filtra por payment_account_id, no por "id" — el shim de
+  // offlineSupabase solo sabe resolver filas objetivo por "id", así que acá
+  // se resuelve la lista de ids a mano antes de llamarlo.
+  const dependents = await db.mm_accounts.where("payment_account_id").anyOf(deletedAccountIds).toArray();
+  const ids = dependents.map((a) => a.id);
+  if (!ids.length) return;
+  await offlineSupabase.from("mm_accounts")
     .update({ auto_pay: false, next_payment_date: null })
-    .in("payment_account_id", deletedAccountIds);
+    .in("id", ids);
 }
 
 // Convierte un monto a la moneda principal — se llama UNA sola vez, al
@@ -838,47 +682,21 @@ export function isRatePending(t, mainCurrency) {
   return !!t.sl_link_id && t.exchange_rate == null && t.currency !== mainCurrency;
 }
 
-// Todas las transacciones pendientes de tasa, de CUALQUIER mes — a propósito
-// no se limita al mes visible (quedaría escondida si está en otro mes) ni
-// excluye las transferencias de préstamo ocultas de Split Ledger (Presté/Me
-// prestaron, que nunca aparecen en Transacciones/Buscador): si una de esas
-// queda pendiente, hoy no hay NINGÚN otro lugar que avise salvo entrando
-// manualmente al extracto de esa cuenta — este listado es la única forma de
-// enterarse sin tener que acordarte de revisar cada grupo vinculado.
+// Todas las transacciones pendientes de tasa, de CUALQUIER mes — leídas de
+// la copia local completa.
 export function usePendingRateTransactions(userId) {
-  const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { rows: all, loading } = useLocalTable("mm_transactions", userId);
+  const settingsRow = useLiveQuery(() => (userId ? db.mm_settings.get(userId) : undefined), [userId], undefined);
+  const mainCurrency = settingsRow?.main_currency || DEFAULT_SETTINGS.main_currency;
+  const transactions = useMemo(() => all
+    .filter((t) => !t.deleted && t.sl_link_id && t.exchange_rate == null && t.currency !== mainCurrency)
+    .sort((a, b) => new Date(a.date) - new Date(b.date)), [all, mainCurrency]);
 
-  const load = useCallback(async () => {
-    if (!userId) { setLoading(false); return; }
-    setLoading(true);
-    const { data: settingsRow } = await supabase.from("mm_settings").select("main_currency").eq("user_id", userId).maybeSingle();
-    const mainCurrency = settingsRow?.main_currency || "EUR";
-    const data = await fetchAllRows((from, to) => supabase
-      .from("mm_transactions")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("deleted", false)
-      .not("sl_link_id", "is", null)
-      .is("exchange_rate", null)
-      .neq("currency", mainCurrency)
-      .order("id", { ascending: true })
-      .range(from, to));
-    // La paginación ordena por id (requisito de fetchAllRows); se reordena acá
-    // por fecha, que es el orden real que necesita la pantalla.
-    data.sort((a, b) => new Date(a.date) - new Date(b.date));
-    setTransactions(data);
-    setLoading(false);
-  }, [userId]);
-
-  useEffect(() => { load(); }, [load]);
-
-  return { transactions, loading, reload: load };
+  return { transactions, loading, reload: () => {} };
 }
 
-// accountTotals: una fila por cuenta (vista mm_account_totals), ya sumada
-// del lado del servidor (suma `amount_main`, no `amount`) — acá no hay más
-// conversión que hacer. Restricción dura (ver PENDIENTES.md sección B): como
+// accountTotals: una fila por cuenta, ya calculada localmente (ver
+// localAggregates.js). Restricción dura (ver PENDIENTES.md sección B): como
 // toda transacción de una cuenta queda en SU moneda, este total ya está en
 // la moneda de esa cuenta (`accounts.find(a => a.id === accountId).currency`),
 // no en una principal global.

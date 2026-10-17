@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
-import { supabase } from "./supabaseClient.js";
+import { useLiveQuery } from "dexie-react-hooks";
+import { db } from "./localDb.js";
+import { offlineSupabase } from "./offlineSupabase.js";
 
 /* =========================================================================
    REGLAS DE DESCRIPCIÓN — "memoria" de la importación de fotos (ver
@@ -22,28 +23,23 @@ import { supabase } from "./supabaseClient.js";
 // Tiene que ser el espejo exacto de la columna generada en SQL
 // (normalized_match_text, ver el ALTER TABLE entregado): mismo trim +
 // lowercase + colapso de espacios en los dos lados, o la búsqueda en
-// memoria y el índice único de la base dejan de coincidir.
+// memoria y el índice único de la base dejan de coincidir. También es la
+// clave primaria compuesta de la copia local (ver localDb.js) — se usa acá
+// mismo para resolverla offline, ya que normalized_match_text es una
+// columna GENERADA en Postgres (no se puede mandar en el upsert).
 export function normalizeDescription(text) {
   return text.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+// Lectura local-first, igual que el resto de Money Manager (ver
+// moneyManagerData.js) — la copia local la trae syncEngine.js.
 export function useDescriptionRules(userId) {
-  const [rules, setRules] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    if (!userId) { setLoading(false); return; }
-    const { data } = await supabase
-      .from("mm_description_rules")
-      .select("*")
-      .eq("user_id", userId);
-    setRules(data || []);
-    setLoading(false);
-  }, [userId]);
-
-  useEffect(() => { load(); }, [load]);
-
-  return { rules, loading, reload: load };
+  const rules = useLiveQuery(
+    () => (userId ? db.mm_description_rules.where("user_id").equals(userId).toArray() : []),
+    [userId],
+    undefined
+  );
+  return { rules: rules || [], loading: rules === undefined, reload: () => {} };
 }
 
 // Busca una coincidencia exacta (normalizada) para la descripción que el OCR
@@ -57,13 +53,16 @@ export function findDescriptionRule(rules, matchText) {
   return rules.find((r) => r.normalized_match_text === normalized) || null;
 }
 
-// "Gana la más reciente": el upsert de Supabase ya pisa las columnas no
-// clave por defecto, así que alcanza con upsertear siempre que se confirma
-// un paso, sin distinguir alta de actualización a mano. matchText tiene que
-// ser siempre lo que el OCR extrajo originalmente (estable entre fotos),
-// aunque title/categoryId/memo cambien con cada corrección del usuario.
+// "Gana la más reciente": el upsert ya pisa las columnas no clave por
+// defecto, así que alcanza con upsertear siempre que se confirma un paso,
+// sin distinguir alta de actualización a mano. matchText tiene que ser
+// siempre lo que el OCR extrajo originalmente (estable entre fotos), aunque
+// title/categoryId/memo cambien con cada corrección del usuario.
+// `localKeyValues`: normalized_match_text se computa acá (no se manda al
+// servidor, Postgres la genera sola) para que offlineSupabase pueda armar
+// la clave local/de cola sin depender de una respuesta de red.
 export async function upsertDescriptionRule(userId, { matchText, type, title, categoryId, memo }) {
-  const { error } = await supabase.from("mm_description_rules").upsert(
+  const { error } = await offlineSupabase.from("mm_description_rules").upsert(
     {
       user_id: userId,
       match_text: matchText,
@@ -73,7 +72,10 @@ export async function upsertDescriptionRule(userId, { matchText, type, title, ca
       memo: memo || null,
       last_used_at: new Date().toISOString(),
     },
-    { onConflict: "user_id,normalized_match_text" }
+    {
+      onConflict: "user_id,normalized_match_text",
+      localKeyValues: { user_id: userId, normalized_match_text: normalizeDescription(matchText) },
+    }
   );
   if (error) throw error;
 }

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Plus, Repeat, X } from "lucide-react";
-import { supabase } from "../../lib/supabaseClient.js";
+import { offlineSupabase as supabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
 import { ConfirmInline, EmptyState } from "../../components/Shared.jsx";
 import { money, fmtDate } from "../../lib/helpers.jsx";

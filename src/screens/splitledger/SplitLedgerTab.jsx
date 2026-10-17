@@ -9,7 +9,7 @@ import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCen
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { styles } from "../../lib/styles.js";
-import { TopBar, RootHeader, ConfirmInline, Modal, Footer, PhotoPicker, Field, ToggleField, PickerField, SplitLedgerIcon, EmptyState, CalculatorAmountInput } from "../../components/Shared.jsx";
+import { TopBar, RootHeader, ConfirmInline, Modal, Footer, PhotoPicker, ImageWithFallback, Field, ToggleField, PickerField, SplitLedgerIcon, EmptyState, CalculatorAmountInput } from "../../components/Shared.jsx";
 import { linkGroupToAccount, updateLinkDefaults, unlinkGroup } from "../../lib/splitLedgerLink.js";
 import { useRecentNoteTitles } from "../../lib/moneyManagerData.js";
 import {
@@ -31,9 +31,18 @@ import {
 export default function SplitLedgerTab({
   session, groups, loading, reloadGroup, deleteGroup,
   view, setView, showError, showSuccess, showInfo,
-  moneyManager, onBackOverride,
+  moneyManager, onBackOverride, isOnline = true,
 }) {
   const [groupInvites, setGroupInvites] = useState([]); // invitaciones pendientes del grupo que estoy editando
+
+  // Split Ledger es online-only (varios miembros escriben el mismo grupo,
+  // a diferencia de Money Manager) — offline se puede VER el último estado
+  // cacheado, pero cualquier escritura se bloquea acá, en el único lugar
+  // donde este archivo de verdad habla con la base (ver comentario arriba
+  // del export default).
+  const blockOffline = useCallback(() => {
+    showError("Estás offline, no podés hacer esto ahora.");
+  }, [showError]);
 
   const loadGroupInvites = useCallback(async (groupId) => {
     const { data, error } = await supabase
@@ -67,6 +76,8 @@ export default function SplitLedgerTab({
           moneyManager={moneyManager}
           onOpen={(id) => { setView({ screen: "group", groupId: id }); reloadGroup(id); }}
           onNewExpense={() => setView({ screen: "newExpense" })}
+          isOnline={isOnline}
+          showError={showError}
         />
       )}
 
@@ -75,7 +86,9 @@ export default function SplitLedgerTab({
           onCancel={onBackOverride || (() => setView({ screen: "home" }))}
           session={session}
           showError={showError}
+          isOnline={isOnline}
           onCreate={async ({ name, baseCurrency, members, photoUrl }) => {
+            if (!isOnline) { blockOffline(); return; }
             try {
               const { data: groupRow, error: e1 } = await supabase
                 .from("groups")
@@ -112,7 +125,10 @@ export default function SplitLedgerTab({
           onSettleUp={(prefill) => setView({ screen: "settleUp", groupId: activeGroup.id, prefill })}
           onOpenPayment={(paymentId) => setView({ screen: "paymentDetail", groupId: activeGroup.id, paymentId })}
           onEditGroup={() => setView({ screen: "editGroup", groupId: activeGroup.id })}
+          isOnline={isOnline}
+          showError={showError}
           onSoftDeleteExpense={async (expenseId) => {
+            if (!isOnline) { blockOffline(); return; }
             try {
               const { error } = await supabase.from("expenses").update({ deleted: true }).eq("id", expenseId);
               if (error) throw error;
@@ -130,6 +146,8 @@ export default function SplitLedgerTab({
           expenseId={view.expenseId}
           onBack={() => setView({ screen: "group", groupId: activeGroup.id })}
           onEdit={(expenseId) => setView({ screen: "newExpense", groupId: activeGroup.id, expenseId })}
+          isOnline={isOnline}
+          showError={showError}
         />
       )}
 
@@ -139,6 +157,8 @@ export default function SplitLedgerTab({
           paymentId={view.paymentId}
           onBack={onBackOverride || (() => setView({ screen: "group", groupId: activeGroup.id }))}
           onEdit={(paymentId) => setView({ screen: "settleUp", groupId: activeGroup.id, paymentId })}
+          isOnline={isOnline}
+          showError={showError}
         />
       )}
 
@@ -158,6 +178,7 @@ export default function SplitLedgerTab({
               : { screen: "home" }
           ))}
           onSave={async (expense) => {
+            if (!isOnline) { blockOffline(); return; }
             const groupId = activeGroup?.id ?? expense.groupId;
             const exists = !!expense.id;
             const payload = {
@@ -204,6 +225,7 @@ export default function SplitLedgerTab({
             } catch (e) { showError(`No se pudo guardar el gasto: ${e?.message || e}`); }
           }}
           onDelete={async (expenseId) => {
+            if (!isOnline) { blockOffline(); return; }
             try {
               // Soft-delete, no DELETE real: un gasto ya sincronizado hacia
               // Money Manager (de cualquier miembro vinculado) guarda este id
@@ -233,6 +255,7 @@ export default function SplitLedgerTab({
               : { screen: "group", groupId: activeGroup.id }
           ))}
           onSave={async (payment) => {
+            if (!isOnline) { blockOffline(); return; }
             const payload = {
               group_id: activeGroup.id,
               from_member_id: payment.from,
@@ -270,6 +293,7 @@ export default function SplitLedgerTab({
             } catch (e) { showError(`No se pudo registrar el pago: ${e?.message || e}`); }
           }}
           onDelete={async (paymentId) => {
+            if (!isOnline) { blockOffline(); return; }
             try {
               // Mismo motivo que el soft-delete de gastos: no romper "Ver
               // original" para un pago ya sincronizado hacia Money Manager.
@@ -290,8 +314,10 @@ export default function SplitLedgerTab({
           group={activeGroup}
           session={session}
           moneyManager={moneyManager}
+          isOnline={isOnline}
           onCancel={onBackOverride || (() => setView({ screen: "group", groupId: activeGroup.id }))}
           onSave={async ({ name, baseCurrency, photoUrl, membersToAdd, memberIdsToRemove, categoriesToAdd, categoriesToUpdate, categoryIdsToRemove }) => {
+            if (!isOnline) { blockOffline(); return; }
             try {
               const { error: e1 } = await supabase
                 .from("groups")
@@ -343,6 +369,7 @@ export default function SplitLedgerTab({
             } catch (e) { showError(`No se pudo guardar el grupo: ${e?.message || e}`); }
           }}
           onDeleteGroup={async () => {
+            if (!isOnline) { blockOffline(); return; }
             try {
               await deleteGroup(activeGroup.id);
               setView({ screen: "home" });
@@ -363,6 +390,7 @@ export default function SplitLedgerTab({
           groupInvites={groupInvites}
           onBack={() => setView({ screen: "editGroup", groupId: activeGroup.id })}
           onSend={async ({ memberId, targetUsername }) => {
+            if (!isOnline) { blockOffline(); return false; }
             try {
               const uname = targetUsername.trim().toLowerCase();
               const { data: target, error: e0 } = await supabase
@@ -387,6 +415,7 @@ export default function SplitLedgerTab({
             } catch (e) { showError(`No se pudo enviar la invitación: ${e?.message || e}`); return false; }
           }}
           onCancelInvite={async (memberId) => {
+            if (!isOnline) { blockOffline(); return; }
             try {
               const pending = groupInvites.find((i) => i.memberId === memberId);
               if (!pending) return;
@@ -437,7 +466,7 @@ function groupCardLines(g, session) {
   return lines.length > 0 ? lines : [{ key: "settled", node: "Saldado" }];
 }
 
-function Home({ groups, loading, session, moneyManager, onOpen, onNewExpense }) {
+function Home({ groups, loading, session, moneyManager, onOpen, onNewExpense, isOnline = true, showError }) {
   return (
     <div style={styles.screen}>
       <RootHeader title="Tus grupos" />
@@ -460,10 +489,11 @@ function Home({ groups, loading, session, moneyManager, onOpen, onNewExpense }) 
                 <button style={styles.groupCard} onClick={() => onOpen(g.id)}>
                   <div style={styles.groupCardLeft}>
                     <div style={{ width: 48, height: 48, minWidth: 48, borderRadius: 12, overflow: "hidden", background: g.photoUrl ? "transparent" : "#E8DFD0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      {g.photoUrl
-                        ? <img src={g.photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                        : <User size={22} color="#A89A87" />
-                      }
+                      <ImageWithFallback
+                        src={g.photoUrl}
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        fallback={<User size={22} color="#A89A87" />}
+                      />
                     </div>
                     <div>
                       <p style={styles.groupName}>{g.name}</p>
@@ -490,7 +520,11 @@ function Home({ groups, loading, session, moneyManager, onOpen, onNewExpense }) 
       {/* FAB flotante para agregar un gasto — sin grupos todavía no hay a dónde agregarlo.
           bottom más alto que el default: acá siempre está visible la barra de 5 tabs. */}
       {!loading && groups && groups.length > 0 && (
-        <button style={{ ...styles.fab, bottom: "calc(78px + env(safe-area-inset-bottom))" }} onClick={onNewExpense} aria-label="Agregar gasto">
+        <button
+          style={{ ...styles.fab, bottom: "calc(78px + env(safe-area-inset-bottom))", opacity: isOnline ? 1 : 0.5 }}
+          onClick={() => { if (!isOnline) { showError("Estás offline, no podés crear un gasto ahora."); return; } onNewExpense(); }}
+          aria-label="Agregar gasto"
+        >
           <Plus size={24} strokeWidth={2.5} />
         </button>
       )}
@@ -509,7 +543,7 @@ function Home({ groups, loading, session, moneyManager, onOpen, onNewExpense }) 
 // con id/invitación/balance pendiente; sin categorías vs. reordenar con
 // drag-and-drop; sin borrar vs. modal de "escribí Confirmar") — se dejan
 // como secciones propias de cada modo, no forzadas a parecerse.
-function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, onSave, onDeleteGroup, onInvite, groupInvites = [], showError }) {
+function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, onSave, onDeleteGroup, onInvite, groupInvites = [], showError, isOnline = true }) {
   const isEditing = !!group;
   const [name, setName] = useState(group?.name || "");
   const [baseCurrency, setBaseCurrency] = useState(group?.baseCurrency || "EUR");
@@ -630,6 +664,7 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
       if (hasEmptyCategory) setCatsOpen(true);
       return;
     }
+    if (!isOnline) { showError("Estás offline, no podés hacer esto ahora."); return; }
     setSaving(true);
     try {
       const resolvedPhotoUrl = await resolvePhotoUrl({ pendingFile, removed, currentUrl: group.photoUrl });
@@ -730,7 +765,7 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
       />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
         {/* Foto del grupo */}
-        <PhotoPicker previewUrl={photoUrl} onChange={handlePhoto} onClear={clearPhoto} shape="square" />
+        <PhotoPicker previewUrl={photoUrl} onChange={handlePhoto} onClear={clearPhoto} shape="square" disabled={!isOnline} onDisabledClick={() => showError("Estás offline, no podés hacer esto ahora.")} />
 
         <Field label="Nombre del grupo" required error={touched.name && !name.trim() ? "Este campo es obligatorio." : ""}>
           <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} onBlur={() => touch("name")} placeholder={isEditing ? undefined : "Viaje a Lisboa, Piso compartido…"} />
@@ -897,6 +932,7 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
             session={session}
             moneyManager={moneyManager}
             showError={showError}
+            isOnline={isOnline}
             linked={mmLinked}
             onToggle={setMmLinked}
             ownAccountId={mmOwnAccountId}
@@ -986,7 +1022,7 @@ function SplitLedgerMoneyLink({
   group, session, moneyManager, showError,
   linked, onToggle, ownAccountId, onOwnAccountChange, otherAccountId, onOtherAccountChange,
   loanAccountId, onLoanAccountChange,
-  touched, touch, disabled,
+  touched, touch, disabled, isOnline = true,
 }) {
   const [unlinking, setUnlinking] = useState(false);
   const [confirmingUnlink, setConfirmingUnlink] = useState(false);
@@ -1014,6 +1050,7 @@ function SplitLedgerMoneyLink({
   };
 
   const handleUnlink = async () => {
+    if (!isOnline) { showError("Estás offline, no podés hacer esto ahora."); return; }
     setUnlinking(true);
     try {
       await unlinkGroup(activeLink.id);
@@ -1174,7 +1211,8 @@ function SortableCategoryRow({ cat, onEditIcon, onChangeLabel, onRemove, draggab
    GROUP VIEW
    ========================================================================= */
 
-function GroupView({ group, session, onRefresh, onBack, onAddExpense, onOpenExpense, onOpenPayment, onSettleUp, onEditGroup, onSoftDeleteExpense }) {
+function GroupView({ group, session, onRefresh, onBack, onAddExpense, onOpenExpense, onOpenPayment, onSettleUp, onEditGroup, onSoftDeleteExpense, isOnline = true, showError }) {
+  const blockOffline = () => showError("Estás offline, no podés hacer esto ahora.");
   const [tab, setTab] = useState("activity"); // activity | balances | individual
   useScrollToTopOnChange(tab);
 
@@ -1226,7 +1264,11 @@ function GroupView({ group, session, onRefresh, onBack, onAddExpense, onOpenExpe
         title={group.name}
         onBack={onBack}
         right={
-          <button style={styles.iconBtnGhost} onClick={onEditGroup} aria-label="Editar grupo">
+          <button
+            style={{ ...styles.iconBtnGhost, opacity: isOnline ? 1 : 0.5 }}
+            onClick={() => { if (!isOnline) { blockOffline(); return; } onEditGroup(); }}
+            aria-label="Editar grupo"
+          >
             <Settings size={18} />
           </button>
         }
@@ -1278,7 +1320,10 @@ function GroupView({ group, session, onRefresh, onBack, onAddExpense, onOpenExpe
                         <strong style={{ fontWeight: 700 }}>{shortName(nameOf(members, t.to))}</strong>
                       </span>
                       <span style={{ fontWeight: 700, fontSize: 14, color: "#C75D3B", fontFamily: "system-ui, sans-serif", flexShrink: 0 }}>{money(t.amount, currency)}</span>
-                      <button style={styles.settleSmallBtn} onClick={() => onSettleUp({ from: t.from, to: t.to, amount: t.amount, currency })}>
+                      <button
+                        style={{ ...styles.settleSmallBtn, opacity: isOnline ? 1 : 0.5 }}
+                        onClick={() => { if (!isOnline) { blockOffline(); return; } onSettleUp({ from: t.from, to: t.to, amount: t.amount, currency }); }}
+                      >
                         Saldar
                       </button>
                     </div>
@@ -1289,7 +1334,10 @@ function GroupView({ group, session, onRefresh, onBack, onAddExpense, onOpenExpe
             <p style={styles.simplifyNote}>
               {allSettled ? "Sin pagos pendientes." : `Simplificado a ${totalTxnCount} pago${totalTxnCount > 1 ? "s" : ""}: el mínimo posible para saldar el grupo.`}
             </p>
-            <button style={{ ...styles.btnSecondary, width: "calc(100% - 40px)", margin: "4px 20px 0" }} onClick={() => onSettleUp(null)}>
+            <button
+              style={{ ...styles.btnSecondary, width: "calc(100% - 40px)", margin: "4px 20px 0", opacity: isOnline ? 1 : 0.5 }}
+              onClick={() => { if (!isOnline) { blockOffline(); return; } onSettleUp(null); }}
+            >
               <HandCoins size={16} /> Registrar un pago
             </button>
           </div>
@@ -1484,7 +1532,11 @@ function GroupView({ group, session, onRefresh, onBack, onAddExpense, onOpenExpe
         </div>
       )}
 
-      <button style={{ ...styles.fab, bottom: "calc(78px + env(safe-area-inset-bottom))" }} onClick={onAddExpense} aria-label="Agregar gasto"><Plus size={24} strokeWidth={2.5} /></button>
+      <button
+        style={{ ...styles.fab, bottom: "calc(78px + env(safe-area-inset-bottom))", opacity: isOnline ? 1 : 0.5 }}
+        onClick={() => { if (!isOnline) { blockOffline(); return; } onAddExpense(); }}
+        aria-label="Agregar gasto"
+      ><Plus size={24} strokeWidth={2.5} /></button>
     </div>
   );
 }
@@ -1493,7 +1545,7 @@ function GroupView({ group, session, onRefresh, onBack, onAddExpense, onOpenExpe
    EXPENSE DETAIL (solo lectura — se abre al tocar la tarjeta de un gasto)
    ========================================================================= */
 
-function ExpenseDetail({ group, expenseId, onBack, onEdit }) {
+function ExpenseDetail({ group, expenseId, onBack, onEdit, isOnline = true, showError }) {
   const { members } = group;
   const e = group.expenses.find((x) => x.id === expenseId);
   const [showFullPhoto, setShowFullPhoto] = useState(false);
@@ -1519,8 +1571,8 @@ function ExpenseDetail({ group, expenseId, onBack, onEdit }) {
         onBack={onBack}
         right={
           <button
-            onClick={() => onEdit(e.id)}
-            style={{ display: "flex", alignItems: "center", gap: 5, border: "none", background: "transparent", color: "#C75D3B", fontWeight: 700, fontSize: 13.5, fontFamily: "system-ui, sans-serif", padding: "6px 4px" }}
+            onClick={() => { if (!isOnline) { showError("Estás offline, no podés editar este gasto ahora."); return; } onEdit(e.id); }}
+            style={{ display: "flex", alignItems: "center", gap: 5, border: "none", background: "transparent", color: "#C75D3B", fontWeight: 700, fontSize: 13.5, fontFamily: "system-ui, sans-serif", padding: "6px 4px", opacity: isOnline ? 1 : 0.5 }}
           >
             <Pencil size={15} /> Editar
           </button>
@@ -1587,7 +1639,11 @@ function ExpenseDetail({ group, expenseId, onBack, onEdit }) {
             aria-label="Ver foto completa"
             style={{ width: "100%", padding: 0, border: "none", background: "none", display: "block", cursor: "zoom-in" }}
           >
-            <img src={e.imageUrl} alt="" style={{ width: "100%", borderRadius: 12, border: "1px solid #ECE3D3", objectFit: "cover", maxHeight: 220, display: "block" }} />
+            <ImageWithFallback
+              src={e.imageUrl}
+              style={{ width: "100%", borderRadius: 12, border: "1px solid #ECE3D3", objectFit: "cover", maxHeight: 220, display: "block" }}
+              fallback={<div style={{ padding: 14, textAlign: "center", borderRadius: 12, border: "1px solid #ECE3D3", color: "#A89A87", fontSize: 13, fontFamily: "system-ui, sans-serif" }}>Foto no disponible sin conexión</div>}
+            />
           </button>
         )}
 
@@ -2392,7 +2448,7 @@ function NewExpense({ group, groups, defaultGroupId, expenseId, onCancel, onSave
    mismo patrón que ExpenseDetail para ser consistentes)
    ========================================================================= */
 
-function PaymentDetail({ group, paymentId, onBack, onEdit }) {
+function PaymentDetail({ group, paymentId, onBack, onEdit, isOnline = true, showError }) {
   const { members } = group;
   const p = group.payments.find((x) => x.id === paymentId);
 
@@ -2412,8 +2468,8 @@ function PaymentDetail({ group, paymentId, onBack, onEdit }) {
         onBack={onBack}
         right={
           <button
-            onClick={() => onEdit(p.id)}
-            style={{ display: "flex", alignItems: "center", gap: 5, border: "none", background: "transparent", color: "#C75D3B", fontWeight: 700, fontSize: 13.5, fontFamily: "system-ui, sans-serif", padding: "6px 4px" }}
+            onClick={() => { if (!isOnline) { showError("Estás offline, no podés editar este pago ahora."); return; } onEdit(p.id); }}
+            style={{ display: "flex", alignItems: "center", gap: 5, border: "none", background: "transparent", color: "#C75D3B", fontWeight: 700, fontSize: 13.5, fontFamily: "system-ui, sans-serif", padding: "6px 4px", opacity: isOnline ? 1 : 0.5 }}
           >
             <Pencil size={15} /> Editar
           </button>

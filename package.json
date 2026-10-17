@@ -15,11 +15,14 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@supabase/supabase-js": "^2.115.0",
     "@tesseract.js-data/spa": "^1.0.0",
+    "dexie": "^4.4.6",
+    "dexie-react-hooks": "^4.4.0",
     "lucide-react": "^0.383.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tesseract.js": "^7.0.0",
-    "tesseract.js-core": "^7.0.0"
+    "tesseract.js-core": "^7.0.0",
+    "vite-plugin-pwa": "^2.0.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",

@@ -4,6 +4,7 @@ import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCen
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
+import { offlineSupabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, RootHeader, ConfirmInline, Footer, PhotoPicker, ToggleField, Field, PasswordInput } from "../../components/Shared.jsx";
 import { useImageUpload, resolvePhotoUrl, colorFor, initials, useScrollToTopOnChange } from "../../lib/helpers.jsx";
@@ -20,11 +21,11 @@ import CurrencySettingsScreen from "../moneymanager/CurrencySettingsScreen.jsx";
    ========================================================================= */
 
 export default function ConfigScreen({
-  session, invites = [], onAcceptInvite, onRejectInvite, onLogout, refreshProfile,
+  session, invites = [], onAcceptInvite, onRejectInvite, onLogout, refreshProfile, patchSession,
   groups, reloadGroups, onCreateGroup, onOpenGroup, showError, showSuccess, showInfo,
   changingPassword, setChangingPassword, viewingProfile, setViewingProfile,
   moneyManager, onSaveMoneyTransaction, creatingRecurring, setCreatingRecurring,
-  moneyManagerScreen, setMoneyManagerScreen, onOpenSplitLedgerGroup,
+  moneyManagerScreen, setMoneyManagerScreen, onOpenSplitLedgerGroup, isOnline = true,
 }) {
   // Igual que activeTab en SplitLedger.jsx: en localStorage para que
   // sobreviva a cerrar y reabrir la app, no solo a pasar a segundo plano.
@@ -129,6 +130,7 @@ export default function ConfigScreen({
         showError={showError}
         showInfo={showInfo}
         onBack={() => setMoneyManagerScreen(null)}
+        isOnline={isOnline}
       />
     );
   }
@@ -147,6 +149,7 @@ export default function ConfigScreen({
         showError={showError}
         showInfo={showInfo}
         onBack={() => setMoneyManagerScreen(null)}
+        isOnline={isOnline}
       />
     );
   }
@@ -155,8 +158,11 @@ export default function ConfigScreen({
     return (
       <ChangePasswordScreen
         session={session}
+        isOnline={isOnline}
+        showError={showError}
         onBack={() => setChangingPassword(false)}
         onSave={async (newPassword) => {
+          if (!isOnline) throw new Error("Estás offline, no podés cambiar la contraseña ahora.");
           const { error } = await supabase.auth.updateUser({ password: newPassword });
           if (error) throw error;
           showSuccess("Contraseña actualizada.");
@@ -170,10 +176,13 @@ export default function ConfigScreen({
     return (
       <ProfileScreen
         session={session}
+        isOnline={isOnline}
+        showError={showError}
         onBack={() => setViewingProfile(false)}
         onLogout={onLogout}
         onChangePassword={() => setChangingPassword(true)}
         onSave={async ({ photoUrl }) => {
+          if (!isOnline) throw new Error("Estás offline, no podés guardar cambios de perfil ahora.");
           const { error } = await supabase.from("profiles").update({ photo_url: photoUrl }).eq("id", session.userId);
           if (error) throw error;
           await refreshProfile();
@@ -240,13 +249,14 @@ export default function ConfigScreen({
           reloadGroups={reloadGroups}
           onCreateGroup={onCreateGroup}
           onOpenGroup={onOpenGroup}
-          refreshProfile={refreshProfile}
           showError={showError}
           showSuccess={showSuccess}
           showInfo={showInfo}
           invites={invites}
           onAcceptInvite={onAcceptInvite}
           onRejectInvite={onRejectInvite}
+          isOnline={isOnline}
+          patchSession={patchSession}
         />
       )}
     </div>
@@ -285,7 +295,7 @@ function MenuRow({ label, onClick, badge, last }) {
    para el botón de "editar" propio; acá alcanza con un estado local).
    ========================================================================= */
 
-function AccountsSettingsScreen({ session, groups, accounts, accountTotals, settings, slLinks, onOpenSplitLedgerGroup, reload, showError, showInfo, onBack }) {
+function AccountsSettingsScreen({ session, groups, accounts, accountTotals, settings, slLinks, onOpenSplitLedgerGroup, reload, showError, showInfo, onBack, isOnline = true }) {
   const [view, setView] = useState({ screen: "groups" });
   useScrollToTopOnChange(view.screen, view.groupId);
 
@@ -308,6 +318,7 @@ function AccountsSettingsScreen({ session, groups, accounts, accountTotals, sett
         justCreated={view.justCreated}
         onBack={() => setView({ screen: "groups" })}
         onDeleted={() => setView({ screen: "groups" })}
+        isOnline={isOnline}
       />
     );
   }
@@ -331,7 +342,7 @@ function AccountsSettingsScreen({ session, groups, accounts, accountTotals, sett
    la derecha de Configuración): foto, cambiar contraseña, cerrar sesión.
    ========================================================================= */
 
-function ProfileScreen({ session, onBack, onLogout, onChangePassword, onSave }) {
+function ProfileScreen({ session, onBack, onLogout, onChangePassword, onSave, isOnline = true, showError }) {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
@@ -352,11 +363,11 @@ function ProfileScreen({ session, onBack, onLogout, onChangePassword, onSave }) 
     <div style={styles.screen}>
       <TopBar title="Perfil" onBack={onBack} />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        <PhotoPicker previewUrl={photoUrl} onChange={handlePhoto} onClear={clearPhoto} shape="circle" />
+        <PhotoPicker previewUrl={photoUrl} onChange={handlePhoto} onClear={clearPhoto} shape="circle" disabled={!isOnline} onDisabledClick={() => showError("Estás offline, no podés cambiar la foto ahora.")} />
 
         <p style={{ ...styles.muted, padding: 0, fontSize: 12 }}>@{session.username}</p>
 
-        <button style={styles.btnSecondary} onClick={onChangePassword}>
+        <button style={{ ...styles.btnSecondary, opacity: isOnline ? 1 : 0.5 }} onClick={() => { if (!isOnline) { showError("Estás offline, no podés cambiar la contraseña ahora."); return; } onChangePassword(); }}>
           Cambiar contraseña
         </button>
 
@@ -382,7 +393,7 @@ function ProfileScreen({ session, onBack, onLogout, onChangePassword, onSave }) 
       ) : (
         <Footer>
           <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onBack}>Cancelar</button>
-          <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: saving ? 0.6 : 1 }} onClick={handleSave} disabled={saving}>
+          <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !isOnline) ? 0.5 : 1 }} onClick={handleSave} disabled={saving || !isOnline}>
             {saving ? "Guardando…" : "Guardar"}
           </button>
         </Footer>
@@ -395,7 +406,7 @@ function ProfileScreen({ session, onBack, onLogout, onChangePassword, onSave }) 
    CAMBIAR CONTRASEÑA
    ========================================================================= */
 
-function ChangePasswordScreen({ session, onBack, onSave }) {
+function ChangePasswordScreen({ session, onBack, onSave, isOnline = true, showError }) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -411,6 +422,7 @@ function ChangePasswordScreen({ session, onBack, onSave }) {
     if (saving) return;
     setErr("");
     if (!canSave) { setTouched({ currentPassword: true, newPassword: true, confirmPassword: true }); return; }
+    if (!isOnline) { showError("Estás offline, no podés cambiar la contraseña ahora."); return; }
     setSaving(true);
     try {
       const { error } = await supabase.auth.signInWithPassword({ email: session.email, password: currentPassword });
@@ -449,9 +461,9 @@ function ChangePasswordScreen({ session, onBack, onSave }) {
       <Footer>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onBack}>Cancelar</button>
         <button
-          style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }}
+          style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave || !isOnline) ? 0.5 : 1 }}
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || !isOnline}
         >
           {saving ? "Actualizando…" : "Actualizar contraseña"}
         </button>
@@ -465,7 +477,7 @@ function ChangePasswordScreen({ session, onBack, onSave }) {
    defecto, tus grupos)
    ========================================================================= */
 
-function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onOpenGroup, refreshProfile, showError, showSuccess, showInfo, invites, onAcceptInvite, onRejectInvite }) {
+function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onOpenGroup, patchSession, showError, showSuccess, showInfo, invites, onAcceptInvite, onRejectInvite, isOnline = true }) {
   const [displayName, setDisplayName] = useState(session.displayName || "");
   const [savingName, setSavingName] = useState(false);
   const [togglingEnabled, setTogglingEnabled] = useState(false);
@@ -486,6 +498,13 @@ function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onO
     useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
   );
+  // Estas 4 son offline-capaces: son filas que solo vos tocás (tu propio
+  // perfil, o tu propio `sort_order` dentro de group_members) — no tienen el
+  // riesgo de que otro miembro esté escribiendo lo mismo al mismo tiempo,
+  // mismo argumento que ya justifica que Money Manager sea offline completo.
+  // Pasan por offlineSupabase (escribe directo con señal, encola sin ella) y
+  // reflejan el cambio al toque en `session` vía patchSession, sin esperar
+  // una vuelta de red (fetchProfile) que offline nunca llegaría.
   const handleGroupDragEnd = async ({ active, over }) => {
     if (!over || active.id === over.id) return;
     const oldIndex = groupOrder.indexOf(active.id);
@@ -496,11 +515,14 @@ function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onO
       const results = await Promise.all(newOrder.map((groupId, i) => {
         const g = groups.find((x) => x.id === groupId);
         const memberId = g.members.find((m) => m.linkedUserId === session.userId)?.id;
-        return supabase.from("group_members").update({ sort_order: i }).eq("id", memberId);
+        return offlineSupabase.from("group_members").update({ sort_order: i }).eq("id", memberId);
       }));
       const failed = results.find((r) => r.error);
       if (failed) throw failed.error;
-      await reloadGroups();
+      // Sin señal, reloadGroups() traería el cache viejo (sin este reorden
+      // todavía) y pisaría el orden optimista que ya se ve bien -- se deja
+      // tal cual hasta el próximo sync real, que va a traer esto ya confirmado.
+      if (isOnline) await reloadGroups();
     } catch (e) {
       showError(`No se pudo guardar el orden: ${e?.message || e}`);
       await reloadGroups();
@@ -511,19 +533,20 @@ function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onO
     if (!displayName.trim()) return showError("El nombre no puede estar vacío.");
     setSavingName(true);
     try {
-      const { error } = await supabase.from("profiles").update({ display_name: displayName.trim() }).eq("id", session.userId);
+      const { error } = await offlineSupabase.from("profiles").update({ display_name: displayName.trim() }).eq("id", session.userId);
       if (error) throw error;
-      await refreshProfile();
-      showSuccess("Nombre actualizado.");
+      patchSession({ displayName: displayName.trim() });
+      showSuccess(isOnline ? "Nombre actualizado." : "Nombre actualizado. Se sube solo apenas vuelva la señal.");
     } catch (e) { showError(`No se pudo guardar: ${e?.message || e}`); } finally { setSavingName(false); }
   };
 
   const toggleEnabled = async () => {
     setTogglingEnabled(true);
     try {
-      const { error } = await supabase.from("profiles").update({ split_ledger_enabled: !session.splitLedgerEnabled }).eq("id", session.userId);
+      const nextValue = !session.splitLedgerEnabled;
+      const { error } = await offlineSupabase.from("profiles").update({ split_ledger_enabled: nextValue }).eq("id", session.userId);
       if (error) throw error;
-      await refreshProfile();
+      patchSession({ splitLedgerEnabled: nextValue });
     } catch (e) { showError(`No se pudo actualizar: ${e?.message || e}`); } finally { setTogglingEnabled(false); }
   };
 
@@ -531,10 +554,10 @@ function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onO
     const value = e.target.value || null;
     setSavingDefault(true);
     try {
-      const { error } = await supabase.from("profiles").update({ default_group_id: value }).eq("id", session.userId);
+      const { error } = await offlineSupabase.from("profiles").update({ default_group_id: value }).eq("id", session.userId);
       if (error) throw error;
-      await refreshProfile();
-      showInfo("Guardado.");
+      patchSession({ defaultGroupId: value });
+      showInfo(isOnline ? "Guardado." : "Guardado. Se sube solo apenas vuelva la señal.");
     } catch (e) { showError(`No se pudo actualizar: ${e?.message || e}`); } finally { setSavingDefault(false); }
   };
 
@@ -588,7 +611,7 @@ function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onO
               </p>
               <div style={{ display: "flex", gap: 8 }}>
                 <button style={styles.btnGhostSmall} onClick={() => onRejectInvite(inv)}>Rechazar</button>
-                <button style={{ ...styles.btnDangerSmall, background: "#3B6E62" }} onClick={() => onAcceptInvite(inv)}>Aceptar</button>
+                <button style={{ ...styles.btnDangerSmall, background: "#3B6E62", opacity: isOnline ? 1 : 0.5 }} onClick={() => onAcceptInvite(inv)}>Aceptar</button>
               </div>
             </div>
           ))}
@@ -606,7 +629,12 @@ function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onO
           </div>
         </SortableContext>
       </DndContext>
-      <button style={styles.btnDashed} onClick={onCreateGroup}><Plus size={16} /> Crear grupo</button>
+      <button
+        style={{ ...styles.btnDashed, opacity: isOnline ? 1 : 0.5 }}
+        onClick={() => { if (!isOnline) { showError("Estás offline, no podés crear un grupo ahora."); return; } onCreateGroup(); }}
+      >
+        <Plus size={16} /> Crear grupo
+      </button>
     </div>
   );
 }

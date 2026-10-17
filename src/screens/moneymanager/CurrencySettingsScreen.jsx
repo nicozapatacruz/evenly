@@ -3,7 +3,7 @@ import { Menu, Plus, X } from "lucide-react";
 import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { supabase } from "../../lib/supabaseClient.js";
+import { offlineSupabase as supabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, Footer, ConfirmInline, Field } from "../../components/Shared.jsx";
 import { CURRENCIES, CURRENCY_LIST } from "../../lib/helpers.jsx";

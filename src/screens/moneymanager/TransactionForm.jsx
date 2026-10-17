@@ -3,7 +3,7 @@ import { X, Menu, Plus, Trash2, Copy, Star, Divide } from "lucide-react";
 import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { supabase } from "../../lib/supabaseClient.js";
+import { offlineSupabase as supabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, Footer, ConfirmInline, IconInput, PickerField, Field, Modal, CalculatorAmountInput, CurrencyConversionField } from "../../components/Shared.jsx";
 import { parseAmountInput, todayInputValue, dateInputValueInZone, money, fmtDate, useScrollToTopOnChange } from "../../lib/helpers.jsx";
@@ -26,7 +26,7 @@ const TYPE_INFO = {
 export default function TransactionForm({
   session, settings, groups, accounts, categories, onCancel, onSave, onDelete, onBookmark, reloadCategories, showError, showInfo,
   forceRecurringOpen = false, hideRemoveRecurring = false, editingTransaction = null, defaultDate = null, defaultAccountId = null,
-  prefillBookmark = null, slLinks = null, onOpenSplitLedgerExpense = null,
+  prefillBookmark = null, slLinks = null, onOpenSplitLedgerExpense = null, isOnline = true,
 }) {
   const [managingCategoryType, setManagingCategoryType] = useState(null); // "income" | "expense" | null
   useScrollToTopOnChange(managingCategoryType);
@@ -302,8 +302,11 @@ export default function TransactionForm({
           <div style={{ display: "flex", gap: 4 }}>
             {isSynced && splitGroupId && onOpenSplitLedgerExpense && (
               <button
-                style={{ ...styles.btnToday, display: "flex", alignItems: "center", gap: 4 }}
-                onClick={() => onOpenSplitLedgerExpense(splitGroupId, editingTransaction.sl_source_kind, editingTransaction.sl_source_id)}
+                style={{ ...styles.btnToday, display: "flex", alignItems: "center", gap: 4, opacity: isOnline ? 1 : 0.5 }}
+                onClick={() => {
+                  if (!isOnline) { showError("Estás offline, no podés abrir el original ahora."); return; }
+                  onOpenSplitLedgerExpense(splitGroupId, editingTransaction.sl_source_kind, editingTransaction.sl_source_id);
+                }}
               >
                 <Divide size={13} color="#A8754A" />
                 Original

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import { Pencil, Plus, ChevronRight, ChevronUp, ChevronDown, Menu, Trash2, Eye, EyeOff, CreditCard, AlertTriangle } from "lucide-react";
 import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { supabase } from "../../lib/supabaseClient.js";
+import { offlineSupabase as supabase } from "../../lib/offlineSupabase.js";
+import { db } from "../../lib/localDb.js";
 import { styles } from "../../lib/styles.js";
 import { RootHeader, TopBar, ConfirmInline, Footer, Field, EmptyState } from "../../components/Shared.jsx";
 import { money, useScrollToTopOnChange } from "../../lib/helpers.jsx";
@@ -19,7 +21,7 @@ import TransactionForm from "./TransactionForm.jsx";
    manageGroups / manageAccounts: pantallas de edición (TopBar).
    ========================================================================= */
 
-export default function CuentasTab({ session, settings, groups, accounts, accountTotals, categories, slLinks, onOpenSplitLedgerGroup, onOpenSplitLedgerExpense, reload, reloadCategories, showError, showInfo, view, setView, onSaveMoneyTransaction, onDeleteMoneyTransaction, onBookmarkMoneyTransaction }) {
+export default function CuentasTab({ session, settings, groups, accounts, accountTotals, categories, slLinks, onOpenSplitLedgerGroup, onOpenSplitLedgerExpense, reload, reloadCategories, showError, showInfo, view, setView, onSaveMoneyTransaction, onDeleteMoneyTransaction, onBookmarkMoneyTransaction, isOnline = true }) {
   const balanceColor = (n) => (n > 0.004 ? "#3B6E62" : n < -0.004 ? "#B0473A" : "#6B6355");
   const [deletedOpen, setDeletedOpen] = useState(false);
 
@@ -40,30 +42,23 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
   // regalo o efectivo por sacar) — por eso se suma la transferencia
   // puntual, no el balance de la cuenta entera.
   const realBalanceConfig = CUSTOM_USER_CONFIG[session.email]?.realBalance;
-  const [pendienteTcSum, setPendienteTcSum] = useState(0);
-  // Arranca en null (no en 0) a propósito: mientras no se sabe el valor
-  // real todavía, mejor no mostrar la fila "Saldo Real" que mostrar un
-  // número de entrada que es incompleto y después salta solo.
-  const [pendienteTcLoaded, setPendienteTcLoaded] = useState(false);
-  useEffect(() => {
-    if (!realBalanceConfig) return;
-    const tcId = accounts.find((a) => a.name === realBalanceConfig.tcName && !a.deleted)?.id;
-    const pendienteId = accounts.find((a) => a.name === realBalanceConfig.pendienteName && !a.deleted)?.id;
-    if (!tcId || !pendienteId) return;
-    supabase
-      .from("mm_transactions")
-      .select("amount")
-      .eq("user_id", session.userId)
-      .eq("deleted", false)
-      .eq("type", "transfer")
-      .eq("account_id", tcId)
-      .eq("to_account_id", pendienteId)
-      .eq("title", "Pendiente TC")
-      .then(({ data }) => {
-        setPendienteTcSum((data || []).reduce((s, t) => s + t.amount, 0));
-        setPendienteTcLoaded(true);
-      });
-  }, [realBalanceConfig, accounts, session.userId]);
+  const realBalanceTcId = accounts.find((a) => a.name === realBalanceConfig?.tcName && !a.deleted)?.id;
+  const realBalancePendienteId = accounts.find((a) => a.name === realBalanceConfig?.pendienteName && !a.deleted)?.id;
+  // Local-first (lee de Dexie, no de red) — antes esto era una consulta
+  // directa a Supabase; se quedaba pegada para siempre offline (y de hecho
+  // rota incluso con señal: terminó pasando sin querer por offlineSupabase,
+  // que solo sabe de escrituras, no de un SELECT liso como este). Arranca
+  // en null (no en 0) a propósito: mientras no se sabe el valor real
+  // todavía, mejor no mostrar la fila "Saldo Real" que mostrar un número de
+  // entrada que es incompleto y después salta solo.
+  const pendienteTcSum = useLiveQuery(async () => {
+    if (!realBalanceTcId || !realBalancePendienteId) return null;
+    const rows = await db.mm_transactions.where("account_id").equals(realBalanceTcId).toArray();
+    return rows
+      .filter((t) => !t.deleted && t.type === "transfer" && t.to_account_id === realBalancePendienteId && t.title === "Pendiente TC")
+      .reduce((s, t) => s + t.amount, 0);
+  }, [realBalanceTcId, realBalancePendienteId], null);
+  const pendienteTcLoaded = pendienteTcSum !== null;
 
   if (view.screen === "manageAllAccounts") {
     return (
@@ -79,6 +74,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
         showError={showError}
         showInfo={showInfo}
         onBack={() => setView({ screen: "list" })}
+        isOnline={isOnline}
       />
     );
   }
@@ -124,6 +120,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
         reloadCategories={reloadCategories}
         showError={showError}
         showInfo={showInfo}
+        isOnline={isOnline}
         editingTransaction={view.transaction}
         defaultDate={view.date}
         defaultAccountId={view.accountId}
@@ -439,7 +436,7 @@ function SortableGroupRow({ group, onOpen, draggable }) {
 // (Footer Cancelar/Guardar, igual que AccountDetailScreen) se administra acá
 // la lista de cuentas hijas — eso sigue siendo inmediato, como el resto de
 // los drag-and-drop de la app.
-export function ManageAccounts({ session, group = null, groups, accounts, accountTotals, settings, slLinks, onOpenSplitLedgerGroup, reload, showError, showInfo, justCreated, onBack, onCreated, onDeleted }) {
+export function ManageAccounts({ session, group = null, groups, accounts, accountTotals, settings, slLinks, onOpenSplitLedgerGroup, reload, showError, showInfo, justCreated, onBack, onCreated, onDeleted, isOnline = true }) {
   // Solo el primer render de esta pantalla (llegando recién de "Nuevo
   // grupo") — no se recalcula después, así que un re-render por cualquier
   // otro motivo no lo hace reaparecer.
@@ -591,7 +588,7 @@ export function ManageAccounts({ session, group = null, groups, accounts, accoun
               accounts={accounts}
               reload={reload}
               showError={showError}
-              onOpenAccount={(id) => openAccountOrSplitLedgerGroup(group, id, slLinks, onOpenSplitLedgerGroup, setViewingAccountId)}
+              onOpenAccount={(id) => openAccountOrSplitLedgerGroup(group, id, slLinks, onOpenSplitLedgerGroup, setViewingAccountId, isOnline, showError)}
             />
             {!isSystemGroup && (
               <button style={styles.btnDashed} onClick={() => setCreating(true)}>
@@ -616,7 +613,7 @@ export function ManageAccounts({ session, group = null, groups, accounts, accoun
 // "Grupos de cuentas"). Cada grupo es solo un encabezado de sección — para
 // renombrar/reordenar/crear GRUPOS está la pantalla separada "Grupos de
 // cuentas", reachable únicamente desde Configuración.
-export function ManageAllAccounts({ session, groups, accounts, accountTotals, settings, slLinks, onOpenSplitLedgerGroup, reload, showError, showInfo, onBack }) {
+export function ManageAllAccounts({ session, groups, accounts, accountTotals, settings, slLinks, onOpenSplitLedgerGroup, reload, showError, showInfo, onBack, isOnline = true }) {
   const [creating, setCreating] = useState(false);
   const [viewingAccountId, setViewingAccountId] = useState(null);
   useScrollToTopOnChange(creating, viewingAccountId);
@@ -676,7 +673,7 @@ export function ManageAllAccounts({ session, groups, accounts, accountTotals, se
               accounts={accounts}
               reload={reload}
               showError={showError}
-              onOpenAccount={(id) => openAccountOrSplitLedgerGroup(g, id, slLinks, onOpenSplitLedgerGroup, setViewingAccountId)}
+              onOpenAccount={(id) => openAccountOrSplitLedgerGroup(g, id, slLinks, onOpenSplitLedgerGroup, setViewingAccountId, isOnline, showError)}
             />
           </div>
         ))}
@@ -690,8 +687,13 @@ export function ManageAllAccounts({ session, groups, accounts, accountTotals, se
 // Ledger", la flecha lleva al "Editar grupo" de Split Ledger en vez de abrir
 // AccountDetailScreen (se busca el vínculo más reciente, activo o no, para
 // no dejar la flecha muerta en una cuenta ya desvinculada).
-function openAccountOrSplitLedgerGroup(group, accountId, slLinks, onOpenSplitLedgerGroup, onOpenAccount) {
+function openAccountOrSplitLedgerGroup(group, accountId, slLinks, onOpenSplitLedgerGroup, onOpenAccount, isOnline, showError) {
   if (group?.system_key === "split_ledger") {
+    // Salta directo a "Editar grupo" de Split Ledger -- online-only, mismo
+    // motivo que el resto de Split Ledger (bypassearía el bloqueo de
+    // GroupView si se dejara entrar offline, dejando picar la foto/nombre y
+    // fallar recién al guardar).
+    if (!isOnline) { showError?.("Estás offline, no podés editar este grupo ahora."); return; }
     const link = (slLinks || [])
       .filter((l) => l.pseudo_account_id === accountId)
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];

@@ -911,9 +911,13 @@ export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, 
           type="button"
           onClick={openEdit}
           disabled={disabled}
-          style={{ ...styles.input, width: "100%", height: 44, boxSizing: "border-box", textAlign: "left", display: "flex", alignItems: "center", opacity: disabled ? 0.6 : 1, cursor: disabled ? "not-allowed" : "pointer", ...(currency ? { paddingRight: 46 } : null), ...style }}
+          style={{ ...styles.input, width: "100%", height: 44, boxSizing: "border-box", textAlign: "left", display: "flex", alignItems: "center", opacity: disabled ? 0.6 : 1, cursor: disabled ? "not-allowed" : "pointer", ...(open ? { boxShadow: "0 0 0 2px #C75D3B" } : null), ...(currency ? { paddingRight: 46 } : null), ...style }}
         >
           {displayValue ? displayValue : <span style={{ color: "#A89A87", fontSize: 13 }}>{placeholder}</span>}
+          {/* Este <button> no tiene foco/caret nativo (ver nota arriba) — sin
+              esto, no había ninguna señal visual de que el teclado propio
+              está activo para este campo (igual online que offline). */}
+          {open && <span className="blink-cursor" style={{ marginLeft: 2, width: 1.5, height: 18, background: "#C75D3B" }} />}
         </button>
         {currency && (
           <span style={{ position: "absolute", right: 13, top: "50%", transform: "translateY(-50%)", color: "#A89A87", fontSize: 13, pointerEvents: "none" }}>

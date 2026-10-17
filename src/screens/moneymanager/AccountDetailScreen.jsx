@@ -19,7 +19,13 @@ const balanceColor = (n) => (n > 0.004 ? "#3B6E62" : n < -0.004 ? "#B0473A" : "#
    ========================================================================= */
 
 export default function AccountDetailScreen({ session, account = null, groups, accounts, accountTotals, settings, defaultGroupId, groupLocked = false, reload, showError, showInfo, onBack, onDeleted }) {
-  const [groupId, setGroupId] = useState(account?.group_id || defaultGroupId || groups[0]?.id || "");
+  // El grupo "Split Ledger" nunca es elegible a mano (ver el <select> de
+  // abajo) — si fuera el primero de `groups` (ej. por orden de arrastre en
+  // "Grupos de cuentas"), el valor por defecto de una cuenta nueva tiene que
+  // saltearlo igual, si no quedaría un groupId que ni aparece en las
+  // opciones ni se puede corregir desde el selector.
+  const selectableGroups = groups.filter((g) => !g.deleted && g.system_key !== "split_ledger");
+  const [groupId, setGroupId] = useState(account?.group_id || defaultGroupId || selectableGroups[0]?.id || "");
   const [name, setName] = useState(account?.name || "");
   const [icon, setIcon] = useState(account?.icon || "");
   // Restricción dura (ver PENDIENTES.md sección B): toda transacción de esta
@@ -196,8 +202,11 @@ export default function AccountDetailScreen({ session, account = null, groups, a
       )}
       <div style={{ ...styles.form, paddingBottom: 100 }}>
         <Field label="Grupo">
+          {/* El grupo "Split Ledger" es informativo (lo crea/mantiene el
+              programa solo, ver isSystemAccount) — nunca se elige a mano acá,
+              mismo criterio que paymentAccountGroups más abajo. */}
           <select style={{ ...styles.input, opacity: groupLocked ? 0.6 : 1 }} value={groupId} onChange={(e) => setGroupId(e.target.value)} disabled={groupLocked}>
-            {groups.filter((g) => !g.deleted).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+            {selectableGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
         </Field>
 

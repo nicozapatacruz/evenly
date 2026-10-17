@@ -202,8 +202,23 @@ async function applyPendienteTcAutoSum(link, userId, userEmail, ctx, choicesBySo
   const pendienteAccount = (accounts || []).find((a) => a.name === config.pendienteAccountName);
   if (!tcAccount || !pendienteAccount) return;
 
+  // Traído una sola vez antes del loop: evita reintentar el insert (y su
+  // 409 esperado, ver más abajo) para cada gasto que esta misma función ya
+  // aplicó en una corrida anterior -- sin esto, cada sincronización volvía a
+  // intentarlo para TODOS los gastos ya sumados desde siempre, no solo los
+  // nuevos. El insert liso sigue siendo lo que de verdad protege contra una
+  // doble suma (dos corridas casi simultáneas sobre un gasto recién
+  // aplicado) -- este chequeo solo recorta el caso ya resuelto hace rato.
+  const { data: existingContribs } = await supabase
+    .from("sl_mm_pendiente_tc_contributions")
+    .select("source_id")
+    .eq("link_id", link.id)
+    .eq("source_kind", "expense");
+  const appliedExpenseIds = new Set((existingContribs || []).map((c) => c.source_id));
+
   for (const e of ctx.expenses) {
     if (e.deleted || !expenseInvolvesMe(e, ctx.memberId)) continue;
+    if (appliedExpenseIds.has(e.id)) continue;
     const shareAmt = Number(e.shares?.[ctx.memberId] || 0);
     const paidAmt = Number(e.payers?.[ctx.memberId] || 0);
     const diff = paidAmt - shareAmt;

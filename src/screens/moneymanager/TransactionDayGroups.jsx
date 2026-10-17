@@ -105,8 +105,8 @@ export function TransactionDayGroups({ transactions, settings, accounts, categor
         return (
           <div key={dayKey} data-daykey={dayKey} style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
             <div
-              onClick={() => onNewTransaction(dayKey)}
-              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 14px", background: "#FAF7F2", borderBottom: "1px solid #F0EBE2", fontFamily: "system-ui, sans-serif", cursor: "pointer" }}
+              onClick={onNewTransaction ? () => onNewTransaction(dayKey) : undefined}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 14px", background: "#FAF7F2", borderBottom: "1px solid #F0EBE2", fontFamily: "system-ui, sans-serif", cursor: onNewTransaction ? "pointer" : "default" }}
             >
               <span style={{ fontWeight: 700, fontSize: 13.5 }}>{d.getDate()} <span style={{ fontWeight: 400, color: "#6B6355", textTransform: "capitalize" }}>{DAY_LABEL(d)}</span></span>
               <span style={{ display: "flex", gap: 10, fontSize: 12.5 }}>

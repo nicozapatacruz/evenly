@@ -30,7 +30,7 @@ function balanceBefore(totals, year, month) {
 // se vuelve a montar al volver; si el tab/mes fueran estado local, se
 // perderían en ese viaje de ida y vuelta.
 export default function AccountActivityScreen({
-  userId, settings, accounts, categories, slLinks, accountId, accountName, accountIcon,
+  userId, settings, accounts, categories, slLinks, accountId, accountName, accountIcon, isSystemAccount = false,
   tab, setTab, viewMonth, setViewMonth, onBack, onNewTransaction, onEditTransaction,
 }) {
   const { totals, loading: loadingTotals } = useAccountMonthTotals(userId, accountId);
@@ -68,7 +68,7 @@ export default function AccountActivityScreen({
         <DiarioSubTab
           userId={userId} settings={accountSettings} accounts={accounts} categories={categories} slLinks={slLinks}
           accountId={accountId} totals={totals} viewMonth={viewMonth} setViewMonth={setViewMonth}
-          onNewTransaction={onNewTransaction} onEditTransaction={onEditTransaction}
+          onNewTransaction={isSystemAccount ? undefined : onNewTransaction} onEditTransaction={onEditTransaction}
         />
       ) : tab === "mensual" ? (
         <MensualSubTab
@@ -82,7 +82,7 @@ export default function AccountActivityScreen({
         />
       )}
 
-      {tab === "diario" && (
+      {tab === "diario" && !isSystemAccount && (
         <button style={{ ...styles.fab, bottom: "calc(78px + env(safe-area-inset-bottom))" }} onClick={() => onNewTransaction()} aria-label="Nueva transacción">
           <Plus size={24} strokeWidth={2.5} />
         </button>

@@ -84,6 +84,10 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
     if (!activityAccount) { setView({ screen: "list" }); return null; }
 
     if (view.screen === "activity") {
+      // Cuenta pseudo de un grupo vinculado de Split Ledger — solo
+      // informativa, no se cargan movimientos acá (se gestionan desde Split
+      // Ledger), así que esta pantalla no debe ofrecer "nueva transacción".
+      const isSystemAccount = groups.find((g) => g.id === activityAccount.group_id)?.system_key === "split_ledger";
       return (
         <AccountActivityScreen
           userId={session.userId}
@@ -94,6 +98,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
           accountId={view.accountId}
           accountName={activityAccount.name}
           accountIcon={activityAccount.icon}
+          isSystemAccount={isSystemAccount}
           tab={view.tab}
           setTab={(tab) => setView((v) => ({ ...v, tab }))}
           viewMonth={view.viewMonth}
@@ -665,7 +670,10 @@ export function ManageAllAccounts({ session, groups, accounts, accountTotals, se
         right={<button style={styles.iconBtnGhost} onClick={() => setCreating(true)} aria-label="Nueva cuenta"><Plus size={20} /></button>}
       />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        {groups.filter((g) => !g.deleted && accounts.some((a) => a.group_id === g.id && !a.deleted)).map((g) => (
+        {/* El grupo "Split Ledger" es informativo (lo gestiona el programa
+            solo al vincular un grupo compartido) — no tiene nada para editar
+            acá, se maneja desde Split Ledger. */}
+        {groups.filter((g) => !g.deleted && g.system_key !== "split_ledger" && accounts.some((a) => a.group_id === g.id && !a.deleted)).map((g) => (
           <div key={g.id}>
             <p style={{ ...styles.label, marginBottom: 12 }}>{g.name}</p>
             <AccountGroupEditor

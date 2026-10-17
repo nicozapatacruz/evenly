@@ -144,7 +144,7 @@ export default function SplitLedgerTab({
         <ExpenseDetail
           group={activeGroup}
           expenseId={view.expenseId}
-          onBack={() => setView({ screen: "group", groupId: activeGroup.id })}
+          onBack={onBackOverride || (() => setView({ screen: "group", groupId: activeGroup.id }))}
           onEdit={(expenseId) => setView({ screen: "newExpense", groupId: activeGroup.id, expenseId })}
           isOnline={isOnline}
           showError={showError}
@@ -1885,7 +1885,6 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
   // así que para cuando handleSave llega a ejecutarse esto siempre es true — es solo un
   // respaldo silencioso, no hace falta mostrar ningún error acá.
   const canSave =
-    !!description.trim() &&
     validAmount &&
     (payerMode === "single" ? !!singlePayer : Math.abs(multiPayerTotal - numericAmount) < 0.01) &&
     participantIds.length > 0 &&
@@ -1896,7 +1895,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
 
   const handleSave = async () => {
     if (saving) return;
-    if (!canSave) { setTouched({ description: true, amount: true, mmAccountId: true }); return; }
+    if (!canSave) { setTouched({ amount: true, mmAccountId: true }); return; }
     const dateMs = new Date(date + "T12:00:00").getTime();
     const payers = buildPayers();
     setSaving(true);
@@ -2094,15 +2093,15 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
         </Field>
 
         <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-          <Field label="Descripción" required style={{ flex: 1 }}>
+          <Field label="Descripción" style={{ flex: 1 }}>
             <div style={{ position: "relative" }}>
               <input
                 style={{ ...styles.input, width: "100%", height: 44, boxSizing: "border-box" }}
                 value={description}
                 onChange={(e) => { setDescription(e.target.value); setDescriptionDismissed(false); }}
                 onFocus={() => setDescriptionFocused(true)}
-                onBlur={() => { setDescriptionFocused(false); touch("description"); }}
-                placeholder="Cena, taxi, supermercado…"
+                onBlur={() => setDescriptionFocused(false)}
+                placeholder="Cena, taxi, supermercado… (opcional)"
               />
               {descriptionFocused && !descriptionDismissed && descriptionSuggestions.length > 0 && (
                 <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, zIndex: 5, border: "1px solid #DDD2BE", borderRadius: 10, background: "#fff", overflow: "hidden", boxShadow: "0 4px 10px rgba(0,0,0,0.08)" }}>
@@ -2128,12 +2127,6 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
             <PenLine size={18} />
           </button>
         </div>
-        {/* Mismo criterio que el error de Monto: vive FUERA del Field para no
-            sumarle altura solo a esa columna y desalinear los íconos de
-            Foto/Nota (hermanos en el mismo flex row). */}
-        {touched.description && !description.trim() && (
-          <span style={{ fontSize: 12, fontWeight: 400, color: "#B0473A", marginTop: -8, fontFamily: "system-ui, sans-serif" }}>Este campo es obligatorio.</span>
-        )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <p style={styles.label}>¿Quién pagó?</p>

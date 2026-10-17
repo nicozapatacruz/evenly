@@ -6,7 +6,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { offlineSupabase as supabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, Footer, ConfirmInline, IconInput, PickerField, Field, Modal, CalculatorAmountInput, CurrencyConversionField } from "../../components/Shared.jsx";
-import { parseAmountInput, todayInputValue, dateInputValueInZone, money, fmtDate, useScrollToTopOnChange } from "../../lib/helpers.jsx";
+import { parseAmountInput, todayInputValue, dateInputValue, dateInputValueInZone, money, fmtDate, useScrollToTopOnChange } from "../../lib/helpers.jsx";
 import { RECURRING_FREQUENCIES, nextOccurrence, computeAmountMain, useRecentNoteTitles } from "../../lib/moneyManagerData.js";
 
 const TYPE_INFO = {
@@ -14,6 +14,15 @@ const TYPE_INFO = {
   expense: { label: "Gasto", newLabel: "Nuevo gasto", color: "#C75D3B" },
   transfer: { label: "Transferencia", newLabel: "Nueva transferencia", color: "#4A6FA5" },
 };
+
+// Deriva freqValue/freqInterval (estado de este formulario) a partir de una
+// fila de mm_recurring ya existente — mismo criterio de "match exacto, si no
+// cae en la variante -x" que ya usa freqLabel en RecurringScreen.jsx.
+function recurringToFreqState(r) {
+  const exact = RECURRING_FREQUENCIES.find((f) => f.unit === r.repeat_unit && f.interval === r.repeat_interval);
+  if (exact) return { freqValue: exact.value, freqInterval: String(r.repeat_interval) };
+  return { freqValue: r.repeat_unit === "week" ? "week-x" : "month-x", freqInterval: String(r.repeat_interval) };
+}
 
 /* =========================================================================
    NUEVA TRANSACCIÓN — Ingreso/Gasto/Transferencia en un solo formulario
@@ -24,8 +33,8 @@ const TYPE_INFO = {
    ========================================================================= */
 
 export default function TransactionForm({
-  session, settings, groups, accounts, categories, onCancel, onSave, onDelete, onBookmark, reloadCategories, showError, showInfo,
-  forceRecurringOpen = false, hideRemoveRecurring = false, editingTransaction = null, defaultDate = null, defaultAccountId = null,
+  session, settings, groups, accounts, categories, onCancel, onSave, onSaveRecurring, onDelete, onDeleteRecurring, onBookmark, reloadCategories, showError, showInfo,
+  forceRecurringOpen = false, hideRemoveRecurring = false, editingTransaction = null, editingRecurring = null, defaultDate = null, defaultAccountId = null,
   prefillBookmark = null, slLinks = null, onOpenSplitLedgerExpense = null, isOnline = true,
 }) {
   const [managingCategoryType, setManagingCategoryType] = useState(null); // "income" | "expense" | null
@@ -53,11 +62,18 @@ export default function TransactionForm({
   // prefillBookmark solo aplica cuando no hay editingTransaction (un
   // marcador arranca "Nueva transacción", nunca "Editar") — y nunca trae
   // fecha, siempre arranca en hoy (o defaultDate si vino de otro lado).
-  const [type, setType] = useState(editingTransaction?.type || prefillBookmark?.type || "expense");
-  const [date, setDate] = useState(editingTransaction ? dateInputValueInZone(new Date(editingTransaction.date).getTime(), editingTransaction.timezone) : (defaultDate || todayInputValue()));
-  const [amount, setAmount] = useState(editingTransaction ? String(editingTransaction.amount) : (prefillBookmark ? String(prefillBookmark.amount) : ""));
+  // editingRecurring (fila de mm_recurring) es la 3ra fuente posible de
+  // valores iniciales, junto a editingTransaction/prefillBookmark — nunca
+  // coincide con las otras dos a la vez (ver ConfigScreen.jsx).
+  const [type, setType] = useState(editingTransaction?.type || editingRecurring?.type || prefillBookmark?.type || "expense");
+  const [date, setDate] = useState(
+    editingTransaction ? dateInputValueInZone(new Date(editingTransaction.date).getTime(), editingTransaction.timezone)
+    : editingRecurring ? dateInputValue(new Date(editingRecurring.start_date).getTime())
+    : (defaultDate || todayInputValue())
+  );
+  const [amount, setAmount] = useState(editingTransaction ? String(editingTransaction.amount) : editingRecurring ? String(editingRecurring.amount) : (prefillBookmark ? String(prefillBookmark.amount) : ""));
   const [currency, setCurrency] = useState(
-    editingTransaction?.currency || prefillBookmark?.currency
+    editingTransaction?.currency || editingRecurring?.currency || prefillBookmark?.currency
     || accounts.find((a) => a.id === (prefillBookmark?.account_id || defaultAccountId))?.currency
     || settings.main_currency
   );
@@ -66,9 +82,10 @@ export default function TransactionForm({
   // tasa o como monto ya convertido, pero lo que sube acá siempre queda en
   // este mismo formato canónico).
   const [exchangeRate, setExchangeRate] = useState(
-    (editingTransaction?.exchange_rate || prefillBookmark?.exchange_rate) ? String(editingTransaction?.exchange_rate || prefillBookmark?.exchange_rate) : ""
+    (editingTransaction?.exchange_rate || editingRecurring?.exchange_rate || prefillBookmark?.exchange_rate)
+      ? String(editingTransaction?.exchange_rate || editingRecurring?.exchange_rate || prefillBookmark?.exchange_rate) : ""
   );
-  const [categoryId, setCategoryId] = useState(editingTransaction?.category_id || prefillBookmark?.category_id || "");
+  const [categoryId, setCategoryId] = useState(editingTransaction?.category_id || editingRecurring?.category_id || prefillBookmark?.category_id || "");
   // Sube cada vez que el botón "Ok" del teclado de Importe confirma el monto
   // y pide saltar directo a elegir cuenta (ver CalculatorAmountInput) — el
   // campo que sigue a Importe desde que Cuenta pasó a ir antes que Categoría.
@@ -76,9 +93,9 @@ export default function TransactionForm({
   // Sube cada vez que la moneda cambia a una distinta de la cuenta, para que
   // CurrencyConversionField se abra solo (ver abajo, cerca del campo Importe).
   const [openConversionSignal, setOpenConversionSignal] = useState(0);
-  const [accountId, setAccountId] = useState(editingTransaction?.account_id || prefillBookmark?.account_id || defaultAccountId || "");
-  const [toAccountId, setToAccountId] = useState(editingTransaction?.to_account_id || prefillBookmark?.to_account_id || "");
-  const [note, setNote] = useState(editingTransaction?.title || prefillBookmark?.title || "");
+  const [accountId, setAccountId] = useState(editingTransaction?.account_id || editingRecurring?.account_id || prefillBookmark?.account_id || defaultAccountId || "");
+  const [toAccountId, setToAccountId] = useState(editingTransaction?.to_account_id || editingRecurring?.to_account_id || prefillBookmark?.to_account_id || "");
+  const [note, setNote] = useState(editingTransaction?.title || editingRecurring?.title || prefillBookmark?.title || "");
   // Separado en dos banderas a propósito: "noteFocused" sigue al foco real,
   // "noteDismissed" se prende solo al elegir una sugerencia (para que se
   // cierre aunque queden otras coincidencias, ej. "Mercadona" vs "Mercadona
@@ -90,7 +107,7 @@ export default function TransactionForm({
   const noteSuggestions = settings.autocomplete_notes && note.trim()
     ? recentNoteTitles.filter((t) => t.toLowerCase().includes(note.trim().toLowerCase()) && t.toLowerCase() !== note.trim().toLowerCase()).slice(0, 5)
     : [];
-  const [description, setDescription] = useState(editingTransaction?.memo || prefillBookmark?.memo || "");
+  const [description, setDescription] = useState(editingTransaction?.memo || editingRecurring?.memo || prefillBookmark?.memo || "");
   const [saving, setSaving] = useState(false);
   const [touched, setTouched] = useState({});
   const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
@@ -123,10 +140,11 @@ export default function TransactionForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountId]);
 
-  const [recurringOpen, setRecurringOpen] = useState(forceRecurringOpen);
-  const [freqValue, setFreqValue] = useState("month-1");
-  const [freqInterval, setFreqInterval] = useState("3");
-  const [endDate, setEndDate] = useState("");
+  const [recurringOpen, setRecurringOpen] = useState(forceRecurringOpen || !!editingRecurring);
+  const initialFreq = editingRecurring ? recurringToFreqState(editingRecurring) : null;
+  const [freqValue, setFreqValue] = useState(initialFreq?.freqValue || "month-1");
+  const [freqInterval, setFreqInterval] = useState(initialFreq?.freqInterval || "3");
+  const [endDate, setEndDate] = useState(editingRecurring?.end_date ? dateInputValue(new Date(editingRecurring.end_date).getTime()) : "");
 
   // Igual que con cuentas ocultas: una categoría eliminada no aparece para
   // elegir en transacciones nuevas, pero si es la que ya tiene asignada
@@ -197,8 +215,23 @@ export default function TransactionForm({
 
   // Al editar, no dejar guardar si no se cambió nada — creando una siempre
   // es "dirty" (no hay un original con qué comparar), y copiar cuenta como
-  // crear (effectiveEditing ya es null en modo copia).
-  const isDirty = !effectiveEditing || (
+  // crear (effectiveEditing ya es null en modo copia). Editar una recurrente
+  // sigue la misma lógica, comparando contra editingRecurring en vez de
+  // editingTransaction (son objetos distintos, con sus propios campos).
+  const isDirty = editingRecurring ? (
+    type !== editingRecurring.type
+    || amount !== String(editingRecurring.amount)
+    || currency !== (editingRecurring.currency || settings.main_currency)
+    || exchangeRate !== (editingRecurring.exchange_rate ? String(editingRecurring.exchange_rate) : "")
+    || categoryId !== (editingRecurring.category_id || "")
+    || accountId !== (editingRecurring.account_id || "")
+    || toAccountId !== (editingRecurring.to_account_id || "")
+    || note !== (editingRecurring.title || "")
+    || description !== (editingRecurring.memo || "")
+    || freqValue !== initialFreq.freqValue
+    || freqInterval !== initialFreq.freqInterval
+    || endDate !== (editingRecurring.end_date ? dateInputValue(new Date(editingRecurring.end_date).getTime()) : "")
+  ) : !effectiveEditing || (
     type !== editingTransaction.type
     || date !== dateInputValueInZone(new Date(editingTransaction.date).getTime(), editingTransaction.timezone)
     || amount !== String(editingTransaction.amount)
@@ -226,9 +259,31 @@ export default function TransactionForm({
     }
     setSaving(true);
     try {
-      const txDate = new Date(date + "T12:00:00");
       const rate = needsRate ? canonicalRate : null;
       const amountMain = computeAmountMain(numericAmount, currency, accountCurrency, rate);
+      // Editar una recurrente ya existente cambia la plantilla en sí (mm_recurring),
+      // no crea una transacción nueva -- un UPDATE aparte, sin tocar start_date/
+      // next_date (el calendario ya en curso no se toca acá, solo el "qué").
+      if (editingRecurring) {
+        const interval = freq.interval ?? customInterval;
+        await onSaveRecurring(editingRecurring.id, {
+          type,
+          account_id: accountId,
+          to_account_id: type === "transfer" ? toAccountId : null,
+          category_id: type === "transfer" ? null : (categoryId || null),
+          currency,
+          amount: numericAmount,
+          exchange_rate: rate,
+          amount_main: amountMain,
+          title: note.trim() || null,
+          memo: description.trim() || null,
+          repeat_unit: freq.unit,
+          repeat_interval: interval,
+          end_date: endDate ? new Date(endDate + "T12:00:00").toISOString() : null,
+        });
+        return;
+      }
+      const txDate = new Date(date + "T12:00:00");
       let recurring = null;
       if (recurringOpen) {
         const interval = freq.interval ?? customInterval;
@@ -296,28 +351,29 @@ export default function TransactionForm({
   return (
     <div style={styles.screen}>
       <TopBar
-        title={effectiveEditing ? `Editar ${TYPE_INFO[type].label}` : TYPE_INFO[type].newLabel}
+        title={editingRecurring ? "Editar recurrente" : effectiveEditing ? `Editar ${TYPE_INFO[type].label}` : TYPE_INFO[type].newLabel}
         onBack={onCancel}
-        right={effectiveEditing && (
+        right={(effectiveEditing || editingRecurring) && (
           <div style={{ display: "flex", gap: 4 }}>
             {isSynced && splitGroupId && onOpenSplitLedgerExpense && (
+              // Ya no hace falta bloquear esto offline: lleva al detalle
+              // (solo lectura) del gasto/pago, no directo a editarlo — ese
+              // detalle ya sabe mostrarse con el último estado en caché, y
+              // "Editar" desde ahí tiene su propio guard offline.
               <button
-                style={{ ...styles.btnToday, display: "flex", alignItems: "center", gap: 4, opacity: isOnline ? 1 : 0.5 }}
-                onClick={() => {
-                  if (!isOnline) { showError("Estás offline, no podés abrir el original ahora."); return; }
-                  onOpenSplitLedgerExpense(splitGroupId, editingTransaction.sl_source_kind, editingTransaction.sl_source_id);
-                }}
+                style={{ ...styles.btnToday, display: "flex", alignItems: "center", gap: 4 }}
+                onClick={() => onOpenSplitLedgerExpense(splitGroupId, editingTransaction.sl_source_kind, editingTransaction.sl_source_id)}
               >
                 <Divide size={13} color="#A8754A" />
                 Original
               </button>
             )}
-            {onBookmark && !isSynced && (
+            {onBookmark && !isSynced && !editingRecurring && (
               <button style={styles.iconBtnGhost} onClick={handleBookmark} aria-label="Guardar como marcador">
                 <Star size={17} />
               </button>
             )}
-            {!isSynced && (
+            {!isSynced && !editingRecurring && (
               <button style={styles.iconBtnGhost} onClick={() => setShowCopyModal(true)} aria-label="Copiar">
                 <Copy size={17} />
               </button>
@@ -347,13 +403,16 @@ export default function TransactionForm({
       )}
       {confirmDelete && (
         <ConfirmInline
-          message={`¿Eliminar este ${TYPE_INFO[type].label.toLowerCase()}?`}
+          message={editingRecurring
+            ? "¿Eliminar esta transacción recurrente? No borra las que ya se generaron."
+            : `¿Eliminar este ${TYPE_INFO[type].label.toLowerCase()}?`}
           confirmLabel="Eliminar"
           confirmDisabled={deleting}
           onCancel={() => setConfirmDelete(false)}
           onConfirm={async () => {
             setDeleting(true);
-            await onDelete(editingTransaction.id);
+            if (editingRecurring) await onDeleteRecurring(editingRecurring.id);
+            else await onDelete(editingTransaction.id);
             setDeleting(false);
           }}
           style={{ margin: "6px 20px 12px", borderRadius: 12, borderTop: "1px solid #EBC9BA" }}
@@ -390,9 +449,16 @@ export default function TransactionForm({
           ))}
         </div>
 
-        <Field label="Fecha">
-          <input style={{ ...styles.input, opacity: isSynced ? 0.6 : 1 }} type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={isSynced} />
-        </Field>
+        {/* Al editar una recurrente no hay "fecha de esta ocurrencia" que
+            mostrar -- el calendario (start_date/next_date) no se toca desde
+            acá, ver handleSave. `date` igual se mantiene en estado (con el
+            start_date original) para que RecurringFields siga mostrando
+            bien el mensaje de "se repite los días X". */}
+        {!editingRecurring && (
+          <Field label="Fecha">
+            <input style={{ ...styles.input, opacity: isSynced ? 0.6 : 1 }} type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={isSynced} />
+          </Field>
+        )}
 
         <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
           <Field label="Importe" required style={{ flex: 1 }}>
@@ -609,7 +675,7 @@ export default function TransactionForm({
             onIntervalBlur={() => touch("freqInterval")}
             endDate={endDate}
             setEndDate={setEndDate}
-            onRemove={hideRemoveRecurring ? null : () => setRecurringOpen(false)}
+            onRemove={(hideRemoveRecurring || editingRecurring) ? null : () => setRecurringOpen(false)}
           />
         )}
       </div>

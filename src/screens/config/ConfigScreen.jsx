@@ -24,7 +24,8 @@ export default function ConfigScreen({
   session, invites = [], onAcceptInvite, onRejectInvite, onLogout, refreshProfile, patchSession,
   groups, reloadGroups, onCreateGroup, onOpenGroup, showError, showSuccess, showInfo,
   changingPassword, setChangingPassword, viewingProfile, setViewingProfile,
-  moneyManager, onSaveMoneyTransaction, creatingRecurring, setCreatingRecurring,
+  moneyManager, onSaveMoneyTransaction, onSaveRecurring, onDeleteRecurring, creatingRecurring, setCreatingRecurring,
+  editingRecurring, setEditingRecurring,
   moneyManagerScreen, setMoneyManagerScreen, onOpenSplitLedgerGroup, isOnline = true,
 }) {
   // Igual que activeTab en SplitLedger.jsx: en localStorage para que
@@ -38,7 +39,7 @@ export default function ConfigScreen({
   }, [section]);
   useScrollToTopOnChange(section);
 
-  if (creatingRecurring) {
+  if (creatingRecurring || editingRecurring) {
     return (
       <TransactionForm
         session={session}
@@ -50,10 +51,19 @@ export default function ConfigScreen({
         showError={showError}
         forceRecurringOpen
         hideRemoveRecurring
-        onCancel={() => setCreatingRecurring(false)}
+        editingRecurring={editingRecurring}
+        onCancel={() => { setCreatingRecurring(false); setEditingRecurring(null); }}
         onSave={async (tx) => {
           const ok = await onSaveMoneyTransaction(tx);
           if (ok) setCreatingRecurring(false);
+        }}
+        onSaveRecurring={async (id, payload) => {
+          const ok = await onSaveRecurring(id, payload);
+          if (ok) setEditingRecurring(null);
+        }}
+        onDeleteRecurring={async (id) => {
+          const ok = await onDeleteRecurring(id);
+          if (ok) setEditingRecurring(null);
         }}
       />
     );
@@ -62,15 +72,14 @@ export default function ConfigScreen({
   if (moneyManagerScreen === "recurring") {
     return (
       <div style={styles.screen}>
-        <TopBar title="Transacciones repetidas" onBack={() => setMoneyManagerScreen(null)} />
+        <TopBar title="Transacciones recurrentes" onBack={() => setMoneyManagerScreen(null)} />
         <div style={{ ...styles.form, paddingBottom: 100 }}>
           <RecurringScreen
             accounts={moneyManager.accounts}
+            categories={moneyManager.categories}
             recurring={moneyManager.recurring}
-            reload={moneyManager.reload}
-            showError={showError}
-            showInfo={showInfo}
             onCreateNew={() => setCreatingRecurring(true)}
+            onEdit={(r) => setEditingRecurring(r)}
           />
         </div>
       </div>
@@ -227,7 +236,7 @@ export default function ConfigScreen({
             <p style={{ ...styles.label, marginBottom: 12 }}>Transacciones</p>
             <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
               <MenuRow label="Detalles del período" onClick={() => setMoneyManagerScreen("period")} />
-              <MenuRow label="Transacciones repetidas" onClick={() => setMoneyManagerScreen("recurring")} last />
+              <MenuRow label="Transacciones recurrentes" onClick={() => setMoneyManagerScreen("recurring")} last />
             </div>
           </div>
 

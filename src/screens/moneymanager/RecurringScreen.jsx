@@ -1,8 +1,7 @@
-import React, { useState } from "react";
-import { Plus, Repeat, X } from "lucide-react";
-import { offlineSupabase as supabase } from "../../lib/offlineSupabase.js";
+import React from "react";
+import { Plus, Repeat, ChevronRight } from "lucide-react";
 import { styles } from "../../lib/styles.js";
-import { ConfirmInline, EmptyState } from "../../components/Shared.jsx";
+import { EmptyState } from "../../components/Shared.jsx";
 import { money, fmtDate } from "../../lib/helpers.jsx";
 import { RECURRING_FREQUENCIES } from "../../lib/moneyManagerData.js";
 
@@ -16,61 +15,66 @@ function freqLabel(r) {
 }
 
 /* =========================================================================
-   TRANSACCIONES REPETIDAS — vive dentro de Configuración → Money Manager.
+   TRANSACCIONES RECURRENTES — vive dentro de Configuración → Money Manager.
    Sin RootHeader propio (esa sección ya vive bajo el header de Config). El
    "+" no abre nada acá adentro — pide a ConfigScreen que muestre el
    TransactionForm a pantalla completa (mismo patrón que ChangePasswordScreen
    /ProfileScreen: reemplaza toda la pantalla, no queda anidado bajo el
-   header de Config).
+   header de Config). Borrar una recurrente tampoco pasa acá -- toda la fila
+   solo abre "Editar recurrente" (como tocar una fila de grupo), y ese
+   formulario tiene su propia papelera en el header, igual que editar un
+   gasto.
    ========================================================================= */
 
-export default function RecurringScreen({ accounts, recurring, reload, showError, showInfo, onCreateNew }) {
-  const [confirmRemoveId, setConfirmRemoveId] = useState(null);
-
-  const accountName = (id) => accounts.find((a) => a.id === id)?.name || "—";
-
-  const removeRecurring = async (id) => {
-    try {
-      const { error } = await supabase.from("mm_recurring").delete().eq("id", id);
-      if (error) throw error;
-      await reload();
-      showInfo("Transacción repetida eliminada.");
-    } catch (e) { showError(`No se pudo borrar: ${e?.message || e}`); }
-    setConfirmRemoveId(null);
-  };
+export default function RecurringScreen({ accounts, categories, recurring, onCreateNew, onEdit }) {
+  const account = (id) => accounts.find((a) => a.id === id);
+  const category = (id) => categories.find((c) => c.id === id);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       {recurring.length === 0 && (
-        <EmptyState icon={<Repeat size={28} strokeWidth={1.5} />} title="Todavía no hay transacciones repetidas">
-          Tocá "Nueva transacción repetida" para crear la primera.
+        <EmptyState icon={<Repeat size={28} strokeWidth={1.5} />} title="Todavía no hay transacciones recurrentes">
+          Tocá "Nueva transacción recurrente" para crear la primera.
         </EmptyState>
       )}
       {recurring.map((r) => (
-        <div key={r.id}>
-          <div style={{ ...styles.shareRow, alignItems: "flex-start", flexDirection: "column", gap: 4, borderRadius: confirmRemoveId === r.id ? "10px 10px 0 0" : 10 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
-              <span style={{ fontWeight: 700, color: TYPE_COLOR[r.type] }}>{TYPE_LABEL[r.type]} · {money(r.amount, r.currency)}</span>
-              <button style={styles.iconBtnGhost} onClick={() => setConfirmRemoveId(r.id)} aria-label="Borrar recurrencia">
-                <X size={16} />
-              </button>
-            </div>
+        <button
+          key={r.id}
+          onClick={() => onEdit(r)}
+          style={{ ...styles.shareRow, alignItems: "center", gap: 10, borderRadius: 10, width: "100%", textAlign: "left", background: "#fff", border: "1px solid #ECE3D3" }}
+        >
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+            <span style={{ fontWeight: 700, color: TYPE_COLOR[r.type] }}>
+              {TYPE_LABEL[r.type]} · {money(r.amount, r.currency)}{r.title ? ` → ${r.title}` : ""}
+            </span>
+            <span style={{ fontSize: 12.5, color: "#6B6355", fontFamily: "system-ui, sans-serif", display: "flex", alignItems: "center", gap: 3, flexWrap: "wrap" }}>
+              {account(r.account_id)?.icon && <span style={{ fontSize: 13 }}>{account(r.account_id).icon}</span>}
+              {account(r.account_id)?.name || "—"}
+              {r.type === "transfer" && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                  → {account(r.to_account_id)?.icon && <span style={{ fontSize: 13 }}>{account(r.to_account_id).icon}</span>}
+                  {account(r.to_account_id)?.name || "—"}
+                </span>
+              )}
+              {r.type !== "transfer" && (() => {
+                const c = category(r.category_id);
+                return (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                    · {c?.icon && <span style={{ fontSize: 13 }}>{c.icon}</span>}
+                    {c ? c.name : "Sin categoría"}
+                  </span>
+                );
+              })()}
+            </span>
             <span style={{ fontSize: 12.5, color: "#6B6355", fontFamily: "system-ui, sans-serif" }}>
-              {freqLabel(r)} · {accountName(r.account_id)}{r.type === "transfer" ? ` → ${accountName(r.to_account_id)}` : ""} · próxima: {fmtDate(new Date(r.next_date).getTime())}
+              {freqLabel(r)} · próxima: {fmtDate(new Date(r.next_date).getTime())}
             </span>
           </div>
-          {confirmRemoveId === r.id && (
-            <ConfirmInline
-              message="¿Borrar esta transacción repetida? No borra las que ya se generaron."
-              confirmLabel="Borrar"
-              onCancel={() => setConfirmRemoveId(null)}
-              onConfirm={() => removeRecurring(r.id)}
-            />
-          )}
-        </div>
+          <ChevronRight size={20} color="#A89A87" style={{ flexShrink: 0 }} />
+        </button>
       ))}
       <button style={styles.btnDashed} onClick={onCreateNew}>
-        <Plus size={16} /> Nueva transacción repetida
+        <Plus size={16} /> Nueva transacción recurrente
       </button>
     </div>
   );

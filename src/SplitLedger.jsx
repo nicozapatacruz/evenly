@@ -730,6 +730,7 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
   const [changingPassword, setChangingPassword] = useState(false);
   const [viewingProfile, setViewingProfile] = useState(false);
   const [creatingRecurring, setCreatingRecurring] = useState(false);
+  const [editingRecurring, setEditingRecurring] = useState(null); // fila de mm_recurring, o null
   const [moneyManagerScreen, setMoneyManagerScreen] = useState(null);
   // Esta app no navega con URLs/router — cambiar de pantalla es solo React
   // mostrando otro árbol de componentes, así que el navegador nunca resetea
@@ -756,7 +757,7 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
     scrollToTop();
     const raf = requestAnimationFrame(scrollToTop);
     return () => cancelAnimationFrame(raf);
-  }, [activeTab, splitLedgerView.screen, accountsView.screen, ledgerView.screen, statsView.screen, moneyManagerScreen, changingPassword, viewingProfile, creatingRecurring]);
+  }, [activeTab, splitLedgerView.screen, accountsView.screen, ledgerView.screen, statsView.screen, moneyManagerScreen, changingPassword, viewingProfile, creatingRecurring, editingRecurring]);
   const [toast, setToast] = useState(null); // { message, type: "error" | "success" | "info" }
   const [invites, setInvites] = useState([]); // invitaciones que ME llegaron (bandeja)
 
@@ -766,7 +767,7 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
 
   // Guarda una transacción de Money Manager y, si venía con recurrencia
   // activada, también crea su plantilla en mm_recurring. Un solo lugar para
-  // esto porque lo usan tanto "Hoy" (FAB) como "Transacciones repetidas" en Config.
+  // esto porque lo usan tanto "Hoy" (FAB) como "Transacciones recurrentes" en Config.
   const saveMoneyTransaction = async ({ recurring, id, ...tx }) => {
     try {
       const payload = { ...tx, date: new Date(tx.date).toISOString() };
@@ -801,6 +802,38 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
       return true;
     } catch (e) {
       showError(`No se pudo guardar: ${e?.message || e}`);
+      return false;
+    }
+  };
+
+  // Edita en el lugar la plantilla de una recurrente ya existente (nunca
+  // crea una transacción) -- mm_recurring es de un solo escritor, igual que
+  // el resto de Money Manager, así que esto también se encola offline.
+  const saveRecurring = async (id, payload) => {
+    try {
+      const { error } = await offlineSupabase.from("mm_recurring").update(payload).eq("id", id);
+      if (error) throw error;
+      await moneyManager.reload();
+      return true;
+    } catch (e) {
+      showError(`No se pudo guardar: ${e?.message || e}`);
+      return false;
+    }
+  };
+
+  // Borrado real (no soft-delete): una recurrente no tiene pantalla de
+  // "papelera" que la use, a diferencia de cuentas/categorías/transacciones
+  // (mismo criterio que generateDueRecurring cuando una plantilla cumple su
+  // end_date). No borra las transacciones que ya generó.
+  const deleteRecurring = async (id) => {
+    try {
+      const { error } = await offlineSupabase.from("mm_recurring").delete().eq("id", id);
+      if (error) throw error;
+      await moneyManager.reload();
+      showInfo("Transacción recurrente eliminada.");
+      return true;
+    } catch (e) {
+      showError(`No se pudo borrar: ${e?.message || e}`);
       return false;
     }
   };
@@ -937,14 +970,17 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
   // perder el hilo de "estoy editando este grupo").
   const openSplitLedgerGroup = useCallback((groupId) => goToSplitLedger("editGroup", { groupId }, ["inviteScreen"]), [goToSplitLedger]);
 
-  // Usado por TransactionForm en una transacción sincronizada — lleva
-  // directo a editar el gasto/pago de origen (mismo criterio para los dos
-  // desde que los pagos también tienen su propia pantalla de edición, ver
-  // SPLIT_MONEY_LINK_PLAN.md).
+  // Usado por TransactionForm en una transacción sincronizada — lleva al
+  // detalle (solo lectura) del gasto/pago de origen, igual que tocar esa
+  // fila dentro del grupo; "Editar" desde ahí es una acción aparte, no algo
+  // que "Original" haga por su cuenta. "newExpense"/"settleUp" cuentan como
+  // la misma tarea para que el botón Cancelar/Guardar de esa edición (si se
+  // llega a abrir desde acá) también vuelva derecho a Money Manager.
   const openSplitLedgerExpense = useCallback((groupId, sourceKind, sourceId) => {
     goToSplitLedger(
-      sourceKind === "expense" ? "newExpense" : "settleUp",
-      sourceKind === "expense" ? { groupId, expenseId: sourceId } : { groupId, paymentId: sourceId }
+      sourceKind === "expense" ? "expenseDetail" : "paymentDetail",
+      sourceKind === "expense" ? { groupId, expenseId: sourceId } : { groupId, paymentId: sourceId },
+      [sourceKind === "expense" ? "newExpense" : "settleUp"]
     );
   }, [goToSplitLedger]);
 
@@ -999,6 +1035,7 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
         setChangingPassword(false);
         setViewingProfile(false);
         setCreatingRecurring(false);
+        setEditingRecurring(null);
         setMoneyManagerScreen(null);
         loadInvites();
       }
@@ -1012,7 +1049,7 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
 
   const visibleTabs = TABS.filter((t) => t.key !== "splitledger" || session.splitLedgerEnabled);
   const showTabBar = activeTab === "config"
-    ? (!changingPassword && !viewingProfile && !creatingRecurring && (!moneyManagerScreen || moneyManagerScreen === "recurring"))
+    ? (!changingPassword && !viewingProfile && !creatingRecurring && !editingRecurring && (!moneyManagerScreen || moneyManagerScreen === "recurring"))
     : activeTab === "accounts"
       ? (accountsView.screen === "list" || accountsView.screen === "activity")
       : activeTab === "ledger"
@@ -1292,8 +1329,12 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
           setViewingProfile={setViewingProfile}
           moneyManager={moneyManager}
           onSaveMoneyTransaction={saveMoneyTransaction}
+          onSaveRecurring={saveRecurring}
+          onDeleteRecurring={deleteRecurring}
           creatingRecurring={creatingRecurring}
           setCreatingRecurring={setCreatingRecurring}
+          editingRecurring={editingRecurring}
+          setEditingRecurring={setEditingRecurring}
           moneyManagerScreen={moneyManagerScreen}
           setMoneyManagerScreen={setMoneyManagerScreen}
           onOpenSplitLedgerGroup={openSplitLedgerGroup}

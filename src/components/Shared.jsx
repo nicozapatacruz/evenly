@@ -314,6 +314,23 @@ export function FiltersActiveBanner({ onOpen, onClear }) {
   );
 }
 
+// Mismo look/patrón que FiltersActiveBanner (tocar el cuerpo abre el modal
+// de comparar, la X la quita directo sin confirmar) -- pensado para vivir
+// al lado de ese banner, 50/50, cuando los dos están activos a la vez (ver
+// EstadisticasTab).
+export function CompareActiveBanner({ onOpen, onClear }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 14px", borderRadius: 20, background: "#FBEDE7", border: "1px solid #EBC9BA" }}>
+      <button type="button" onClick={onOpen} style={{ flex: 1, background: "none", border: "none", padding: 0, textAlign: "left", fontSize: 13, fontWeight: 600, fontFamily: "system-ui, sans-serif", color: "#C75D3B", cursor: "pointer" }}>
+        Comparación activa
+      </button>
+      <button type="button" onClick={onClear} aria-label="Quitar comparación" style={{ background: "none", border: "none", padding: 0, display: "flex", alignItems: "center", color: "#C75D3B", cursor: "pointer" }}>
+        <X size={15} />
+      </button>
+    </div>
+  );
+}
+
 // Mismo look que FiltersActiveBanner (sin botón de "quitar" — no hay nada
 // que limpiar, solo se resuelve cargando la tasa) — tocarlo abre la primera
 // transacción pendiente para completarla.

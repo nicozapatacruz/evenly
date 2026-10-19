@@ -257,6 +257,28 @@ export function dateInputValueInZone(ms, tz) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms));
 }
 
+export function daysInMonth(year, monthIndex) {
+  return new Date(year, monthIndex + 1, 0).getDate();
+}
+
+// Para la comparación de ritmo de gasto (Estadísticas): null si viewMonth no
+// es el mes real de "now" -- ahí no hay ningún punto "esperado" que marcar,
+// un mes ya cerrado no tiene ritmo que juzgar.
+export function monthProgressPct(viewMonth, now = new Date()) {
+  if (viewMonth.getFullYear() !== now.getFullYear() || viewMonth.getMonth() !== now.getMonth()) return null;
+  return now.getDate() / daysInMonth(now.getFullYear(), now.getMonth());
+}
+
+// n meses consecutivos ANTES de viewMonth (no lo incluye), más reciente primero.
+export function monthsBefore(viewMonth, n) {
+  const out = [];
+  for (let i = 1; i <= n; i++) {
+    const d = new Date(viewMonth.getFullYear(), viewMonth.getMonth() - i, 1);
+    out.push({ year: d.getFullYear(), month: d.getMonth() + 1 });
+  }
+  return out;
+}
+
 // Esta app no navega con URLs/router: "cambiar de pantalla" es solo React
 // mostrando otro árbol de componentes, así que el navegador nunca resetea el
 // scroll solo (eso sí pasaría con una navegación real de página). Cualquier

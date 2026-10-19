@@ -33,7 +33,7 @@ export function computeAccountTotals(transactions) {
 // principal — filtra por la moneda de la cuenta de cada transacción, mismo
 // criterio que ya usaba `aggregateByCategory` (Fase 2 multi-moneda).
 // `accounts` se pasa para resolver esa moneda; se recorta a un (year,month)
-// o a un category_id puntual del lado de quien llama (useCategoryMonthTotals/
+// o a un category_id puntual del lado de quien llama (useStatsCategoryTotals/
 // useCategoryTimeline), acá se calculan todos de una sola pasada.
 export function computeCategoryMonthTotals(transactions, accounts, type, mainCurrency) {
   const map = new Map();

@@ -250,13 +250,24 @@ export default function SearchScreen({
         title="Buscar"
         onBack={onBack}
         right={
-          <HeaderMenu
-            trigger={<><SlidersHorizontal size={19} />{hasActiveFilters(filters) && <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: "#C75D3B" }} />}</>}
-            items={[{ icon: <SlidersHorizontal size={16} color="#6B6355" />, label: "Filtros", onClick: openFilters, badge: hasActiveFilters(filters) }]}
-            currencies={currencies}
-            currency={currency}
-            onChangeCurrency={setCurrency}
-          />
+          // Con una sola moneda en uso, el popover de HeaderMenu termina
+          // mostrando una sola fila ("Filtros") -- indirección sin motivo,
+          // mejor ir directo. Con más de una moneda sí hace falta el
+          // popover (ahí también vive el selector de moneda).
+          currencies.length > 1 ? (
+            <HeaderMenu
+              trigger={<><SlidersHorizontal size={19} />{hasActiveFilters(filters) && <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: "#C75D3B" }} />}</>}
+              items={[{ icon: <SlidersHorizontal size={16} color="#6B6355" />, label: "Filtros", onClick: openFilters, badge: hasActiveFilters(filters) }]}
+              currencies={currencies}
+              currency={currency}
+              onChangeCurrency={setCurrency}
+            />
+          ) : (
+            <button style={{ ...styles.iconBtnGhost, position: "relative" }} onClick={openFilters} aria-label="Filtros">
+              <SlidersHorizontal size={19} />
+              {hasActiveFilters(filters) && <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: "#C75D3B" }} />}
+            </button>
+          )
         }
       />
       <div style={{ padding: "10px 20px", borderBottom: "1px solid #ECE3D3" }}>

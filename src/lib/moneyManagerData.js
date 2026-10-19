@@ -2,7 +2,7 @@ import { useCallback, useMemo } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { supabase } from "./supabaseClient.js";
 import { db } from "./localDb.js";
-import { dateInputValueInZone, parseAmountInput } from "./helpers.jsx";
+import { dateInputValueInZone, parseAmountInput, daysInMonth, monthsBefore } from "./helpers.jsx";
 import { hasActiveFilters, matchesFilters } from "./filterHelpers.js";
 import { reconcileSplitLedger, getPendienteTcReviewItems, acknowledgePendienteTcReviewItem } from "./splitLedgerSync.js";
 import { computeAccountTotals, computeCategoryMonthTotals, computeAccountMonthTotals } from "./localAggregates.js";
@@ -115,10 +115,6 @@ export const RECURRING_FREQUENCIES = [
   { value: "month-x", unit: "month", interval: null, label: "Cada X meses" },
   { value: "year-1", unit: "year", interval: 1, label: "Cada año" },
 ];
-
-function daysInMonth(year, monthIndex) {
-  return new Date(year, monthIndex + 1, 0).getDate();
-}
 
 // El día se "clampea" hacia abajo SOLO si el mes de destino no lo tiene
 // (30 en un mes de 31 días queda en 30; 31 en abril cae en 30; 29/30/31 en
@@ -342,23 +338,40 @@ export function useAccountMonthTotals(userId, accountId) {
   return { totals, loading: !!accountId && loading };
 }
 
-// Totales por categoría del mes visible (Estadísticas) — antes la vista
-// mm_category_month_totals (sin filtros) o una agregación en el cliente
-// (con filtros); ahora siempre se calcula en el cliente desde Dexie, ambos
-// caminos quedan iguales.
-export function useCategoryMonthTotals(userId, viewMonth, type, mainCurrency, enabled = true) {
+// Arma la comparación de ritmo de gasto (Estadísticas) a partir de un
+// resultado YA calculado de computeCategoryMonthTotals (no vuelve a tocar
+// Dexie) -- un mapa category_id→total para viewMonth, otro para el período
+// de comparación según compareSpec ({mode: "off"|"average"|"specific",
+// months, specificMonth: {year,month}}). "average" cuenta $0 los meses sin
+// movimiento (representa mejor "cuánto gasto normalmente" que excluirlos).
+function buildComparisons(allTotals, viewMonth, compareSpec) {
+  const mode = compareSpec?.mode || "off";
+  if (mode === "off") return [];
   const year = viewMonth.getFullYear();
   const month = viewMonth.getMonth() + 1;
-  const { rows: all, loading } = useLocalTable("mm_transactions", userId);
-  const { rows: accounts } = useLocalTable("mm_accounts", userId);
-  const totals = useMemo(() => {
-    if (!enabled) return [];
-    return computeCategoryMonthTotals(all, accounts, type, mainCurrency)
-      .filter((r) => r.year === year && r.month === month)
-      .map(({ category_id, total }) => ({ category_id, total }));
-  }, [all, accounts, type, mainCurrency, enabled, year, month]);
+  const currentMap = new Map();
+  for (const r of allTotals) if (r.year === year && r.month === month) currentMap.set(r.category_id, r.total);
 
-  return { totals, loading: enabled && loading };
+  const baselineMap = new Map();
+  if (mode === "specific" && compareSpec.specificMonth) {
+    const { year: by, month: bm } = compareSpec.specificMonth;
+    for (const r of allTotals) if (r.year === by && r.month === bm) baselineMap.set(r.category_id, r.total);
+  } else if (mode === "average") {
+    const months = compareSpec.months || 1;
+    for (const { year: by, month: bm } of monthsBefore(viewMonth, months)) {
+      for (const r of allTotals) {
+        if (r.year === by && r.month === bm) baselineMap.set(r.category_id, (baselineMap.get(r.category_id) || 0) + r.total);
+      }
+    }
+    for (const [k, v] of baselineMap) baselineMap.set(k, v / months);
+  }
+
+  const ids = new Set([...currentMap.keys(), ...baselineMap.keys()]);
+  return [...ids].map((category_id) => ({
+    category_id,
+    current: currentMap.get(category_id) || 0,
+    baseline: baselineMap.get(category_id) || 0,
+  }));
 }
 
 // Agrega transacciones ya traídas (crudo) por categoría — usado por
@@ -376,21 +389,38 @@ function aggregateByCategory(transactions, type, accounts, mainCurrency) {
 }
 
 // Totales por categoría para Estadísticas, con soporte de filtros (cuenta/
-// categoría/importe/fecha). `monthTxCount` distingue "no hay nada este mes"
-// de "el filtro no dejó nada" en la UI.
-export function useStatsCategoryTotals(userId, viewMonth, filters, mainCurrency, accounts) {
+// categoría/importe/fecha) y de la comparación de ritmo de gasto.
+// `monthTxCount` distingue "no hay nada este mes" de "el filtro no dejó
+// nada" en la UI. Una sola lectura de mm_transactions para todo esto (antes
+// eran 3 por separado -- ingreso, gasto, y la comparación -- cada una
+// volviendo a traer y recorrer toda la historia; acá se trae y recorre una
+// vez sola y se reusa, la comparación no pesa de más por estar activa).
+export function useStatsCategoryTotals(userId, viewMonth, filters, mainCurrency, accounts, compareSpec) {
   const filtering = hasActiveFilters(filters);
-  const { totals: incomeAgg, loading: incomeAggLoading } = useCategoryMonthTotals(userId, viewMonth, "income", mainCurrency, !filtering);
-  const { totals: expenseAgg, loading: expenseAggLoading } = useCategoryMonthTotals(userId, viewMonth, "expense", mainCurrency, !filtering);
+  const { rows: all, loading: allLoading } = useLocalTable("mm_transactions", userId);
+
+  const allIncomeTotals = useMemo(() => computeCategoryMonthTotals(all, accounts, "income", mainCurrency), [all, accounts, mainCurrency]);
+  const allExpenseTotals = useMemo(() => computeCategoryMonthTotals(all, accounts, "expense", mainCurrency), [all, accounts, mainCurrency]);
+
+  const year = viewMonth.getFullYear();
+  const month = viewMonth.getMonth() + 1;
+  const incomeAgg = useMemo(() => allIncomeTotals.filter((r) => r.year === year && r.month === month).map(({ category_id, total }) => ({ category_id, total })), [allIncomeTotals, year, month]);
+  const expenseAgg = useMemo(() => allExpenseTotals.filter((r) => r.year === year && r.month === month).map(({ category_id, total }) => ({ category_id, total })), [allExpenseTotals, year, month]);
+
   const { transactions: monthTx, loading: monthTxLoading } = useMonthTransactions(userId, viewMonth, filtering);
   const filteredTx = useMemo(() => (filtering ? monthTx.filter((t) => matchesFilters(t, filters)) : monthTx), [monthTx, filtering, filters]);
 
   const incomeTotals = filtering ? aggregateByCategory(filteredTx, "income", accounts, mainCurrency) : incomeAgg;
   const expenseTotals = filtering ? aggregateByCategory(filteredTx, "expense", accounts, mainCurrency) : expenseAgg;
-  const incomeLoading = filtering ? monthTxLoading : incomeAggLoading;
-  const expenseLoading = filtering ? monthTxLoading : expenseAggLoading;
+  const incomeLoading = filtering ? monthTxLoading : allLoading;
+  const expenseLoading = filtering ? monthTxLoading : allLoading;
 
-  return { incomeTotals, expenseTotals, incomeLoading, expenseLoading, monthTxCount: monthTx.length };
+  const comparisons = useMemo(() => ({
+    income: buildComparisons(allIncomeTotals, viewMonth, compareSpec),
+    expense: buildComparisons(allExpenseTotals, viewMonth, compareSpec),
+  }), [allIncomeTotals, allExpenseTotals, viewMonth, compareSpec]);
+
+  return { incomeTotals, expenseTotals, incomeLoading, expenseLoading, monthTxCount: monthTx.length, comparisons };
 }
 
 // Serie mensual de una sola categoría (drill-down de Estadísticas) — todos

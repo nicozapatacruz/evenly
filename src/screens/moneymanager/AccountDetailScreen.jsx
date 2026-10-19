@@ -193,7 +193,7 @@ export default function AccountDetailScreen({ session, account = null, groups, a
           message={dependentAutoPayCards.length > 0
             ? `"${account.name}" es la cuenta de pago de ${dependentAutoPayCards.map((c) => `"${c.name}"`).join(", ")}\nEl pago automático de esa${dependentAutoPayCards.length > 1 ? "s tarjetas" : " tarjeta"} se desactivará al eliminar.\n\n¿Eliminar igual?`
             : `¿Eliminar "${account.name}"?`}
-          confirmLabel="Eliminar"
+          confirmLabel={deleting ? "Eliminando…" : "Eliminar"}
           confirmDisabled={deleting}
           onCancel={() => setConfirmDelete(false)}
           onConfirm={remove}

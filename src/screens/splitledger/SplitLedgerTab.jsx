@@ -591,6 +591,7 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
   const [catsOpen, setCatsOpen] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deletingGroup, setDeletingGroup] = useState(false);
   const balances = useMemo(() => (group ? computeBalances(group) : {}), [group]);
 
   const isDirty = useMemo(() => {
@@ -1000,10 +1001,16 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
             <button style={{ ...styles.btnGhostSmall, flex: 1, justifyContent: "center" }} onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(""); }}>Cancelar</button>
             <button
-              style={{ ...styles.btnDangerSmall, flex: 1, opacity: deleteConfirmText === "Confirmar" ? 1 : 0.4, cursor: deleteConfirmText === "Confirmar" ? "pointer" : "not-allowed" }}
-              onClick={() => deleteConfirmText === "Confirmar" && onDeleteGroup()}
+              style={{ ...styles.btnDangerSmall, flex: 1, opacity: (deleteConfirmText === "Confirmar" && !deletingGroup) ? 1 : 0.4, cursor: (deleteConfirmText === "Confirmar" && !deletingGroup) ? "pointer" : "not-allowed" }}
+              disabled={deletingGroup}
+              onClick={async () => {
+                if (deleteConfirmText !== "Confirmar") return;
+                setDeletingGroup(true);
+                await onDeleteGroup();
+                setDeletingGroup(false);
+              }}
             >
-              Confirmar
+              {deletingGroup ? "Eliminando…" : "Confirmar"}
             </button>
           </div>
         </Modal>
@@ -1977,9 +1984,10 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
       {confirmDelete && (
         <ConfirmInline
           message="¿Borrar este gasto?"
-          confirmLabel="Borrar"
+          confirmLabel={saving ? "Borrando…" : "Borrar"}
+          confirmDisabled={saving}
           onCancel={() => setConfirmDelete(false)}
-          onConfirm={() => onDelete(existing.id)}
+          onConfirm={async () => { setSaving(true); await onDelete(existing.id); setSaving(false); }}
           style={{ margin: "6px 20px 12px", borderRadius: 12, borderTop: "1px solid #EBC9BA" }}
         />
       )}
@@ -2635,9 +2643,10 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
       {confirmDelete && (
         <ConfirmInline
           message="¿Borrar este pago?"
-          confirmLabel="Borrar"
+          confirmLabel={saving ? "Borrando…" : "Borrar"}
+          confirmDisabled={saving}
           onCancel={() => setConfirmDelete(false)}
-          onConfirm={() => onDelete(existing.id)}
+          onConfirm={async () => { setSaving(true); await onDelete(existing.id); setSaving(false); }}
           style={{ margin: "6px 20px 12px", borderRadius: 12, borderTop: "1px solid #EBC9BA" }}
         />
       )}

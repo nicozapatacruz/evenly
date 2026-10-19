@@ -356,6 +356,7 @@ function AccountsSettingsScreen({ session, groups, accounts, accountTotals, sett
 
 function ProfileScreen({ session, onBack, onLogout, onChangePassword, onSave, isOnline = true, showError }) {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
   const { previewUrl: photoUrl, pendingFile, removed, handleImageChange: handlePhoto, clear: clearPhoto } = useImageUpload(session.photoUrl || null, setErr);
@@ -395,9 +396,10 @@ function ProfileScreen({ session, onBack, onLogout, onChangePassword, onSave, is
           ) : (
             <ConfirmInline
               message="¿Cerrar sesión?"
-              confirmLabel="Cerrar sesión"
+              confirmLabel={loggingOut ? "Cerrando sesión…" : "Cerrar sesión"}
+              confirmDisabled={loggingOut}
               onCancel={() => setShowLogoutConfirm(false)}
-              onConfirm={onLogout}
+              onConfirm={async () => { setLoggingOut(true); await onLogout(); setLoggingOut(false); }}
               style={{ width: "100%", borderRadius: 12, borderTop: "1px solid #EBC9BA" }}
             />
           )}
@@ -494,6 +496,10 @@ function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onO
   const [savingName, setSavingName] = useState(false);
   const [togglingEnabled, setTogglingEnabled] = useState(false);
   const [savingDefault, setSavingDefault] = useState(false);
+  // { id: invite.inviteId, action: "accept" | "reject" } — para saber cuál
+  // de los 2 botones de ESA fila puntual mostrar como en curso (aceptar y
+  // rechazar son mutuamente excluyentes para una misma invitación).
+  const [processingInvite, setProcessingInvite] = useState(null);
   const nameDirty = displayName.trim() !== (session.displayName || "");
 
   // Orden local de "tus grupos" (dnd-kit necesita el array de ids ya en el
@@ -622,8 +628,28 @@ function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onO
                 <strong>{inv.fromUsername}</strong> te invitó a <strong>{inv.groupName}</strong> como <strong>{inv.memberName}</strong>
               </p>
               <div style={{ display: "flex", gap: 8 }}>
-                <button style={styles.btnGhostSmall} onClick={() => onRejectInvite(inv)}>Rechazar</button>
-                <button style={{ ...styles.btnDangerSmall, background: "#3B6E62", opacity: isOnline ? 1 : 0.5 }} onClick={() => onAcceptInvite(inv)}>Aceptar</button>
+                <button
+                  style={{ ...styles.btnGhostSmall, opacity: processingInvite ? 0.5 : 1 }}
+                  disabled={!!processingInvite}
+                  onClick={async () => {
+                    setProcessingInvite({ id: inv.inviteId, action: "reject" });
+                    await onRejectInvite(inv);
+                    setProcessingInvite(null);
+                  }}
+                >
+                  {processingInvite?.id === inv.inviteId && processingInvite.action === "reject" ? "Rechazando…" : "Rechazar"}
+                </button>
+                <button
+                  style={{ ...styles.btnDangerSmall, background: "#3B6E62", opacity: (isOnline && !processingInvite) ? 1 : 0.5 }}
+                  disabled={!!processingInvite}
+                  onClick={async () => {
+                    setProcessingInvite({ id: inv.inviteId, action: "accept" });
+                    await onAcceptInvite(inv);
+                    setProcessingInvite(null);
+                  }}
+                >
+                  {processingInvite?.id === inv.inviteId && processingInvite.action === "accept" ? "Aceptando…" : "Aceptar"}
+                </button>
               </div>
             </div>
           ))}

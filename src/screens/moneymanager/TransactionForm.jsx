@@ -406,7 +406,7 @@ export default function TransactionForm({
           message={editingRecurring
             ? "¿Eliminar esta transacción recurrente? No borra las que ya se generaron."
             : `¿Eliminar este ${TYPE_INFO[type].label.toLowerCase()}?`}
-          confirmLabel="Eliminar"
+          confirmLabel={deleting ? "Eliminando…" : "Eliminar"}
           confirmDisabled={deleting}
           onCancel={() => setConfirmDelete(false)}
           onConfirm={async () => {
@@ -781,6 +781,7 @@ export function ManageCategories({ session, type, categories, reload, showError,
   const [names, setNames] = useState(() => Object.fromEntries(typeCategories.map((c) => [c.id, c.name])));
   const [icons, setIcons] = useState(() => Object.fromEntries(typeCategories.map((c) => [c.id, c.icon])));
   const [confirmRemoveId, setConfirmRemoveId] = useState(null);
+  const [removingCategoryId, setRemovingCategoryId] = useState(null);
   const [order, setOrder] = useState(() => typeCategories.map((c) => c.id));
 
   useEffect(() => {
@@ -832,12 +833,14 @@ export function ManageCategories({ session, type, categories, reload, showError,
 
   const removeCategory = async (id) => {
     const name = typeCategories.find((c) => c.id === id)?.name;
+    setRemovingCategoryId(id);
     try {
       const { error } = await supabase.from("mm_categories").update({ deleted: true }).eq("id", id);
       if (error) throw error;
       await reload();
       showInfo(`"${name}" eliminada.`);
     } catch (e) { showError(`No se pudo borrar: ${e?.message || e}`); }
+    setRemovingCategoryId(null);
     setConfirmRemoveId(null);
   };
 
@@ -885,7 +888,8 @@ export function ManageCategories({ session, type, categories, reload, showError,
                     {confirmRemoveId === id && (
                       <ConfirmInline
                         message={`¿Borrar "${c.name}"?`}
-                        confirmLabel="Borrar"
+                        confirmLabel={removingCategoryId === id ? "Borrando…" : "Borrar"}
+                        confirmDisabled={removingCategoryId === id}
                         onCancel={() => setConfirmRemoveId(null)}
                         onConfirm={() => removeCategory(id)}
                       />

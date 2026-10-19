@@ -538,7 +538,7 @@ export function ConfirmInline({ title, message, confirmLabel = "Confirmar", onCa
       <div style={{ display: "flex", gap: 8, marginTop: message ? 10 : 0 }}>
         <button style={{ ...styles.btnGhostSmall, flex: 1, justifyContent: "center" }} onClick={onCancel}>Cancelar</button>
         <button
-          style={danger ? { ...styles.btnDangerSmall, flex: 1 } : { ...styles.btnPrimarySmall, flex: 1, opacity: confirmDisabled ? 0.5 : 1 }}
+          style={{ ...(danger ? styles.btnDangerSmall : styles.btnPrimarySmall), flex: 1, opacity: confirmDisabled ? 0.5 : 1 }}
           onClick={onConfirm}
           disabled={confirmDisabled}
         >

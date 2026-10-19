@@ -111,6 +111,7 @@ export default function BookmarksScreen({ userId, accounts, categories, onBack, 
 function BookmarkGroup({ type, items, accounts, categories, managing, onUse, onRemove, onReorder }) {
   const [order, setOrder] = useState(() => items.map((b) => b.id));
   const [confirmRemoveId, setConfirmRemoveId] = useState(null);
+  const [removingId, setRemovingId] = useState(null);
   React.useEffect(() => { setOrder(items.map((b) => b.id)); }, [items]);
 
   const dndSensors = useSensors(
@@ -149,9 +150,15 @@ function BookmarkGroup({ type, items, accounts, categories, managing, onUse, onR
                 {confirmRemoveId === id && (
                   <ConfirmInline
                     message={`¿Borrar "${name}"?`}
-                    confirmLabel="Borrar"
+                    confirmLabel={removingId === id ? "Borrando…" : "Borrar"}
+                    confirmDisabled={removingId === id}
                     onCancel={() => setConfirmRemoveId(null)}
-                    onConfirm={async () => { await onRemove(id, name); setConfirmRemoveId(null); }}
+                    onConfirm={async () => {
+                      setRemovingId(id);
+                      await onRemove(id, name);
+                      setRemovingId(null);
+                      setConfirmRemoveId(null);
+                    }}
                   />
                 )}
               </div>

@@ -565,7 +565,7 @@ export function ManageAccounts({ session, group = null, groups, accounts, accoun
       {group && confirmDelete && (
         <ConfirmInline
           message={accCount > 0 ? `"${group.name}" tiene ${accCount} cuenta(s) adentro.\nSe borran juntas. ¿Continuar?` : `¿Eliminar "${group.name}"?`}
-          confirmLabel="Eliminar"
+          confirmLabel={deleting ? "Eliminando…" : "Eliminar"}
           confirmDisabled={deleting}
           onCancel={() => setConfirmDelete(false)}
           onConfirm={remove}

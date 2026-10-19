@@ -658,8 +658,9 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
   const { groups, loading, reloadGroup, deleteGroup, reload: reloadGroups } = useGroups(session.userId);
   const moneyManager = useMoneyManager(session.userId, session.email);
   const isOnline = useConnectivity();
-  // Tapa toda la app mientras sincroniza — al arrancar (si hay señal) y en
-  // toda transición offline→online. El efecto de abajo reacciona solo a
+  // Banner de sincronización (no bloqueante, ver ReconnectSyncGate) — al
+  // arrancar (si hay señal) y en toda transición offline→online. El efecto
+  // de abajo reacciona solo a
   // CAMBIOS de isOnline (incluido el primer render): arranca sincronizando
   // si ya hay señal, no hace nada si arranca sin ella, y vuelve a
   // sincronizar apenas isOnline pasa de false a true.

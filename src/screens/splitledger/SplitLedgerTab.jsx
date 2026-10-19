@@ -17,7 +17,7 @@ import {
   DEFAULT_CATEGORIES, groupCategories, catInfo, colorFor, initials, shortName, nameOf,
   computeBalances, simplifyDebts, fairSplit, computeShares,
   dateInputValue, todayInputValue, fmtDate,
-  useImageUpload, resolvePhotoUrl, useScrollToTopOnChange,
+  useImageUpload, resolvePhotoUrl, useScrollToTopOnChange, normalizeForSearch,
 } from "../../lib/helpers.jsx";
 
 /* =========================================================================
@@ -1839,7 +1839,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
   const mmInvolved = !!(activeLink && myMemberId && (iPay || iParticipate));
   const showMmCategory = !!(activeLink && myMemberId && iParticipate);
   const descriptionSuggestions = activeLink && moneyManager.settings.autocomplete_notes && description.trim()
-    ? recentNoteTitles.filter((t) => t.toLowerCase().includes(description.trim().toLowerCase()) && t.toLowerCase() !== description.trim().toLowerCase()).slice(0, 5)
+    ? recentNoteTitles.filter((t) => normalizeForSearch(t).includes(normalizeForSearch(description.trim())) && normalizeForSearch(t) !== normalizeForSearch(description.trim())).slice(0, 5)
     : [];
 
   // La primera vez (por vínculo/gasto): trae la elección ya guardada para

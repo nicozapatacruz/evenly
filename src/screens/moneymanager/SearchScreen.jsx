@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Search as SearchIcon, SlidersHorizontal, Trash2, Divide, AlertCircle } from "lucide-react";
 import { styles } from "../../lib/styles.js";
 import { TopBar, HeaderMenu, EmptyState } from "../../components/Shared.jsx";
-import { money, dateInputValueInZone, measureTextWidth, useScrollToTopOnChange } from "../../lib/helpers.jsx";
+import { money, dateInputValueInZone, measureTextWidth, useScrollToTopOnChange, normalizeForSearch } from "../../lib/helpers.jsx";
 import { useRecentNoteTitles, searchTransactions, isRatePending, currenciesInUse } from "../../lib/moneyManagerData.js";
 import { EMPTY_FILTERS, hasActiveFilters } from "../../lib/filterHelpers.js";
 import { FiltersPanel } from "./FiltersPanel.jsx";
@@ -183,7 +183,7 @@ export default function SearchScreen({
 
   const recentNoteTitles = useRecentNoteTitles(session.userId);
   const noteSuggestions = query.trim()
-    ? recentNoteTitles.filter((t) => t.toLowerCase().includes(query.trim().toLowerCase()) && t.toLowerCase() !== query.trim().toLowerCase()).slice(0, 5)
+    ? recentNoteTitles.filter((t) => normalizeForSearch(t).includes(normalizeForSearch(query.trim())) && normalizeForSearch(t) !== normalizeForSearch(query.trim())).slice(0, 5)
     : [];
 
   // Recibe query/filters explícitos (no los lee del state del closure) para

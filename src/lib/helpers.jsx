@@ -257,6 +257,14 @@ export function dateInputValueInZone(ms, tz) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms));
 }
 
+// Para comparar texto de búsqueda/autocompletado sin que importen mayúsculas
+// ni acentos (ej. "bateria" tiene que encontrar "Baterías") -- normalize
+// "NFD" separa cada letra de su acento como caracteres distintos, y después
+// se borran esos acentos sueltos (rango Unicode de "combining diacritics").
+export function normalizeForSearch(s) {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
 export function daysInMonth(year, monthIndex) {
   return new Date(year, monthIndex + 1, 0).getDate();
 }

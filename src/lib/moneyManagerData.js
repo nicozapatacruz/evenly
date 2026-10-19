@@ -2,7 +2,7 @@ import { useCallback, useMemo } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { supabase } from "./supabaseClient.js";
 import { db } from "./localDb.js";
-import { dateInputValueInZone, parseAmountInput, daysInMonth, monthsBefore } from "./helpers.jsx";
+import { dateInputValueInZone, parseAmountInput, daysInMonth, monthsBefore, normalizeForSearch } from "./helpers.jsx";
 import { hasActiveFilters, matchesFilters } from "./filterHelpers.js";
 import { reconcileSplitLedger, getPendienteTcReviewItems, acknowledgePendienteTcReviewItem } from "./splitLedgerSync.js";
 import { computeAccountTotals, computeCategoryMonthTotals, computeAccountMonthTotals } from "./localAggregates.js";
@@ -442,10 +442,14 @@ export function useCategoryTimeline(userId, type, categoryId, mainCurrency) {
 export function useRecentNoteTitles(userId) {
   const { rows: all } = useLocalTable("mm_transactions", userId);
   return useMemo(() => {
+    // Sin límite de cuántas transacciones mirar hacia atrás -- ya está todo
+    // en memoria (local-first), ordenar no cuesta más por no cortar antes.
+    // El límite de cuántas SUGERENCIAS se muestran sigue siendo cosa de
+    // cada autocompletado (.slice(0, 5) en los call-sites), esto es solo
+    // el pool de candidatas de donde eligen.
     const sorted = all
       .filter((t) => !t.deleted && t.title && !t.sl_link_id)
-      .sort((a, b) => new Date(b.date) - new Date(a.date))
-      .slice(0, 300);
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
     return [...new Set(sorted.map((t) => t.title))];
   }, [all]);
 }
@@ -458,8 +462,8 @@ export async function searchTransactions(userId, filters) {
   const all = await db.mm_transactions.where("user_id").equals(userId).toArray();
   let rows = all.filter((t) => !t.deleted && !t.sl_hidden);
 
-  const text = filters.query?.trim().toLowerCase();
-  if (text) rows = rows.filter((t) => t.title?.toLowerCase().includes(text) || t.memo?.toLowerCase().includes(text));
+  const text = filters.query?.trim() ? normalizeForSearch(filters.query.trim()) : "";
+  if (text) rows = rows.filter((t) => (t.title && normalizeForSearch(t.title).includes(text)) || (t.memo && normalizeForSearch(t.memo).includes(text)));
   if (filters.accountIds?.length) {
     const ids = new Set(filters.accountIds);
     rows = rows.filter((t) => ids.has(t.account_id) || ids.has(t.to_account_id));

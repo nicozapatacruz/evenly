@@ -6,7 +6,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { offlineSupabase as supabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, Footer, ConfirmInline, IconInput, PickerField, Field, Modal, CalculatorAmountInput, CurrencyConversionField } from "../../components/Shared.jsx";
-import { parseAmountInput, todayInputValue, dateInputValue, dateInputValueInZone, money, fmtDate, useScrollToTopOnChange } from "../../lib/helpers.jsx";
+import { parseAmountInput, todayInputValue, dateInputValue, dateInputValueInZone, money, fmtDate, useScrollToTopOnChange, normalizeForSearch } from "../../lib/helpers.jsx";
 import { RECURRING_FREQUENCIES, nextOccurrence, computeAmountMain, useRecentNoteTitles } from "../../lib/moneyManagerData.js";
 
 const TYPE_INFO = {
@@ -105,7 +105,7 @@ export default function TransactionForm({
   const [noteDismissed, setNoteDismissed] = useState(false);
   const recentNoteTitles = useRecentNoteTitles(session.userId);
   const noteSuggestions = settings.autocomplete_notes && note.trim()
-    ? recentNoteTitles.filter((t) => t.toLowerCase().includes(note.trim().toLowerCase()) && t.toLowerCase() !== note.trim().toLowerCase()).slice(0, 5)
+    ? recentNoteTitles.filter((t) => normalizeForSearch(t).includes(normalizeForSearch(note.trim())) && normalizeForSearch(t) !== normalizeForSearch(note.trim())).slice(0, 5)
     : [];
   const [description, setDescription] = useState(editingTransaction?.memo || editingRecurring?.memo || prefillBookmark?.memo || "");
   const [saving, setSaving] = useState(false);

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { TopBar, Footer, Field, PickerField, CalculatorAmountInput, EmptyState, Modal } from "../../components/Shared.jsx";
 import { styles } from "../../lib/styles.js";
-import { money, parseAmountInput, dateInputValue, useScrollToTopOnChange } from "../../lib/helpers.jsx";
+import { money, parseAmountInput, dateInputValue, useScrollToTopOnChange, normalizeForSearch } from "../../lib/helpers.jsx";
 import { computeAmountMain, useRecentNoteTitles } from "../../lib/moneyManagerData.js";
 import { useDescriptionRules, findDescriptionRule, upsertDescriptionRule, normalizeDescription } from "../../lib/descriptionRulesData.js";
 import { Check, Inbox, RefreshCw, X } from "lucide-react";
@@ -242,7 +242,7 @@ function WizardStep({ userId, settings, candidate, savedEntry, rule, categories,
   const [titleDismissed, setTitleDismissed] = useState(false);
   const recentTitles = useRecentNoteTitles(userId);
   const titleSuggestions = settings.autocomplete_notes && title.trim()
-    ? recentTitles.filter((t) => t.toLowerCase().includes(title.trim().toLowerCase()) && t.toLowerCase() !== title.trim().toLowerCase()).slice(0, 5)
+    ? recentTitles.filter((t) => normalizeForSearch(t).includes(normalizeForSearch(title.trim())) && normalizeForSearch(t) !== normalizeForSearch(title.trim())).slice(0, 5)
     : [];
 
   const numericAmount = parseAmountInput(amount);

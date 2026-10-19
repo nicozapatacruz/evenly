@@ -1302,7 +1302,7 @@ function GroupView({ group, session, onRefresh, onBack, onAddExpense, onOpenExpe
       {tab === "balances" && (() => {
         const totalTxnCount = currencies.reduce((s, c) => s + txnsByCurrency[c].length, 0);
         return (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 6 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 6, padding: "0 20px" }}>
             {allSettled && (
               <div style={styles.settledBox}><Check size={18} color="#3B6E62" /><span>Todo saldado. Nadie le debe nada a nadie.</span></div>
             )}
@@ -1312,7 +1312,7 @@ function GroupView({ group, session, onRefresh, onBack, onAddExpense, onOpenExpe
               return (
                 <div key={currency} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {currencies.length > 1 && (
-                    <p style={{ ...styles.label, padding: "0 20px" }}>{currency}</p>
+                    <p style={styles.label}>{currency}</p>
                   )}
                   {txns.map((t, i) => (
                     <div key={i} style={styles.debtCard}>
@@ -1340,7 +1340,7 @@ function GroupView({ group, session, onRefresh, onBack, onAddExpense, onOpenExpe
               {allSettled ? "Sin pagos pendientes." : `Simplificado a ${totalTxnCount} pago${totalTxnCount > 1 ? "s" : ""}: el mínimo posible para saldar el grupo.`}
             </p>
             <button
-              style={{ ...styles.btnSecondary, width: "calc(100% - 40px)", margin: "4px 20px 0", opacity: isOnline ? 1 : 0.5 }}
+              style={{ ...styles.btnSecondary, marginTop: 4, opacity: isOnline ? 1 : 0.5 }}
               onClick={() => { if (!isOnline) { blockOffline(); return; } onSettleUp(null); }}
             >
               <HandCoins size={16} /> Registrar un pago
@@ -1443,7 +1443,7 @@ function GroupView({ group, session, onRefresh, onBack, onAddExpense, onOpenExpe
       )}
 
       {tab === "activity" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6, padding: "0 20px" }}>
           {activityItems.length === 0 && (
             <EmptyState icon={<Receipt size={28} strokeWidth={1.5} />} title="Todavía no hay actividad">
               Tocá el "+" de abajo para cargar el primer gasto del grupo.

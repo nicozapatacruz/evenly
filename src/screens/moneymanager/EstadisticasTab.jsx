@@ -8,9 +8,14 @@ import { hasActiveFilters } from "../../lib/filterHelpers.js";
 
 const COMPARE_KEY = "evenly_statsCompare";
 const DEFAULT_COMPARE = { mode: "off", months: 1, specificMonth: null };
-// ±10 puntos porcentuales de margen antes de juzgar "por encima"/"por
-// debajo" del ritmo esperado -- sin esto, estar a 1pp de diferencia ya
-// pintaría rojo/verde, demasiado sensible para ser útil de un vistazo.
+// Margen RELATIVO (no puntos porcentuales planos) antes de juzgar "por
+// encima"/"por debajo" del ritmo esperado -- ej. con expectedPct=75%, verde
+// es haber gastado 67,5% o menos (75% × 0.9), rojo es 82,5% o más (75% ×
+// 1.1). Si fuera un margen plano (±10 puntos siempre, sin importar
+// expectedPct), a fin de mes (expectedPct≈100%) cualquier gasto ligeramente
+// distinto al período de comparación ya pintaba rojo aunque el total fuera
+// casi igual -- con el margen relativo, la tolerancia crece junto con
+// expectedPct, no es la misma franja angosta todo el mes.
 const PACE_MARGIN = 0.10;
 // Ancho fijo (no minWidth) de la columna de la derecha, compartido entre el
 // encabezado (CompareHeader) y cada fila (ComparisonBar) -- tiene que ser
@@ -32,9 +37,10 @@ function loadCompareSpec() {
 // el valor -- ver monthProgressPct.
 function paceColor(ratio, expectedPct) {
   if (expectedPct === null) return "#A8754A";
-  const diff = ratio - expectedPct;
-  if (diff <= -PACE_MARGIN) return "#3B6E62";
-  if (diff >= PACE_MARGIN) return "#B0473A";
+  const lower = expectedPct * (1 - PACE_MARGIN);
+  const upper = expectedPct * (1 + PACE_MARGIN);
+  if (ratio <= lower) return "#3B6E62";
+  if (ratio >= upper) return "#B0473A";
   return "#C9A24B";
 }
 
@@ -64,7 +70,7 @@ function ComparisonBar({ current, baseline, expectedPct, currency }) {
       <div style={{ position: "relative", flex: 1, height: 6, borderRadius: 3, background: "#ECE3D3", overflow: "hidden" }}>
         <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${fillPct}%`, background: paceColor(ratio, expectedPct), borderRadius: 3 }} />
         {expectedPct !== null && (
-          <div style={{ position: "absolute", left: `${expectedPct * 100}%`, top: -1, bottom: -1, width: 2, background: "#2B2620" }} />
+          <div style={{ position: "absolute", left: `${expectedPct * 100}%`, top: -1, bottom: -1, width: 2, background: "#2B2620", transform: "translateX(-50%)" }} />
         )}
       </div>
       <span style={{
@@ -98,9 +104,9 @@ function CompareHeader({ expectedPct, label }) {
             {expectedPct !== null && (
               <>
                 <span style={{ position: "absolute", left: `${expectedPct * 100}%`, bottom: 7, transform: "translateX(-50%)", fontSize: 10.5, color: "#6B6355", fontFamily: "system-ui, sans-serif", whiteSpace: "nowrap" }}>
-                  Hoy
+                  Hoy · {Math.round(expectedPct * 100)}%
                 </span>
-                <div style={{ position: "absolute", left: `${expectedPct * 100}%`, top: -4, bottom: -4, width: 2, background: "#2B2620" }} />
+                <div style={{ position: "absolute", left: `${expectedPct * 100}%`, top: -4, bottom: -4, width: 2, background: "#2B2620", transform: "translateX(-50%)" }} />
               </>
             )}
           </div>
@@ -517,9 +523,9 @@ export default function EstadisticasTab({ userId, settings, accounts, categories
               </div>
               <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 3 }}>
                 <li style={{ fontSize: 11.5, color: "#6B6355", fontFamily: "system-ui, sans-serif", lineHeight: 1.4 }}>① Ícono y nombre de la categoría.</li>
-                <li style={{ fontSize: 11.5, color: "#6B6355", fontFamily: "system-ui, sans-serif", lineHeight: 1.4 }}>② Cuánto gastaste ahí este mes.</li>
+                <li style={{ fontSize: 11.5, color: "#6B6355", fontFamily: "system-ui, sans-serif", lineHeight: 1.4 }}>② Cuánto has {type === "income" ? "ingresado" : "gastado"} ahí este mes.</li>
                 <li style={{ fontSize: 11.5, color: "#6B6355", fontFamily: "system-ui, sans-serif", lineHeight: 1.4 }}>③ Tu ritmo: el color dice si vas bien (verde), al día (ámbar) o alto (rojo); la marca negra señala qué tan avanzado está el mes (lo mismo que "Hoy" arriba de la lista).</li>
-                <li style={{ fontSize: 11.5, color: "#6B6355", fontFamily: "system-ui, sans-serif", lineHeight: 1.4 }}>④ Cuánto gastaste ahí en el período de comparación, y qué porcentaje de eso ya llevás.</li>
+                <li style={{ fontSize: 11.5, color: "#6B6355", fontFamily: "system-ui, sans-serif", lineHeight: 1.4 }}>④ Cuánto {type === "income" ? "ingresaste" : "gastaste"} en total ahí en el período de comparación, y qué porcentaje de eso ya llevás.</li>
               </ul>
             </div>
 

@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { styles } from "../../lib/styles.js";
-import { TopBar, MonthNav, EmptyState, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
+import { TopBar, MonthNav, EmptyState, SegmentedControl, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
 import { money, measureTextWidth } from "../../lib/helpers.jsx";
 import { useAccountMonthTransactions, useAccountMonthTotals } from "../../lib/moneyManagerData.js";
 import { TransactionDayGroups } from "./TransactionDayGroups.jsx";
@@ -46,21 +46,16 @@ export default function AccountActivityScreen({
   return (
     <div style={{ ...styles.screen, display: "flex", flexDirection: "column" }}>
       <TopBar title={<span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>{accountIcon && <span>{accountIcon}</span>} {accountName}</span>} onBack={onBack} />
-      <div style={{ ...styles.tabRow, padding: "10px 14px 0" }}>
-        {[
-          { key: "diario", label: "Diario" },
-          { key: "mensual", label: "Mensual" },
-          { key: "anual", label: "Anual" },
-        ].map((t) => (
-          <button
-            key={t.key}
-            style={tab === t.key ? styles.tabActive : styles.tab}
-            onClick={() => setTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        style={{ margin: "10px 20px 0" }}
+        options={[
+          { value: "diario", label: "Diario" },
+          { value: "mensual", label: "Mensual" },
+          { value: "anual", label: "Anual" },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
 
       {loadingTotals ? (
         <EmptyState title="Cargando…" />

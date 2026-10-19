@@ -5,7 +5,7 @@ import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } 
 import { CSS } from "@dnd-kit/utilities";
 import { offlineSupabase as supabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, Footer, ConfirmInline, IconInput, PickerField, Field, Modal, CalculatorAmountInput, CurrencyConversionField } from "../../components/Shared.jsx";
+import { TopBar, Footer, ConfirmInline, IconInput, PickerField, Field, Modal, CalculatorAmountInput, CurrencyConversionField, SegmentedControl } from "../../components/Shared.jsx";
 import { parseAmountInput, todayInputValue, dateInputValue, dateInputValueInZone, money, fmtDate, useScrollToTopOnChange, normalizeForSearch } from "../../lib/helpers.jsx";
 import { RECURRING_FREQUENCIES, nextOccurrence, computeAmountMain, useRecentNoteTitles } from "../../lib/moneyManagerData.js";
 
@@ -434,20 +434,12 @@ export default function TransactionForm({
               : "Viene de Split Ledger. El monto, la cuenta, la fecha y el tipo se actualizan solos. Podés cambiarle la categoría o la nota."}
           </p>
         )}
-        <div style={{ ...styles.tabRow, padding: 0, opacity: isSynced ? 0.6 : 1 }}>
-          {Object.keys(TYPE_INFO).map((t) => (
-            <button
-              key={t}
-              style={type === t
-                ? { flex: 1, padding: "9px 0", borderRadius: 9, border: `1px solid ${TYPE_INFO[t].color}`, background: TYPE_INFO[t].color, color: "#fff", fontSize: 12.5, fontWeight: 600, fontFamily: "system-ui, sans-serif" }
-                : styles.tab}
-              onClick={() => !isSynced && setType(t)}
-              disabled={isSynced}
-            >
-              {TYPE_INFO[t].label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          options={Object.keys(TYPE_INFO).map((t) => ({ value: t, label: TYPE_INFO[t].label, color: TYPE_INFO[t].color }))}
+          value={type}
+          onChange={setType}
+          disabled={isSynced}
+        />
 
         {/* Al editar una recurrente no hay "fecha de esta ocurrencia" que
             mostrar -- el calendario (start_date/next_date) no se toca desde

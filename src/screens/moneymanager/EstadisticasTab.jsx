@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Search, SlidersHorizontal, GitCompare, Minus, Plus } from "lucide-react";
 import { styles } from "../../lib/styles.js";
-import { RootHeader, MonthNav, TodayButton, FiltersActiveBanner, CompareActiveBanner, HeaderMenu, EmptyState, Modal, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
+import { RootHeader, MonthNav, TodayButton, FiltersActiveBanner, CompareActiveBanner, HeaderMenu, EmptyState, Modal, SegmentedControl, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
 import { money, monthProgressPct } from "../../lib/helpers.jsx";
 import { useStatsCategoryTotals, currenciesInUse } from "../../lib/moneyManagerData.js";
 import { hasActiveFilters } from "../../lib/filterHelpers.js";
@@ -314,22 +314,35 @@ export default function EstadisticasTab({ userId, settings, accounts, categories
         />
         <div style={styles.subHeader} {...swipeHandlers}>
           <MonthNav viewMonth={viewMonth} setViewMonth={setViewMonth} />
-          <div style={{ ...styles.tabRow, padding: 0 }}>
-            <button
-              style={{ ...(type === "income" ? { ...styles.tabActive, background: "#3B6E62", borderColor: "#3B6E62" } : styles.tab), display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "7px 0" }}
-              onClick={() => setType("income")}
-            >
-              <span>Ingresos</span>
-              <span style={{ color: type === "income" ? "#fff" : "#3B6E62" }}>{money(incomeSum, currency)}</span>
-            </button>
-            <button
-              style={{ ...(type === "expense" ? styles.tabActive : styles.tab), display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "7px 0" }}
-              onClick={() => setType("expense")}
-            >
-              <span>Gastos</span>
-              <span style={{ color: type === "expense" ? "#fff" : "#B0473A" }}>{money(expenseSum, currency)}</span>
-            </button>
-          </div>
+          <SegmentedControl
+            options={[
+              {
+                value: "income", color: "#3B6E62",
+                label: () => (
+                  <>
+                    <span>Ingresos</span>
+                    {/* El monto siempre va en su color semántico (verde),
+                        esté o no activa esta opción -- a diferencia del
+                        diseño viejo (relleno sólido), acá la píldora activa
+                        ya es blanca, no hace falta pasar a blanco el texto
+                        para que se siga leyendo. */}
+                    <span style={{ color: "#3B6E62" }}>{money(incomeSum, currency)}</span>
+                  </>
+                ),
+              },
+              {
+                value: "expense",
+                label: () => (
+                  <>
+                    <span>Gastos</span>
+                    <span style={{ color: "#B0473A" }}>{money(expenseSum, currency)}</span>
+                  </>
+                ),
+              },
+            ]}
+            value={type}
+            onChange={setType}
+          />
         </div>
       </div>
       <div key={slide.key} className={slide.className} style={{ ...styles.form, flex: 1, paddingTop: 12 }} {...swipeHandlers}>
@@ -431,14 +444,14 @@ export default function EstadisticasTab({ userId, settings, accounts, categories
                 de los dos se aplica si tocás los dos controles (ver feedback
                 de Nicolas). "Aplicar" siempre usa el que está seleccionado
                 acá, no el que tenía cargado antes. */}
-            <div style={{ display: "flex", gap: 8 }}>
-              <button style={{ ...(localMode === "average" ? styles.tabActive : styles.tab), flex: 1 }} onClick={() => setLocalMode("average")}>
-                Promedio de N meses
-              </button>
-              <button style={{ ...(localMode === "specific" ? styles.tabActive : styles.tab), flex: 1 }} onClick={() => setLocalMode("specific")}>
-                Mes específico
-              </button>
-            </div>
+            <SegmentedControl
+              options={[
+                { value: "average", label: "Promedio de N meses" },
+                { value: "specific", label: "Mes específico" },
+              ]}
+              value={localMode}
+              onChange={setLocalMode}
+            />
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <p style={{ margin: 0, fontSize: 12.5, color: "#6B6355", fontFamily: "system-ui, sans-serif", lineHeight: 1.4 }}>

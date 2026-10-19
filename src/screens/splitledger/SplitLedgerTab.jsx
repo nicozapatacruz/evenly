@@ -9,7 +9,7 @@ import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCen
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { styles } from "../../lib/styles.js";
-import { TopBar, RootHeader, ConfirmInline, Modal, Footer, PhotoPicker, ImageWithFallback, Field, ToggleField, PickerField, SplitLedgerIcon, EmptyState, CalculatorAmountInput } from "../../components/Shared.jsx";
+import { TopBar, RootHeader, ConfirmInline, Modal, Footer, PhotoPicker, ImageWithFallback, Field, ToggleField, PickerField, SplitLedgerIcon, EmptyState, CalculatorAmountInput, SegmentedControl } from "../../components/Shared.jsx";
 import { linkGroupToAccount, updateLinkDefaults, unlinkGroup } from "../../lib/splitLedgerLink.js";
 import { useRecentNoteTitles } from "../../lib/moneyManagerData.js";
 import {
@@ -1274,11 +1274,16 @@ function GroupView({ group, session, onRefresh, onBack, onAddExpense, onOpenExpe
         }
       />
 
-      <div style={{ ...styles.tabRow, marginTop: 12 }}>
-        <button style={tab === "activity" ? styles.tabActive : styles.tab} onClick={() => setTab("activity")}>Actividad</button>
-        <button style={tab === "balances" ? styles.tabActive : styles.tab} onClick={() => setTab("balances")}>Balances</button>
-        <button style={tab === "individual" ? styles.tabActive : styles.tab} onClick={() => setTab("individual")}>Por persona</button>
-      </div>
+      <SegmentedControl
+        style={{ margin: "24px 20px 4px" }}
+        options={[
+          { value: "activity", label: "Actividad" },
+          { value: "balances", label: "Balances" },
+          { value: "individual", label: "Por persona" },
+        ]}
+        value={tab}
+        onChange={setTab}
+      />
 
       {/* Mismo texto ("Debes X a Y" / "Y te debe X") que ya usa la tarjeta
           de este grupo en "Tus grupos", debajo de los toggles para no tener
@@ -2130,10 +2135,14 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
 
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <p style={styles.label}>¿Quién pagó?</p>
-          <div style={styles.splitModeRow}>
-            <button style={payerMode === "single" ? styles.tabActive : styles.tab} onClick={() => setPayerMode("single")}>Una persona</button>
-            <button style={payerMode === "multi" ? styles.tabActive : styles.tab} onClick={() => setPayerMode("multi")}>Varias personas</button>
-          </div>
+          <SegmentedControl
+            options={[
+              { value: "single", label: "Una persona" },
+              { value: "multi", label: "Varias personas" },
+            ]}
+            value={payerMode}
+            onChange={setPayerMode}
+          />
         </div>
 
         {payerMode === "single" && (
@@ -2202,11 +2211,11 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
           {splitExpanded && (
             <div style={{ border: "1px solid #DDD2BE", borderTop: "none", borderRadius: "0 0 10px 10px", padding: "12px", display: "flex", flexDirection: "column", gap: 10, background: "#fff" }}>
               {/* Selector de modo */}
-              <div style={styles.splitModeRow}>
-                {[["equal", "Iguales"], ["exact", "Montos"], ["percent", "Porcentajes"], ["shares", "Partes"]].map(([id, label]) => (
-                  <button key={id} style={splitMode === id ? styles.tabActive : styles.tab} onClick={() => setSplitMode(id)}>{label}</button>
-                ))}
-              </div>
+              <SegmentedControl
+                options={[["equal", "Iguales"], ["exact", "Montos"], ["percent", "Porcentajes"], ["shares", "Partes"]].map(([id, label]) => ({ value: id, label }))}
+                value={splitMode}
+                onChange={setSplitMode}
+              />
 
               {splitMode === "equal" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { TopBar, Footer, Field, PickerField, CalculatorAmountInput, EmptyState, Modal } from "../../components/Shared.jsx";
+import { TopBar, Footer, Field, PickerField, CalculatorAmountInput, EmptyState, Modal, SegmentedControl } from "../../components/Shared.jsx";
 import { styles } from "../../lib/styles.js";
 import { money, parseAmountInput, dateInputValue, useScrollToTopOnChange, normalizeForSearch } from "../../lib/helpers.jsx";
 import { computeAmountMain, useRecentNoteTitles } from "../../lib/moneyManagerData.js";
@@ -267,10 +267,14 @@ function WizardStep({ userId, settings, candidate, savedEntry, rule, categories,
         }
       />
       <div style={{ ...styles.form, paddingBottom: 100 }}>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button style={type === "expense" ? { ...styles.tabActive, border: "1px solid #C75D3B", background: "#C75D3B" } : styles.tab} onClick={() => setType("expense")}>Gasto</button>
-          <button style={type === "income" ? { ...styles.tabActive, border: "1px solid #3B6E62", background: "#3B6E62" } : styles.tab} onClick={() => setType("income")}>Ingreso</button>
-        </div>
+        <SegmentedControl
+          options={[
+            { value: "expense", label: "Gasto" },
+            { value: "income", label: "Ingreso", color: "#3B6E62" },
+          ]}
+          value={type}
+          onChange={setType}
+        />
 
         <Field label="Fecha">
           <input style={styles.input} type="date" value={date} onChange={(e) => setDate(e.target.value)} />

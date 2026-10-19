@@ -6,7 +6,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { offlineSupabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, RootHeader, ConfirmInline, Footer, PhotoPicker, ToggleField, Field, PasswordInput } from "../../components/Shared.jsx";
+import { TopBar, RootHeader, ConfirmInline, Footer, PhotoPicker, ToggleField, Field, PasswordInput, SegmentedControl } from "../../components/Shared.jsx";
 import { useImageUpload, resolvePhotoUrl, colorFor, initials, useScrollToTopOnChange } from "../../lib/helpers.jsx";
 import RecurringScreen from "../moneymanager/RecurringScreen.jsx";
 import TransactionForm, { ManageCategories } from "../moneymanager/TransactionForm.jsx";
@@ -210,15 +210,18 @@ export default function ConfigScreen({
           </button>
         }
       />
-      <div style={styles.tabRow}>
-        <button style={section === "moneymanager" ? styles.tabActive : styles.tab} onClick={() => setSection("moneymanager")}>Money Manager</button>
-        <button style={{ ...(section === "splitledger" ? styles.tabActive : styles.tab), position: "relative" }} onClick={() => setSection("splitledger")}>
-          Split Ledger
-          {invites.length > 0 && (
-            <span style={{ position: "absolute", top: -5, right: -5, width: 12, height: 12, borderRadius: "50%", background: "#C75D3B", border: "2px solid #fff" }} />
-          )}
-        </button>
-      </div>
+      <SegmentedControl
+        style={{ margin: "12px 20px 4px" }}
+        options={[
+          { value: "moneymanager", label: "Money Manager" },
+          {
+            value: "splitledger", label: "Split Ledger",
+            badge: invites.length > 0 ? <span style={{ position: "absolute", top: -5, right: -5, width: 12, height: 12, borderRadius: "50%", background: "#C75D3B", border: "2px solid #fff" }} /> : null,
+          },
+        ]}
+        value={section}
+        onChange={setSection}
+      />
 
       {section === "moneymanager" && (
         <div style={{ ...styles.form, paddingTop: 12 }}>

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { styles } from "../../lib/styles.js";
-import { TopBar, Footer, Field, MultiPickerField } from "../../components/Shared.jsx";
+import { TopBar, Footer, Field, MultiPickerField, SegmentedControl } from "../../components/Shared.jsx";
 import { EMPTY_FILTERS, filtersEqual } from "../../lib/filterHelpers.js";
 
 // Compartido entre el Buscador y el filtro persistente de Transacciones/
@@ -57,24 +57,20 @@ export function FiltersPanel({ draft, setDraft, filters, accountGroups, categori
         </Field>
 
         <Field label="Categoría">
-          <div style={{ display: "flex", gap: 8, marginBottom: 2 }}>
-            <button type="button" style={{ ...(categoryFilterType === "expense" ? styles.tabActive : styles.tab), position: "relative" }} onClick={() => setCategoryFilterType("expense")}>
-              Gasto
-              {expenseCount > 0 && (
-                <span style={{ position: "absolute", top: -8, right: -8, minWidth: 20, height: 20, padding: "0 4px", borderRadius: 10, background: "#C75D3B", color: "#fff", fontSize: 11.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff" }}>
-                  {expenseCount}
-                </span>
-              )}
-            </button>
-            <button type="button" style={{ ...(categoryFilterType === "income" ? styles.tabActive : styles.tab), position: "relative" }} onClick={() => setCategoryFilterType("income")}>
-              Ingreso
-              {incomeCount > 0 && (
-                <span style={{ position: "absolute", top: -8, right: -8, minWidth: 20, height: 20, padding: "0 4px", borderRadius: 10, background: "#C75D3B", color: "#fff", fontSize: 11.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff" }}>
-                  {incomeCount}
-                </span>
-              )}
-            </button>
-          </div>
+          <SegmentedControl
+            options={[
+              {
+                value: "expense", label: "Gasto",
+                badge: expenseCount > 0 ? <span style={{ position: "absolute", top: -8, right: -8, minWidth: 20, height: 20, padding: "0 4px", borderRadius: 10, background: "#C75D3B", color: "#fff", fontSize: 11.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff" }}>{expenseCount}</span> : null,
+              },
+              {
+                value: "income", label: "Ingreso",
+                badge: incomeCount > 0 ? <span style={{ position: "absolute", top: -8, right: -8, minWidth: 20, height: 20, padding: "0 4px", borderRadius: 10, background: "#C75D3B", color: "#fff", fontSize: 11.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff" }}>{incomeCount}</span> : null,
+              },
+            ]}
+            value={categoryFilterType}
+            onChange={setCategoryFilterType}
+          />
           <MultiPickerField
             value={draft.categoryIds}
             onChange={(v) => setDraft((d) => ({ ...d, categoryIds: v }))}

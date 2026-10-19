@@ -470,6 +470,52 @@ export function IconInput({ value, onChange }) {
   );
 }
 
+// Control segmentado (riel gris + píldora blanca que "flota" en la opción
+// activa) — reemplaza el patrón viejo de 2+ botones independientes con su
+// propio borde (`styles.tab`/`styles.tabActive`), que se confundía
+// visualmente con los botones de acción reales (mismo relleno sólido). Acá
+// la opción activa nunca es un relleno sólido, siempre una píldora blanca
+// con el texto en color -- ese lenguaje queda reservado para Guardar/
+// Aplicar/etc.
+//
+// `options`: [{ value, label, color, badge }]. `label` puede ser un nodo
+// fijo o una función `(active) => nodo` (para texto/colores que cambian
+// según si esa opción puntual está activa, ej. el monto debajo de "Ingresos"
+// en Estadísticas). `color` pisa el naranja por defecto para ESA opción
+// cuando está activa (ej. verde para Ingreso). `badge` es un nodo chico
+// (punto o contador) superpuesto arriba a la derecha -- el botón ya tiene
+// `position:"relative"`, no hace falta agregarlo en cada caller.
+export function SegmentedControl({ options, value, onChange, disabled = false, style }) {
+  return (
+    <div style={{ display: "flex", gap: 3, background: "#ECE3D3", borderRadius: 10, padding: 3, opacity: disabled ? 0.6 : 1, ...style }}>
+      {options.map((opt) => {
+        const active = opt.value === value;
+        const accent = opt.color || "#C75D3B";
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            disabled={disabled}
+            onClick={() => onChange(opt.value)}
+            style={{
+              flex: 1, position: "relative", padding: "7px 0", borderRadius: 8, border: "none",
+              background: active ? "#fff" : "transparent",
+              color: active ? accent : "#6B6355",
+              fontSize: 12.5, fontWeight: 600, fontFamily: "system-ui, sans-serif",
+              boxShadow: active ? "0 1px 3px rgba(0,0,0,0.15)" : "none",
+              cursor: disabled ? "not-allowed" : "pointer",
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+            }}
+          >
+            {typeof opt.label === "function" ? opt.label(active) : opt.label}
+            {opt.badge}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // Regla de fricción para acciones destructivas (a propósito, dos niveles):
 // 1) Confirmación de un clic (este componente): para acciones de alcance acotado
 //    y que no borran historial compartido — borrar un gasto, quitar un miembro,
@@ -1177,10 +1223,12 @@ export function CurrencyConversionField({ amount, onChangeAmount, currency, acco
       </button>
       {open && (
         <div ref={sheetRef} style={{ position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: 0, width: "100%", maxWidth: 480, boxSizing: "border-box", background: "#FBF8F2", borderTop: "1px solid #DDD2BE", borderRadius: "16px 16px 0 0", boxShadow: "0 -4px 20px rgba(0,0,0,0.15)", padding: "10px 10px calc(10px + env(safe-area-inset-bottom))", zIndex: 15 }}>
-          <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-            <button type="button" onClick={() => switchMode("rate")} style={{ ...(mode === "rate" ? styles.tabActive : styles.tab), flex: 1 }}>Tasa</button>
-            <button type="button" onClick={() => switchMode("montos")} style={{ ...(mode === "montos" ? styles.tabActive : styles.tab), flex: 1 }}>Montos</button>
-          </div>
+          <SegmentedControl
+            style={{ marginBottom: 10 }}
+            options={[{ value: "rate", label: "Tasa" }, { value: "montos", label: "Montos" }]}
+            value={mode}
+            onChange={switchMode}
+          />
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 10 }}>
             <div>
               <p style={{ ...styles.label, marginBottom: 6 }}>Valor</p>

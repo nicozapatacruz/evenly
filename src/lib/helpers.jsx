@@ -192,7 +192,13 @@ export function simplifyDebts(balances) {
 }
 
 // Convierte un monto float a centavos y de vuelta, distribuyendo sin perder ni ganar céntimos.
-export function fairSplit(amount, ratios) {
+// `seed` decide quién se lleva el centavo extra cuando hay un EMPATE exacto
+// en la parte decimal (ej. partir algo impar a la mitad) -- sin esto, el
+// empate siempre lo gana quien aparece primero en `ratios`/`participantIds`,
+// que para un grupo de 2 personas es siempre la misma persona, siempre.
+// Los que NO están empatados (parte decimal distinta) no se tocan: a esos
+// ya les toca el centavo por mérito propio, no por sorteo.
+export function fairSplit(amount, ratios, seed = 0) {
   // ratios: array de pesos proporcionales (no tienen que sumar 1)
   const totalRatio = ratios.reduce((s, r) => s + r, 0) || 1;
   const totalCents = Math.round(amount * 100);
@@ -200,22 +206,33 @@ export function fairSplit(amount, ratios) {
   const rawCents = ratios.map((r) => (r / totalRatio) * totalCents);
   const floorCents = rawCents.map(Math.floor);
   let remainder = totalCents - floorCents.reduce((s, c) => s + c, 0);
-  // Ordenar por parte decimal descendente para dar los centavos extra a quienes más les "correspondía"
-  const order = rawCents
-    .map((v, i) => ({ i, frac: v - Math.floor(v) }))
-    .sort((a, b) => b.frac - a.frac);
-  order.forEach(({ i }) => {
+  // Agrupar por parte decimal igual (candidatos empatados), ordenar los
+  // grupos de mayor a menor como antes, y DENTRO de cada grupo empatado
+  // rotar el orden según `seed` antes de repartir.
+  const byFrac = new Map();
+  rawCents.forEach((v, i) => {
+    const frac = v - Math.floor(v);
+    if (!byFrac.has(frac)) byFrac.set(frac, []);
+    byFrac.get(frac).push(i);
+  });
+  const order = [];
+  [...byFrac.keys()].sort((a, b) => b - a).forEach((frac) => {
+    const group = byFrac.get(frac);
+    const rotation = ((seed % group.length) + group.length) % group.length;
+    order.push(...group.slice(rotation), ...group.slice(0, rotation));
+  });
+  order.forEach((i) => {
     if (remainder > 0) { floorCents[i]++; remainder--; }
   });
   return floorCents.map((c) => c / 100);
 }
 
-export function computeShares({ splitMode, amount, participantIds, exactAmounts, percentages, shareUnits }) {
+export function computeShares({ splitMode, amount, participantIds, exactAmounts, percentages, shareUnits, seed = 0 }) {
   const shares = {};
   const n = participantIds.length || 1;
 
   if (splitMode === "equal") {
-    const vals = fairSplit(amount, Array(n).fill(1));
+    const vals = fairSplit(amount, Array(n).fill(1), seed);
     participantIds.forEach((id, i) => { shares[id] = vals[i]; });
 
   } else if (splitMode === "exact") {
@@ -223,12 +240,12 @@ export function computeShares({ splitMode, amount, participantIds, exactAmounts,
 
   } else if (splitMode === "percent") {
     const ratios = participantIds.map((id) => percentages[id] || 0);
-    const vals = fairSplit(amount, ratios);
+    const vals = fairSplit(amount, ratios, seed);
     participantIds.forEach((id, i) => { shares[id] = vals[i]; });
 
   } else if (splitMode === "shares") {
     const ratios = participantIds.map((id) => shareUnits[id] || 0);
-    const vals = fairSplit(amount, ratios);
+    const vals = fairSplit(amount, ratios, seed);
     participantIds.forEach((id, i) => { shares[id] = vals[i]; });
   }
 

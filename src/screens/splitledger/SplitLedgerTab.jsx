@@ -1814,8 +1814,12 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
     return result;
   };
 
+  // Día del gasto, no el de hoy -- así el reparto no cambia solo si lo
+  // editás otro día, y un gasto ya guardado siempre recalcula igual.
+  const shareSeed = parseInt(date.slice(8, 10), 10) || 0;
+
   const buildShares = () => {
-    if (splitMode === "equal") return computeShares({ splitMode: "equal", amount: numericAmount, participantIds });
+    if (splitMode === "equal") return computeShares({ splitMode: "equal", amount: numericAmount, participantIds, seed: shareSeed });
     if (splitMode === "exact") {
       const exact = {};
       participantIds.forEach((id) => (exact[id] = parseAmountInput(exactAmounts[id] || "0") || 0));
@@ -1824,11 +1828,11 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
     if (splitMode === "percent") {
       const pct = {};
       participantIds.forEach((id) => (pct[id] = parseFloat(percentages[id] || "0") || 0));
-      return computeShares({ splitMode: "percent", amount: numericAmount, participantIds, percentages: pct });
+      return computeShares({ splitMode: "percent", amount: numericAmount, participantIds, percentages: pct, seed: shareSeed });
     }
     const units = {};
     participantIds.forEach((id) => (units[id] = parseFloat(shareUnits[id] || "0") || 0));
-    return computeShares({ splitMode: "shares", amount: numericAmount, participantIds, shareUnits: units });
+    return computeShares({ splitMode: "shares", amount: numericAmount, participantIds, shareUnits: units, seed: shareSeed });
   };
 
   // 4 casos, según si yo pagué algo y/o me toca una parte real:
@@ -2228,7 +2232,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
               {splitMode === "equal" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {(() => {
-                    const preview = validAmount ? fairSplit(numericAmount, participantIds.map(() => 1)) : [];
+                    const preview = validAmount ? fairSplit(numericAmount, participantIds.map(() => 1), shareSeed) : [];
                     return members.map((m) => {
                       const isIn = participants.has(m.id);
                       const previewIdx = participantIds.indexOf(m.id);

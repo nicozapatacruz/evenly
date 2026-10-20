@@ -19,6 +19,15 @@ import { CUSTOM_USER_CONFIG } from "./customUserConfig.js";
 
 const EPSILON = 0.005;
 
+// `payers`/`shares` ya vienen en centavos exactos (ver fairSplit en
+// helpers.jsx), pero restarlos en punto flotante puede ensuciar el
+// resultado (ej. 31.05 - 15.53 = 15.519999999999998) -- redondear acá, una
+// sola vez justo al calcularlo, antes de que ese ruido se guarde en la base
+// o se siga sumando a otra cosa (ej. el total de "Pendiente TC").
+function roundCents(n) {
+  return Math.round(n * 100) / 100;
+}
+
 // Si el grupo ya no es visible, ya no sos miembro vinculado, o alguna cuenta
 // involucrada (propia/ajena/pseudo) fue borrada → se congela el vínculo, no
 // se escribe nada (mejor no tocar nada que borrar historial por error).
@@ -143,7 +152,7 @@ function computeDesiredTransactions(link, ctx, choicesBySourceKey) {
     if (shareAmt > EPSILON) {
       desired.push({ ...common, key: `expense:${e.id}:share`, role: "share", type: "expense", account_id: accountId, to_account_id: null, amount: shareAmt, category_id: categoryId });
     }
-    const diff = paidAmt - shareAmt;
+    const diff = roundCents(paidAmt - shareAmt);
     if (diff > EPSILON) {
       desired.push({ ...common, key: `expense:${e.id}:loan`, role: "loan", type: "transfer", account_id: loanAccountId, to_account_id: link.pseudo_account_id, amount: diff, category_id: null });
     } else if (diff < -EPSILON) {
@@ -192,15 +201,23 @@ async function applyPendienteTcAutoSum(link, userId, userEmail, ctx, choicesBySo
   const config = CUSTOM_USER_CONFIG[userEmail]?.pendienteTcAutoSum;
   if (!config || ctx.groupName !== config.splitGroupName) return;
 
+  // Ojo: buscar la cuenta "Pendiente" por NOMBRE (como se hacía antes) se
+  // rompe en cuanto hay más de una cuenta con ese nombre (ej. una por cada
+  // grupo de cuentas) -- `.find()` puede agarrar cualquiera, no
+  // necesariamente la de este vínculo, y entonces la búsqueda de la
+  // transacción "Pendiente TC" de más abajo no encuentra nada (se salta en
+  // silencio, sin ningún error, bug real encontrado en vivo 2026-10-20). En
+  // vez de eso, "tcAccount" solo sirve para el nombre (asumido único) y la
+  // cuenta de "lo prestado" se resuelve IGUAL que en computeDesiredTransactions:
+  // por gasto (choice.loan_account_id), nunca por nombre.
   const { data: accounts } = await supabase
     .from("mm_accounts")
     .select("id, name")
     .eq("user_id", userId)
     .eq("deleted", false)
-    .in("name", [config.tcAccountName, config.pendienteAccountName]);
-  const tcAccount = (accounts || []).find((a) => a.name === config.tcAccountName);
-  const pendienteAccount = (accounts || []).find((a) => a.name === config.pendienteAccountName);
-  if (!tcAccount || !pendienteAccount) return;
+    .eq("name", config.tcAccountName);
+  const tcAccount = (accounts || [])[0];
+  if (!tcAccount) return;
 
   // Traído una sola vez antes del loop: evita reintentar el insert (y su
   // 409 esperado, ver más abajo) para cada gasto que esta misma función ya
@@ -221,17 +238,18 @@ async function applyPendienteTcAutoSum(link, userId, userEmail, ctx, choicesBySo
     if (appliedExpenseIds.has(e.id)) continue;
     const shareAmt = Number(e.shares?.[ctx.memberId] || 0);
     const paidAmt = Number(e.payers?.[ctx.memberId] || 0);
-    const diff = paidAmt - shareAmt;
+    const diff = roundCents(paidAmt - shareAmt);
     if (diff <= EPSILON) continue; // solo cuando presto (pago de más), no cuando me prestan
 
     const choice = choicesBySourceKey.get(`expense:${e.id}`);
     const accountId = choice?.account_id || link.default_other_account_id;
     if (accountId !== tcAccount.id) continue; // este gasto puntual no se pagó con esa cuenta
+    const loanAccountId = choice?.loan_account_id || accountId;
 
     const { data: pendienteTcTx } = await supabase
       .from("mm_transactions")
       .select("id, amount, amount_main")
-      .eq("user_id", userId).eq("account_id", tcAccount.id).eq("to_account_id", pendienteAccount.id)
+      .eq("user_id", userId).eq("account_id", tcAccount.id).eq("to_account_id", loanAccountId)
       .eq("title", config.pendienteTcTitle).eq("deleted", false)
       .maybeSingle();
     if (!pendienteTcTx) continue; // no existe todavía esa fila -- la maneja el usuario, no se auto-crea

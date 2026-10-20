@@ -19,9 +19,12 @@ export const CUSTOM_USER_CONFIG = {
     // Auto-suma a "Pendiente TC" (splitLedgerSync.js): cuando creás un gasto
     // en el grupo de Split Ledger indicado, pagado con la cuenta indicada,
     // y prestás una parte, esa parte se suma sola a la transacción manual
-    // "Pendiente TC" (transferencia de esa cuenta a "Pendiente") que ya
-    // manejás vos mismo mes a mes, en vez de tener que sumarla a mano.
-    pendienteTcAutoSum: { splitGroupName: "Nottinghill", tcAccountName: "TC Santander", pendienteAccountName: "Pendiente", pendienteTcTitle: "Pendiente TC" },
+    // "Pendiente TC" (transferencia de esa cuenta a la cuenta de "lo
+    // prestado" de ESE gasto puntual) que ya manejás vos mismo mes a mes, en
+    // vez de tener que sumarla a mano. No hay un "pendienteAccountName" fijo
+    // a propósito: hay más de una cuenta "Pendiente" (una por grupo de
+    // cuentas), así que la cuenta real se resuelve por gasto, nunca por nombre.
+    pendienteTcAutoSum: { splitGroupName: "Nottinghill", tcAccountName: "TC Santander", pendienteTcTitle: "Pendiente TC" },
   },
   "paulina.sanchezbt@gmail.com": {
     realBalance: { group: "Santander", saldoName: "Saldo", tcName: "Tarjeta", pendienteName: "Pendiente" },

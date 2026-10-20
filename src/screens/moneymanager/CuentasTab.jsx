@@ -176,19 +176,19 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
 
   return (
     <div style={styles.screen}>
-      <RootHeader
-        title="Cuentas"
-        right={
-          <div style={{ display: "flex", gap: 4 }}>
-            <button style={styles.iconBtnGhost} onClick={() => setView({ screen: "manageAllAccounts" })} aria-label="Editar cuentas">
-              <Pencil size={19} />
-            </button>
-          </div>
-        }
-      />
-      <div style={{ ...styles.form, paddingTop: 12, gap: 8 }}>
+      <div style={{ position: "sticky", top: 0, zIndex: 5 }}>
+        <RootHeader
+          title="Cuentas"
+          right={
+            <div style={{ display: "flex", gap: 4 }}>
+              <button style={styles.iconBtnGhost} onClick={() => setView({ screen: "manageAllAccounts" })} aria-label="Editar cuentas">
+                <Pencil size={19} />
+              </button>
+            </div>
+          }
+        />
         {totalsByCurrency.length > 0 && (
-          <div style={{ padding: "0 4px 8px" }}>
+          <div style={styles.subHeader}>
             {/* Encabezados una sola vez (no por moneda) — cada fila de abajo
                 ya se identifica sola por el símbolo de `money()`, no hace
                 falta repetir "(EUR)"/"(COP)" al lado de cada título. */}
@@ -206,7 +206,8 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
             ))}
           </div>
         )}
-
+      </div>
+      <div style={{ ...styles.form, paddingTop: 12, gap: 8 }}>
         {activeGroups.length === 0 && (
           <EmptyState title="Todavía no tenés cuentas">Tocá el lápiz arriba para crear tu primer grupo de cuentas.</EmptyState>
         )}
@@ -369,7 +370,7 @@ export function ManageGroups({ session, groups: allGroups, accounts, reload, sho
   }
 
   return (
-    <div style={styles.screen}>
+    <div style={{ ...styles.screen, paddingBottom: 0 }}>
       <TopBar
         title="Grupos de cuentas"
         onBack={onBack}
@@ -572,7 +573,7 @@ export function ManageAccounts({ session, group = null, groups, accounts, accoun
           style={{ margin: "6px 20px 12px", borderRadius: 12, borderTop: "1px solid #EBC9BA" }}
         />
       )}
-      <div style={{ ...styles.form, paddingBottom: 100 }}>
+      <div style={styles.form}>
         <Field label="Nombre" required error={nameTouched && !name.trim() ? "Este campo es obligatorio." : ""}>
           <input style={styles.input} value={name} disabled={isSystemGroup} onChange={(e) => setName(e.target.value)} onBlur={() => setNameTouched(true)} placeholder={group ? undefined : "Nombre (ej: Santander, Efectivo)"} />
         </Field>
@@ -663,13 +664,13 @@ export function ManageAllAccounts({ session, groups, accounts, accountTotals, se
   }
 
   return (
-    <div style={styles.screen}>
+    <div style={{ ...styles.screen, paddingBottom: 0 }}>
       <TopBar
         title="Gestor de cuentas"
         onBack={onBack}
         right={<button style={styles.iconBtnGhost} onClick={() => setCreating(true)} aria-label="Nueva cuenta"><Plus size={20} /></button>}
       />
-      <div style={{ ...styles.form, paddingBottom: 100 }}>
+      <div style={styles.form}>
         {/* El grupo "Split Ledger" es informativo (lo gestiona el programa
             solo al vincular un grupo compartido) — no tiene nada para editar
             acá, se maneja desde Split Ledger. */}

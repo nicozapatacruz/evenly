@@ -93,7 +93,7 @@ export default function PhotoImportEntryScreen({ groups, accounts, onBack, onExt
             onBlur={() => touch("accountId")}
             placeholder="Elegí una cuenta"
             groups={groups
-              .filter((g) => !g.deleted)
+              .filter((g) => !g.deleted && g.system_key !== "split_ledger")
               .map((g) => ({
                 label: g.name,
                 items: accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),

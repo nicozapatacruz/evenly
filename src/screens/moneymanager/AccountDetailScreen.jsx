@@ -200,7 +200,7 @@ export default function AccountDetailScreen({ session, account = null, groups, a
           style={{ margin: "6px 20px 12px", borderRadius: 12, borderTop: "1px solid #EBC9BA" }}
         />
       )}
-      <div style={{ ...styles.form, paddingBottom: 100 }}>
+      <div style={styles.form}>
         <Field label="Grupo">
           {/* El grupo "Split Ledger" es informativo (lo crea/mantiene el
               programa solo, ver isSystemAccount) — nunca se elige a mano acá,

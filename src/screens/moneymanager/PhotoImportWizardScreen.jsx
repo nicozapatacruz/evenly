@@ -113,7 +113,7 @@ export default function PhotoImportWizardScreen({ userId, settings, accounts, ca
       return (
         <div style={styles.screen}>
           <TopBar title="Importar gastos" />
-          <div style={{ ...styles.form, paddingBottom: 100 }}>
+          <div style={styles.form}>
             <EmptyState icon={<RefreshCw size={28} strokeWidth={1.5} className="spin" />} title="Guardando transacciones…" />
           </div>
         </div>
@@ -124,7 +124,7 @@ export default function PhotoImportWizardScreen({ userId, settings, accounts, ca
     return (
       <div style={styles.screen}>
         <TopBar title="Importar gastos" />
-        <div style={{ ...styles.form, paddingBottom: 100 }}>
+        <div style={styles.form}>
           {results.length === 0 && skipped === 0 ? (
             <EmptyState icon={<Inbox size={28} strokeWidth={1.5} />} title="No se guardó ninguna transacción" />
           ) : (
@@ -266,7 +266,7 @@ function WizardStep({ userId, settings, candidate, savedEntry, rule, categories,
           </button>
         }
       />
-      <div style={{ ...styles.form, paddingBottom: 100 }}>
+      <div style={styles.form}>
         <SegmentedControl
           options={[
             { value: "expense", label: "Gasto" },

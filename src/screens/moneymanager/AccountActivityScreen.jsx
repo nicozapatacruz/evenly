@@ -44,7 +44,7 @@ export default function AccountActivityScreen({
   const accountSettings = { ...settings, main_currency: accountCurrency };
 
   return (
-    <div style={{ ...styles.screen, display: "flex", flexDirection: "column" }}>
+    <div style={{ ...styles.screenWithFab, display: "flex", flexDirection: "column" }}>
       <TopBar title={<span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>{accountIcon && <span>{accountIcon}</span>} {accountName}</span>} onBack={onBack} />
       <SegmentedControl
         style={{ margin: "10px 20px 0" }}
@@ -151,7 +151,7 @@ function DiarioSubTab({ userId, settings, accounts, categories, slLinks, account
           </div>
         </div>
       </div>
-      <div key={slide.key} className={slide.className} style={{ ...styles.form, flex: 1, paddingTop: 12, paddingBottom: 100 }} {...swipeHandlers}>
+      <div key={slide.key} className={slide.className} style={{ ...styles.form, flex: 1, paddingTop: 12 }} {...swipeHandlers}>
         {loading ? (
           <EmptyState title="Cargando…" />
         ) : monthTx.length === 0 ? (
@@ -238,7 +238,7 @@ function MensualSubTab({ totals, settings, viewMonth, setViewMonth, onOpenMonth 
           </div>
         </div>
       </div>
-      <div key={slide.key} className={slide.className} style={{ ...styles.form, flex: 1, paddingTop: 12, paddingBottom: 100, display: "flex", flexDirection: "column", gap: 6 }} {...swipeHandlers}>
+      <div key={slide.key} className={slide.className} style={{ ...styles.form, flex: 1, paddingTop: 12, display: "flex", flexDirection: "column", gap: 6 }} {...swipeHandlers}>
         {rows.map((r) => (
           <div
             key={r.month}
@@ -316,7 +316,7 @@ function AnualSubTab({ totals, settings, onOpenYear }) {
           </div>
         </div>
       </div>
-      <div style={{ ...styles.form, flex: 1, paddingTop: 12, paddingBottom: 100, display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ ...styles.form, flex: 1, paddingTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
         {byYear.length === 0 ? (
           <EmptyState title="Nada registrado todavía" />
         ) : byYear.map((y) => (

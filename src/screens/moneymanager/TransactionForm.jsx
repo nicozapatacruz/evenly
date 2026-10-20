@@ -426,7 +426,7 @@ export default function TransactionForm({
       {/* animationDuration inline (no tocar .mm-slide-next en sí) — esa clase
           es compartida con el cambio de mes, y acá se quiere un poco más
           lenta que ahí sin afectarlo. */}
-      <div key={isCopyMode ? "copy" : "orig"} className={isCopyMode ? "mm-slide-next" : undefined} style={{ ...styles.form, paddingBottom: 100, animationDuration: isCopyMode ? "0.32s" : undefined }}>
+      <div key={isCopyMode ? "copy" : "orig"} className={isCopyMode ? "mm-slide-next" : undefined} style={{ ...styles.form, animationDuration: isCopyMode ? "0.32s" : undefined }}>
         {isSynced && (
           <p style={{ ...styles.muted, padding: 0 }}>
             {needsRate
@@ -859,7 +859,7 @@ export function ManageCategories({ session, type, categories, reload, showError,
   }
 
   return (
-    <div style={styles.screen}>
+    <div style={{ ...styles.screen, paddingBottom: 0 }}>
       <TopBar
         title={type === "income" ? "Categorías de ingreso" : "Categorías de gasto"}
         onBack={onBack}
@@ -936,7 +936,7 @@ function NewCategoryForm({ session, type, categories, reload, showError, onCance
   return (
     <div style={styles.screen}>
       <TopBar title="Nueva categoría" onBack={onCancel} />
-      <div style={{ ...styles.form, paddingBottom: 100 }}>
+      <div style={styles.form}>
         <Field label="Nombre" required error={nameTouched && !canSave ? "Este campo es obligatorio." : ""}>
           <div style={{ display: "flex", gap: 8 }}>
             <IconInput value={icon} onChange={setIcon} />

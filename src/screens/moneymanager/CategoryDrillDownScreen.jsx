@@ -117,7 +117,7 @@ export default function CategoryDrillDownScreen({ userId, settings, accounts, ca
           </div>
         )}
       </div>
-      <div key={slide.key} className={slide.className} style={{ ...styles.form, flex: 1, paddingTop: 12, paddingBottom: 100 }} {...swipeHandlers}>
+      <div key={slide.key} className={slide.className} style={{ ...styles.form, flex: 1, paddingTop: 12 }} {...swipeHandlers}>
         {loadingMonth ? (
           <EmptyState title="Cargando…" />
         ) : categoryTx.length === 0 ? (

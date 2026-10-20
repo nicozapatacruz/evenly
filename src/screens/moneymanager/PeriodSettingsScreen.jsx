@@ -40,7 +40,7 @@ export default function PeriodSettingsScreen({ session, settings, reload, showEr
   };
 
   return (
-    <div style={styles.screen}>
+    <div style={{ ...styles.screen, paddingBottom: 0 }}>
       <TopBar title="Detalles del período" onBack={onBack} />
       <div style={{ ...styles.form, opacity: saving ? 0.6 : 1 }}>
         <Field label="Día de inicio del mes">

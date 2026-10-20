@@ -73,7 +73,7 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
   }, [loading, viewMonth, filters]);
 
   return (
-    <div style={{ ...styles.screen, display: "flex", flexDirection: "column" }}>
+    <div style={{ ...styles.screenWithFab, display: "flex", flexDirection: "column" }}>
       <div ref={headerRef} style={{ position: "sticky", top: 0, zIndex: 5 }}>
         <RootHeader
           title="Transacciones"
@@ -133,7 +133,7 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
           </div>
         )}
       </div>
-      <div key={slide.key} className={slide.className} style={{ ...styles.form, flex: 1, paddingTop: pendingRateTx.length > 0 ? 0 : 12, paddingBottom: 100 }} {...swipeHandlers}>
+      <div key={slide.key} className={slide.className} style={{ ...styles.form, flex: 1, paddingTop: pendingRateTx.length > 0 ? 0 : 12 }} {...swipeHandlers}>
         {/* Un solo div envolviendo banner+contenido (no 2 hijos sueltos del
             form de arriba, que tiene gap:14 — un valor distinto al que usan
             Cuentas/Tus grupos) — gap:8 acá adentro iguala el espacio entre

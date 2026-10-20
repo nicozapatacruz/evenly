@@ -64,7 +64,7 @@ export default function BookmarksScreen({ userId, accounts, categories, onBack, 
   }
 
   return (
-    <div style={styles.screen}>
+    <div style={{ ...styles.screen, paddingBottom: 0 }}>
       <TopBar
         title="Marcadores"
         onBack={onBack}
@@ -81,7 +81,7 @@ export default function BookmarksScreen({ userId, accounts, categories, onBack, 
           </div>
         }
       />
-      <div style={{ ...styles.form, paddingBottom: 100 }}>
+      <div style={styles.form}>
         {loading && <EmptyState title="Cargando…" />}
         {!loading && grouped.length === 0 && (
           <EmptyState title="Todavía no tenés marcadores">
@@ -245,9 +245,9 @@ function BookmarkPickerScreen({ userId, accounts, categories, onBack, onPicked, 
   }, [userId]);
 
   return (
-    <div style={styles.screen}>
+    <div style={{ ...styles.screen, paddingBottom: 0 }}>
       <TopBar title="Elegí una transacción" onBack={onBack} />
-      <div style={{ ...styles.form, paddingBottom: 100 }}>
+      <div style={styles.form}>
         {transactions === null && <EmptyState title="Cargando…" />}
         {transactions?.length === 0 && <EmptyState title="No hay transacciones todavía" />}
         {transactions && transactions.length > 0 && (

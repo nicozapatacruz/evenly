@@ -73,7 +73,7 @@ export default function ConfigScreen({
     return (
       <div style={styles.screen}>
         <TopBar title="Transacciones recurrentes" onBack={() => setMoneyManagerScreen(null)} />
-        <div style={{ ...styles.form, paddingBottom: 100 }}>
+        <div style={styles.form}>
           <RecurringScreen
             accounts={moneyManager.accounts}
             categories={moneyManager.categories}
@@ -375,7 +375,7 @@ function ProfileScreen({ session, onBack, onLogout, onChangePassword, onSave, is
   return (
     <div style={styles.screen}>
       <TopBar title="Perfil" onBack={onBack} />
-      <div style={{ ...styles.form, paddingBottom: 100 }}>
+      <div style={styles.form}>
         <PhotoPicker previewUrl={photoUrl} onChange={handlePhoto} onClear={clearPhoto} shape="circle" disabled={!isOnline} onDisabledClick={() => showError("Estás offline, no podés cambiar la foto ahora.")} />
 
         <p style={{ ...styles.muted, padding: 0, fontSize: 12 }}>@{session.username}</p>
@@ -448,7 +448,7 @@ function ChangePasswordScreen({ session, onBack, onSave, isOnline = true, showEr
   return (
     <div style={styles.screen}>
       <TopBar title="Cambiar contraseña" onBack={onBack} />
-      <div style={{ ...styles.form, paddingBottom: 100 }}>
+      <div style={styles.form}>
         <Field label="Contraseña actual" required error={touched.currentPassword && !currentPassword ? "Este campo es obligatorio." : ""}>
           <PasswordInput style={styles.input} value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} onBlur={() => touch("currentPassword")} placeholder="Contraseña actual" />
         </Field>
@@ -580,7 +580,7 @@ function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onO
   };
 
   return (
-    <div style={{ ...styles.form, paddingBottom: 100 }}>
+    <div style={styles.form}>
       <ToggleField
         label="Split Ledger"
         description="Activar la sección de Split Ledger"

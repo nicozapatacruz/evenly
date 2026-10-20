@@ -90,6 +90,15 @@ const fixedHeaderBase = {
   boxSizing: "border-box",
 };
 
+const screenBase = {
+  width: "100%",
+  maxWidth: 480,
+  minHeight: "100%",
+  background: "#FBF8F2",
+  position: "relative",
+  boxShadow: "0 0 0 1px #ECE3D3",
+};
+
 // minHeight: "100%" en vez de una unidad vh/dvh — en la Web App instalada de
 // iOS, vh/dvh a veces reportan un alto mayor al visible real y dejan un hueco
 // fantasma abajo; "100%" hereda de html/body (height:100% en globalCss), que
@@ -104,13 +113,25 @@ export const styles = {
     justifyContent: "center",
   },
   screen: {
-    width: "100%",
-    maxWidth: 480,
-    minHeight: "100%",
-    background: "#FBF8F2",
-    position: "relative",
-    paddingBottom: 100,
-    boxShadow: "0 0 0 1px #ECE3D3",
+    ...screenBase,
+    // Espacio para que el Footer fijo (o la barra de tabs, también fija) no
+    // tape el final del contenido al hacer scroll. Calculado a partir de las
+    // medidas reales de la barra de tabs (tabBar/tabBarItem en este mismo
+    // archivo): 6px + 1px (borde) + 6px + 22px (ícono) + 3px (gap) + ~13px
+    // (línea de la etiqueta) + 6px + 6px = 63px, más el margen de abajo del
+    // celular (env(safe-area-inset-bottom), que la barra también usa) — no
+    // es una medición en vivo, así que si cambian esos números en tabBar/
+    // tabBarItem/tabBarLabel hay que volver a sumar acá a mano.
+    paddingBottom: "calc(63px + env(safe-area-inset-bottom))",
+  },
+  // Mismo `screen`, para las pantallas que además tienen el botón flotante
+  // "+" (`fab`, más abajo en este archivo) — ese botón flota ENCIMA de la
+  // barra de tabs, no al lado, así que hace falta más aire que el de
+  // `screen` (que solo contempla la barra de tabs). Números calcados de la
+  // posición real del fab: bottom 78px + alto 56px + 12px de respiro.
+  screenWithFab: {
+    ...screenBase,
+    paddingBottom: "calc(146px + env(safe-area-inset-bottom))",
   },
   // Header "principal" — único, compartido por las 2 pantallas raíz (Tus
   // grupos / Configuración) vía el componente <RootHeader>. Que sea un solo

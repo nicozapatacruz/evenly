@@ -468,7 +468,7 @@ function groupCardLines(g, session) {
 
 function Home({ groups, loading, session, moneyManager, onOpen, onNewExpense, isOnline = true, showError }) {
   return (
-    <div style={styles.screen}>
+    <div style={styles.screenWithFab}>
       <RootHeader title="Tus grupos" />
 
       {loading && <EmptyState title="Abriendo los grupos…" />}
@@ -764,7 +764,7 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
           </button>
         )}
       />
-      <div style={{ ...styles.form, paddingBottom: 100 }}>
+      <div style={styles.form}>
         {/* Foto del grupo */}
         <PhotoPicker previewUrl={photoUrl} onChange={handlePhoto} onClear={clearPhoto} shape="square" disabled={!isOnline} onDisabledClick={() => showError("Estás offline, no podés hacer esto ahora.")} />
 
@@ -1266,7 +1266,7 @@ function GroupView({ group, session, onRefresh, onBack, onAddExpense, onOpenExpe
   };
 
   return (
-    <div style={styles.screen}>
+    <div style={styles.screenWithFab}>
       <TopBar
         title={group.name}
         onBack={onBack}
@@ -1992,7 +1992,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
         />
       )}
 
-      <div style={{ ...styles.form, paddingBottom: 100 }}>
+      <div style={styles.form}>
         {extraHeaderField}
         <Field label="Fecha">
           <input style={{ ...styles.input, height: 44, boxSizing: "border-box" }} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
@@ -2432,7 +2432,7 @@ function NewExpense({ group, groups, defaultGroupId, expenseId, onCancel, onSave
 
   if (!effectiveGroup) {
     return (
-      <div style={styles.screen}>
+      <div style={{ ...styles.screen, paddingBottom: 0 }}>
         <TopBar title="Nuevo gasto" onBack={onCancel} />
         <div style={styles.form}>{groupPicker}</div>
       </div>
@@ -2650,7 +2650,7 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
           style={{ margin: "6px 20px 12px", borderRadius: 12, borderTop: "1px solid #EBC9BA" }}
         />
       )}
-      <div style={{ ...styles.form, paddingBottom: 100 }}>
+      <div style={styles.form}>
         <p style={{ ...styles.muted, padding: 0 }}>Esto no mueve dinero. Solo anota que el pago ya se hizo fuera de la app, para saldar el balance.</p>
 
         {/* Envuelto en su propio flex-column gap:0 (mismo patrón que
@@ -2806,7 +2806,7 @@ function InviteScreen({ group, session, groupInvites = [], onBack, onSend, onCan
   return (
     <div style={styles.screen}>
       <TopBar title="Invitar al grupo" onBack={onBack} />
-      <div style={{ ...styles.form, paddingBottom: 100 }}>
+      <div style={styles.form}>
         <p style={{ ...styles.muted, padding: 0 }}>
           Selecciona a qué miembro del grupo corresponde la persona que vas a invitar, y escribe su nombre de usuario en la app.
         </p>

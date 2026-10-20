@@ -245,7 +245,7 @@ export default function SearchScreen({
   }
 
   return (
-    <div style={{ ...styles.screen, display: "flex", flexDirection: "column" }}>
+    <div style={{ ...styles.screen, paddingBottom: 0, display: "flex", flexDirection: "column" }}>
       <TopBar
         title="Buscar"
         onBack={onBack}
@@ -300,7 +300,7 @@ export default function SearchScreen({
         </div>
       </div>
 
-      <div style={{ ...styles.form, flex: 1, paddingTop: 12, paddingBottom: 100 }}>
+      <div style={{ ...styles.form, flex: 1, paddingTop: 12 }}>
         {!hasSearched ? (
           <EmptyState title="Buscá por nota o descripción">Escribí algo y apretá Enter, o elegí una sugerencia.</EmptyState>
         ) : loading ? (

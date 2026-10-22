@@ -3,7 +3,7 @@ import { Plus, Search, SlidersHorizontal, Star, Camera } from "lucide-react";
 import { styles } from "../../lib/styles.js";
 import { RootHeader, MonthNav, TodayButton, FiltersActiveBanner, PendingRateBanner, PendienteTcReviewBanner, HeaderMenu, EmptyState, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
 import { money, todayInputValue } from "../../lib/helpers.jsx";
-import { useMonthTransactions, usePendingRateTransactions, currenciesInUse } from "../../lib/moneyManagerData.js";
+import { useMonthTransactions, usePendingRateTransactions, currenciesInUse } from "../../lib/evenCapitalData.js";
 import { hasActiveFilters, matchesFilters } from "../../lib/filterHelpers.js";
 import { TransactionDayGroups } from "./TransactionDayGroups.jsx";
 

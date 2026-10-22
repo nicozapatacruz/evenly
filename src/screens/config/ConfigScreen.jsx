@@ -8,14 +8,14 @@ import { offlineSupabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, RootHeader, ConfirmInline, Footer, PhotoPicker, ToggleField, Field, PasswordInput, SegmentedControl } from "../../components/Shared.jsx";
 import { useImageUpload, resolvePhotoUrl, colorFor, initials, useScrollToTopOnChange } from "../../lib/helpers.jsx";
-import RecurringScreen from "../moneymanager/RecurringScreen.jsx";
-import TransactionForm, { ManageCategories } from "../moneymanager/TransactionForm.jsx";
-import { ManageGroups, ManageAccounts, ManageAllAccounts } from "../moneymanager/CuentasTab.jsx";
-import PeriodSettingsScreen from "../moneymanager/PeriodSettingsScreen.jsx";
-import CurrencySettingsScreen from "../moneymanager/CurrencySettingsScreen.jsx";
+import RecurringScreen from "../evencapital/RecurringScreen.jsx";
+import TransactionForm, { ManageCategories } from "../evencapital/TransactionForm.jsx";
+import { ManageGroups, ManageAccounts, ManageAllAccounts } from "../evencapital/CuentasTab.jsx";
+import PeriodSettingsScreen from "../evencapital/PeriodSettingsScreen.jsx";
+import CurrencySettingsScreen from "../evencapital/CurrencySettingsScreen.jsx";
 
 /* =========================================================================
-   CONFIG — toggle de 2 secciones (Money Manager / Split Ledger) + un botón
+   CONFIG — toggle de 2 secciones (EvenCapital / EvenGroup) + un botón
    de perfil arriba a la derecha (foto, contraseña, cerrar sesión — nada
    más por ahora, así que no amerita ser una sección del toggle).
    ========================================================================= */
@@ -24,15 +24,15 @@ export default function ConfigScreen({
   session, invites = [], onAcceptInvite, onRejectInvite, onLogout, refreshProfile, patchSession,
   groups, reloadGroups, onCreateGroup, onOpenGroup, showError, showSuccess, showInfo,
   changingPassword, setChangingPassword, viewingProfile, setViewingProfile,
-  moneyManager, onSaveMoneyTransaction, onSaveRecurring, onDeleteRecurring, creatingRecurring, setCreatingRecurring,
+  evenCapital, onSaveMoneyTransaction, onSaveRecurring, onDeleteRecurring, creatingRecurring, setCreatingRecurring,
   editingRecurring, setEditingRecurring,
-  moneyManagerScreen, setMoneyManagerScreen, onOpenSplitLedgerGroup, isOnline = true,
+  evenCapitalScreen, setEvenCapitalScreen, onOpenEvenGroup, isOnline = true,
 }) {
-  // Igual que activeTab en SplitLedger.jsx: en localStorage para que
+  // Igual que activeTab en EvenlyApp.jsx: en localStorage para que
   // sobreviva a cerrar y reabrir la app, no solo a pasar a segundo plano.
   const [section, setSection] = useState(() => {
     const saved = localStorage.getItem("evenly_configSection");
-    return saved === "moneymanager" || saved === "splitledger" ? saved : "moneymanager";
+    return saved === "evencapital" || saved === "evengroup" ? saved : "evencapital";
   });
   useEffect(() => {
     localStorage.setItem("evenly_configSection", section);
@@ -43,11 +43,11 @@ export default function ConfigScreen({
     return (
       <TransactionForm
         session={session}
-        settings={moneyManager.settings}
-        groups={moneyManager.groups}
-        accounts={moneyManager.accounts}
-        categories={moneyManager.categories}
-        reloadCategories={moneyManager.reload}
+        settings={evenCapital.settings}
+        groups={evenCapital.groups}
+        accounts={evenCapital.accounts}
+        categories={evenCapital.categories}
+        reloadCategories={evenCapital.reload}
         showError={showError}
         forceRecurringOpen
         hideRemoveRecurring
@@ -69,15 +69,15 @@ export default function ConfigScreen({
     );
   }
 
-  if (moneyManagerScreen === "recurring") {
+  if (evenCapitalScreen === "recurring") {
     return (
       <div style={styles.screen}>
-        <TopBar title="Transacciones recurrentes" onBack={() => setMoneyManagerScreen(null)} />
+        <TopBar title="Transacciones recurrentes" onBack={() => setEvenCapitalScreen(null)} />
         <div style={styles.form}>
           <RecurringScreen
-            accounts={moneyManager.accounts}
-            categories={moneyManager.categories}
-            recurring={moneyManager.recurring}
+            accounts={evenCapital.accounts}
+            categories={evenCapital.categories}
+            recurring={evenCapital.recurring}
             onCreateNew={() => setCreatingRecurring(true)}
             onEdit={(r) => setEditingRecurring(r)}
           />
@@ -86,78 +86,78 @@ export default function ConfigScreen({
     );
   }
 
-  if (moneyManagerScreen === "period") {
+  if (evenCapitalScreen === "period") {
     return (
       <PeriodSettingsScreen
         session={session}
-        settings={moneyManager.settings}
-        reload={moneyManager.reload}
+        settings={evenCapital.settings}
+        reload={evenCapital.reload}
         showError={showError}
         showInfo={showInfo}
-        onBack={() => setMoneyManagerScreen(null)}
+        onBack={() => setEvenCapitalScreen(null)}
       />
     );
   }
 
-  if (moneyManagerScreen === "currency") {
+  if (evenCapitalScreen === "currency") {
     return (
       <CurrencySettingsScreen
         session={session}
-        settings={moneyManager.settings}
-        reload={moneyManager.reload}
+        settings={evenCapital.settings}
+        reload={evenCapital.reload}
         showError={showError}
-        onBack={() => setMoneyManagerScreen(null)}
+        onBack={() => setEvenCapitalScreen(null)}
       />
     );
   }
 
-  if (moneyManagerScreen === "categoriesIncome" || moneyManagerScreen === "categoriesExpense") {
+  if (evenCapitalScreen === "categoriesIncome" || evenCapitalScreen === "categoriesExpense") {
     return (
       <ManageCategories
         session={session}
-        type={moneyManagerScreen === "categoriesIncome" ? "income" : "expense"}
-        categories={moneyManager.categories}
-        reload={moneyManager.reload}
+        type={evenCapitalScreen === "categoriesIncome" ? "income" : "expense"}
+        categories={evenCapital.categories}
+        reload={evenCapital.reload}
         showError={showError}
         showInfo={showInfo}
-        onBack={() => setMoneyManagerScreen(null)}
+        onBack={() => setEvenCapitalScreen(null)}
       />
     );
   }
 
-  if (moneyManagerScreen === "accountTypes") {
+  if (evenCapitalScreen === "accountTypes") {
     return (
       <AccountsSettingsScreen
         session={session}
-        groups={moneyManager.groups}
-        accounts={moneyManager.accounts}
-        accountTotals={moneyManager.accountTotals}
-        settings={moneyManager.settings}
-        slLinks={moneyManager.slLinks}
-        onOpenSplitLedgerGroup={onOpenSplitLedgerGroup}
-        reload={moneyManager.reload}
+        groups={evenCapital.groups}
+        accounts={evenCapital.accounts}
+        accountTotals={evenCapital.accountTotals}
+        settings={evenCapital.settings}
+        slLinks={evenCapital.slLinks}
+        onOpenEvenGroup={onOpenEvenGroup}
+        reload={evenCapital.reload}
         showError={showError}
         showInfo={showInfo}
-        onBack={() => setMoneyManagerScreen(null)}
+        onBack={() => setEvenCapitalScreen(null)}
         isOnline={isOnline}
       />
     );
   }
 
-  if (moneyManagerScreen === "accounts") {
+  if (evenCapitalScreen === "accounts") {
     return (
       <ManageAllAccounts
         session={session}
-        groups={moneyManager.groups}
-        accounts={moneyManager.accounts}
-        accountTotals={moneyManager.accountTotals}
-        settings={moneyManager.settings}
-        slLinks={moneyManager.slLinks}
-        onOpenSplitLedgerGroup={onOpenSplitLedgerGroup}
-        reload={moneyManager.reload}
+        groups={evenCapital.groups}
+        accounts={evenCapital.accounts}
+        accountTotals={evenCapital.accountTotals}
+        settings={evenCapital.settings}
+        slLinks={evenCapital.slLinks}
+        onOpenEvenGroup={onOpenEvenGroup}
+        reload={evenCapital.reload}
         showError={showError}
         showInfo={showInfo}
-        onBack={() => setMoneyManagerScreen(null)}
+        onBack={() => setEvenCapitalScreen(null)}
         isOnline={isOnline}
       />
     );
@@ -213,9 +213,9 @@ export default function ConfigScreen({
       <SegmentedControl
         style={{ margin: "12px 20px 4px" }}
         options={[
-          { value: "moneymanager", label: "Money Manager" },
+          { value: "evencapital", label: "EvenCapital" },
           {
-            value: "splitledger", label: "Split Ledger",
+            value: "evengroup", label: "EvenGroup",
             badge: invites.length > 0 ? <span style={{ position: "absolute", top: -5, right: -5, width: 12, height: 12, borderRadius: "50%", background: "#C75D3B", border: "2px solid #fff" }} /> : null,
           },
         ]}
@@ -223,30 +223,30 @@ export default function ConfigScreen({
         onChange={setSection}
       />
 
-      {section === "moneymanager" && (
+      {section === "evencapital" && (
         <div style={{ ...styles.form, paddingTop: 12 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
             <p style={{ ...styles.label, marginBottom: 12 }}>Categorías/Cuentas</p>
             <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
-              <MenuRow label="Categorías de ingreso" onClick={() => setMoneyManagerScreen("categoriesIncome")} />
-              <MenuRow label="Categorías de gasto" onClick={() => setMoneyManagerScreen("categoriesExpense")} />
-              <MenuRow label="Grupos de cuentas" onClick={() => setMoneyManagerScreen("accountTypes")} />
-              <MenuRow label="Gestor de cuentas" onClick={() => setMoneyManagerScreen("accounts")} last />
+              <MenuRow label="Categorías de ingreso" onClick={() => setEvenCapitalScreen("categoriesIncome")} />
+              <MenuRow label="Categorías de gasto" onClick={() => setEvenCapitalScreen("categoriesExpense")} />
+              <MenuRow label="Grupos de cuentas" onClick={() => setEvenCapitalScreen("accountTypes")} />
+              <MenuRow label="Gestor de cuentas" onClick={() => setEvenCapitalScreen("accounts")} last />
             </div>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
             <p style={{ ...styles.label, marginBottom: 12 }}>Transacciones</p>
             <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
-              <MenuRow label="Detalles del período" onClick={() => setMoneyManagerScreen("period")} />
-              <MenuRow label="Transacciones recurrentes" onClick={() => setMoneyManagerScreen("recurring")} last />
+              <MenuRow label="Detalles del período" onClick={() => setEvenCapitalScreen("period")} />
+              <MenuRow label="Transacciones recurrentes" onClick={() => setEvenCapitalScreen("recurring")} last />
             </div>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
             <p style={{ ...styles.label, marginBottom: 12 }}>Ajustes</p>
             <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
-              <MenuRow label="Ajustes de moneda" onClick={() => setMoneyManagerScreen("currency")} />
+              <MenuRow label="Ajustes de moneda" onClick={() => setEvenCapitalScreen("currency")} />
               <MenuRow label="Respaldo" badge="Próximamente" />
               <MenuRow label="Apariencia" badge="Próximamente" last />
             </div>
@@ -254,8 +254,8 @@ export default function ConfigScreen({
         </div>
       )}
 
-      {section === "splitledger" && (
-        <SplitLedgerSettings
+      {section === "evengroup" && (
+        <EvenGroupSettings
           session={session}
           groups={groups}
           reloadGroups={reloadGroups}
@@ -275,7 +275,7 @@ export default function ConfigScreen({
   );
 }
 
-// Fila de menú genérica para la lista de Money Manager en Config — o navega
+// Fila de menú genérica para la lista de EvenCapital en Config — o navega
 // (onClick) o muestra un badge "Próximamente" (Respaldo/Apariencia, sin
 // construir todavía), nunca las dos cosas.
 function MenuRow({ label, onClick, badge, last }) {
@@ -307,7 +307,7 @@ function MenuRow({ label, onClick, badge, last }) {
    para el botón de "editar" propio; acá alcanza con un estado local).
    ========================================================================= */
 
-function AccountsSettingsScreen({ session, groups, accounts, accountTotals, settings, slLinks, onOpenSplitLedgerGroup, reload, showError, showInfo, onBack, isOnline = true }) {
+function AccountsSettingsScreen({ session, groups, accounts, accountTotals, settings, slLinks, onOpenEvenGroup, reload, showError, showInfo, onBack, isOnline = true }) {
   const [view, setView] = useState({ screen: "groups" });
   useScrollToTopOnChange(view.screen, view.groupId);
 
@@ -323,7 +323,7 @@ function AccountsSettingsScreen({ session, groups, accounts, accountTotals, sett
         accountTotals={accountTotals}
         settings={settings}
         slLinks={slLinks}
-        onOpenSplitLedgerGroup={onOpenSplitLedgerGroup}
+        onOpenEvenGroup={onOpenEvenGroup}
         reload={reload}
         showError={showError}
         showInfo={showInfo}
@@ -487,11 +487,11 @@ function ChangePasswordScreen({ session, onBack, onSave, isOnline = true, showEr
 }
 
 /* =========================================================================
-   SPLIT LEDGER (toggle on/off, invitaciones, nombre visible, grupo por
+   EVENGROUP (toggle on/off, invitaciones, nombre visible, grupo por
    defecto, tus grupos)
    ========================================================================= */
 
-function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onOpenGroup, patchSession, showError, showSuccess, showInfo, invites, onAcceptInvite, onRejectInvite, isOnline = true }) {
+function EvenGroupSettings({ session, groups, reloadGroups, onCreateGroup, onOpenGroup, patchSession, showError, showSuccess, showInfo, invites, onAcceptInvite, onRejectInvite, isOnline = true }) {
   const [displayName, setDisplayName] = useState(session.displayName || "");
   const [savingName, setSavingName] = useState(false);
   const [togglingEnabled, setTogglingEnabled] = useState(false);
@@ -511,7 +511,7 @@ function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onO
   }, [groups]);
 
   // MouseSensor + TouchSensor en vez de PointerSensor — ver comentario en
-  // SplitLedgerTab.jsx (mismo fix, mismo bug de touch en iOS Safari).
+  // EvenGroupTab.jsx (mismo fix, mismo bug de touch en iOS Safari).
   const dndSensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
@@ -519,7 +519,7 @@ function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onO
   // Estas 4 son offline-capaces: son filas que solo vos tocás (tu propio
   // perfil, o tu propio `sort_order` dentro de group_members) — no tienen el
   // riesgo de que otro miembro esté escribiendo lo mismo al mismo tiempo,
-  // mismo argumento que ya justifica que Money Manager sea offline completo.
+  // mismo argumento que ya justifica que EvenCapital sea offline completo.
   // Pasan por offlineSupabase (escribe directo con señal, encola sin ella) y
   // reflejan el cambio al toque en `session` vía patchSession, sin esperar
   // una vuelta de red (fetchProfile) que offline nunca llegaría.
@@ -561,10 +561,10 @@ function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onO
   const toggleEnabled = async () => {
     setTogglingEnabled(true);
     try {
-      const nextValue = !session.splitLedgerEnabled;
+      const nextValue = !session.evenGroupEnabled;
       const { error } = await offlineSupabase.from("profiles").update({ split_ledger_enabled: nextValue }).eq("id", session.userId);
       if (error) throw error;
-      patchSession({ splitLedgerEnabled: nextValue });
+      patchSession({ evenGroupEnabled: nextValue });
     } catch (e) { showError(`No se pudo actualizar: ${e?.message || e}`); } finally { setTogglingEnabled(false); }
   };
 
@@ -582,9 +582,9 @@ function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onO
   return (
     <div style={styles.form}>
       <ToggleField
-        label="Split Ledger"
-        description="Activar la sección de Split Ledger"
-        checked={session.splitLedgerEnabled}
+        label="EvenGroup"
+        description="Activar la sección de EvenGroup"
+        checked={session.evenGroupEnabled}
         onChange={toggleEnabled}
         disabled={togglingEnabled}
       />
@@ -611,7 +611,7 @@ function SplitLedgerSettings({ session, groups, reloadGroups, onCreateGroup, onO
         </select>
       </Field>
       <p style={{ ...styles.muted, padding: 0, marginTop: -8 }}>
-        El botón de "+" en Split Ledger crea el gasto directo en este grupo.
+        El botón de "+" en EvenGroup crea el gasto directo en este grupo.
       </p>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

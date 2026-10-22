@@ -9,19 +9,19 @@ import { db } from "../../lib/localDb.js";
 import { styles } from "../../lib/styles.js";
 import { RootHeader, TopBar, ConfirmInline, Footer, Field, EmptyState } from "../../components/Shared.jsx";
 import { money, useScrollToTopOnChange } from "../../lib/helpers.jsx";
-import { accountBalance, computeCreditCardBalance, disableAutoPayForDeletedAccounts, useCreditCardActivity } from "../../lib/moneyManagerData.js";
+import { accountBalance, computeCreditCardBalance, disableAutoPayForDeletedAccounts, useCreditCardActivity } from "../../lib/evenCapitalData.js";
 import { CUSTOM_USER_CONFIG } from "../../lib/customUserConfig.js";
 import AccountDetailScreen from "./AccountDetailScreen.jsx";
 import AccountActivityScreen from "./AccountActivityScreen.jsx";
 import TransactionForm from "./TransactionForm.jsx";
 
 /* =========================================================================
-   CUENTAS — tab de Money Manager. Aislado de Split Ledger (tablas mm_*).
+   CUENTAS — tab de EvenCapital. Aislado de EvenGroup (tablas mm_*).
    list: pantalla raíz (RootHeader, igual que Config/Tus Grupos).
    manageGroups / manageAccounts: pantallas de edición (TopBar).
    ========================================================================= */
 
-export default function CuentasTab({ session, settings, groups, accounts, accountTotals, categories, slLinks, onOpenSplitLedgerGroup, onOpenSplitLedgerExpense, reload, reloadCategories, showError, showInfo, view, setView, onSaveMoneyTransaction, onDeleteMoneyTransaction, onBookmarkMoneyTransaction, isOnline = true }) {
+export default function CuentasTab({ session, settings, groups, accounts, accountTotals, categories, slLinks, onOpenEvenGroup, onOpenEvenGroupExpense, reload, reloadCategories, showError, showInfo, view, setView, onSaveMoneyTransaction, onDeleteMoneyTransaction, onBookmarkMoneyTransaction, isOnline = true }) {
   const balanceColor = (n) => (n > 0.004 ? "#3B6E62" : n < -0.004 ? "#B0473A" : "#6B6355");
   const [deletedOpen, setDeletedOpen] = useState(false);
 
@@ -37,7 +37,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
   // tarjeta (ya negativo, es deuda) más lo que de esa deuda en realidad no
   // es suyo — las transferencias puntuales que hacen a fin de mes de la
   // tarjeta a "Pendiente" para separar gastos compartidos (ej. pagarle algo
-  // a alguien o un gasto de Split Ledger). "Pendiente" como CUENTA no sirve
+  // a alguien o un gasto de EvenGroup). "Pendiente" como CUENTA no sirve
   // para esto (mezcla esas transferencias con otras cosas sueltas, como un
   // regalo o efectivo por sacar) — por eso se suma la transferencia
   // puntual, no el balance de la cuenta entera.
@@ -69,7 +69,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
         accountTotals={accountTotals}
         settings={settings}
         slLinks={slLinks}
-        onOpenSplitLedgerGroup={onOpenSplitLedgerGroup}
+        onOpenEvenGroup={onOpenEvenGroup}
         reload={reload}
         showError={showError}
         showInfo={showInfo}
@@ -84,7 +84,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
     if (!activityAccount) { setView({ screen: "list" }); return null; }
 
     if (view.screen === "activity") {
-      // Cuenta pseudo de un grupo vinculado de Split Ledger — solo
+      // Cuenta pseudo de un grupo vinculado de EvenGroup — solo
       // informativa, no se cargan movimientos acá (se gestionan desde Split
       // Ledger), así que esta pantalla no debe ofrecer "nueva transacción".
       const isSystemAccount = groups.find((g) => g.id === activityAccount.group_id)?.system_key === "split_ledger";
@@ -121,7 +121,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
         accounts={accounts}
         categories={categories}
         slLinks={slLinks}
-        onOpenSplitLedgerExpense={onOpenSplitLedgerExpense}
+        onOpenEvenGroupExpense={onOpenEvenGroupExpense}
         reloadCategories={reloadCategories}
         showError={showError}
         showInfo={showInfo}
@@ -218,7 +218,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
           const visibleAccounts = groupAccounts.filter((a) => !a.hidden);
           const gBalances = balancesByCurrency(groupAccounts);
           // Línea divisoria (mismo borde que el header) antes del grupo
-          // "Split Ledger" — para que se note que no es un grupo común, es
+          // "EvenGroup" — para que se note que no es un grupo común, es
           // el reflejo de tus grupos compartidos vinculados.
           const isSystemGroup = g.system_key === "split_ledger";
           return (
@@ -442,7 +442,7 @@ function SortableGroupRow({ group, onOpen, draggable }) {
 // (Footer Cancelar/Guardar, igual que AccountDetailScreen) se administra acá
 // la lista de cuentas hijas — eso sigue siendo inmediato, como el resto de
 // los drag-and-drop de la app.
-export function ManageAccounts({ session, group = null, groups, accounts, accountTotals, settings, slLinks, onOpenSplitLedgerGroup, reload, showError, showInfo, justCreated, onBack, onCreated, onDeleted, isOnline = true }) {
+export function ManageAccounts({ session, group = null, groups, accounts, accountTotals, settings, slLinks, onOpenEvenGroup, reload, showError, showInfo, justCreated, onBack, onCreated, onDeleted, isOnline = true }) {
   // Solo el primer render de esta pantalla (llegando recién de "Nuevo
   // grupo") — no se recalcula después, así que un re-render por cualquier
   // otro motivo no lo hace reaparecer.
@@ -456,8 +456,8 @@ export function ManageAccounts({ session, group = null, groups, accounts, accoun
   useScrollToTopOnChange(creating, viewingAccountId);
   const [nameTouched, setNameTouched] = useState(false);
 
-  // El grupo "Split Ledger" (auto-creado al vincular un grupo compartido) no
-  // se renombra/borra a mano acá — se desvincula desde Split Ledger. Si no,
+  // El grupo "EvenGroup" (auto-creado al vincular un grupo compartido) no
+  // se renombra/borra a mano acá — se desvincula desde EvenGroup. Si no,
   // un cambio acá rompe la referencia que guarda el vínculo sin que se note.
   const isSystemGroup = group?.system_key === "split_ledger";
 
@@ -579,7 +579,7 @@ export function ManageAccounts({ session, group = null, groups, accounts, accoun
         </Field>
         {isSystemGroup && (
           <p style={{ ...styles.muted, padding: 0, marginTop: -8 }}>
-            Se crea solo al vincular un grupo de Split Ledger. Se desvincula desde ahí, no se edita acá.
+            Se crea solo al vincular un grupo de EvenGroup. Se desvincula desde ahí, no se edita acá.
           </p>
         )}
         {group && showCreatedHint && (
@@ -594,7 +594,7 @@ export function ManageAccounts({ session, group = null, groups, accounts, accoun
               accounts={accounts}
               reload={reload}
               showError={showError}
-              onOpenAccount={(id) => openAccountOrSplitLedgerGroup(group, id, slLinks, onOpenSplitLedgerGroup, setViewingAccountId, isOnline, showError)}
+              onOpenAccount={(id) => openAccountOrEvenGroup(group, id, slLinks, onOpenEvenGroup, setViewingAccountId, isOnline, showError)}
             />
             {!isSystemGroup && (
               <button style={styles.btnDashed} onClick={() => setCreating(true)}>
@@ -619,7 +619,7 @@ export function ManageAccounts({ session, group = null, groups, accounts, accoun
 // "Grupos de cuentas"). Cada grupo es solo un encabezado de sección — para
 // renombrar/reordenar/crear GRUPOS está la pantalla separada "Grupos de
 // cuentas", reachable únicamente desde Configuración.
-export function ManageAllAccounts({ session, groups, accounts, accountTotals, settings, slLinks, onOpenSplitLedgerGroup, reload, showError, showInfo, onBack, isOnline = true }) {
+export function ManageAllAccounts({ session, groups, accounts, accountTotals, settings, slLinks, onOpenEvenGroup, reload, showError, showInfo, onBack, isOnline = true }) {
   const [creating, setCreating] = useState(false);
   const [viewingAccountId, setViewingAccountId] = useState(null);
   useScrollToTopOnChange(creating, viewingAccountId);
@@ -671,9 +671,9 @@ export function ManageAllAccounts({ session, groups, accounts, accountTotals, se
         right={<button style={styles.iconBtnGhost} onClick={() => setCreating(true)} aria-label="Nueva cuenta"><Plus size={20} /></button>}
       />
       <div style={styles.form}>
-        {/* El grupo "Split Ledger" es informativo (lo gestiona el programa
+        {/* El grupo "EvenGroup" es informativo (lo gestiona el programa
             solo al vincular un grupo compartido) — no tiene nada para editar
-            acá, se maneja desde Split Ledger. */}
+            acá, se maneja desde EvenGroup. */}
         {groups.filter((g) => !g.deleted && g.system_key !== "split_ledger" && accounts.some((a) => a.group_id === g.id && !a.deleted)).map((g) => (
           <div key={g.id}>
             <p style={{ ...styles.label, marginBottom: 12 }}>{g.name}</p>
@@ -682,7 +682,7 @@ export function ManageAllAccounts({ session, groups, accounts, accountTotals, se
               accounts={accounts}
               reload={reload}
               showError={showError}
-              onOpenAccount={(id) => openAccountOrSplitLedgerGroup(g, id, slLinks, onOpenSplitLedgerGroup, setViewingAccountId, isOnline, showError)}
+              onOpenAccount={(id) => openAccountOrEvenGroup(g, id, slLinks, onOpenEvenGroup, setViewingAccountId, isOnline, showError)}
             />
           </div>
         ))}
@@ -691,22 +691,22 @@ export function ManageAllAccounts({ session, groups, accounts, accountTotals, se
   );
 }
 
-// La cuenta pseudo de un grupo vinculado de Split Ledger no es una cuenta de
+// La cuenta pseudo de un grupo vinculado de EvenGroup no es una cuenta de
 // verdad — editarla no tiene sentido acá. Si el grupo es el sistema "Split
-// Ledger", la flecha lleva al "Editar grupo" de Split Ledger en vez de abrir
+// Ledger", la flecha lleva al "Editar grupo" de EvenGroup en vez de abrir
 // AccountDetailScreen (se busca el vínculo más reciente, activo o no, para
 // no dejar la flecha muerta en una cuenta ya desvinculada).
-function openAccountOrSplitLedgerGroup(group, accountId, slLinks, onOpenSplitLedgerGroup, onOpenAccount, isOnline, showError) {
+function openAccountOrEvenGroup(group, accountId, slLinks, onOpenEvenGroup, onOpenAccount, isOnline, showError) {
   if (group?.system_key === "split_ledger") {
-    // Salta directo a "Editar grupo" de Split Ledger -- online-only, mismo
-    // motivo que el resto de Split Ledger (bypassearía el bloqueo de
+    // Salta directo a "Editar grupo" de EvenGroup -- online-only, mismo
+    // motivo que el resto de EvenGroup (bypassearía el bloqueo de
     // GroupView si se dejara entrar offline, dejando picar la foto/nombre y
     // fallar recién al guardar).
     if (!isOnline) { showError?.("Estás offline, no podés editar este grupo ahora."); return; }
     const link = (slLinks || [])
       .filter((l) => l.pseudo_account_id === accountId)
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
-    if (link && onOpenSplitLedgerGroup) onOpenSplitLedgerGroup(link.group_id);
+    if (link && onOpenEvenGroup) onOpenEvenGroup(link.group_id);
     return;
   }
   onOpenAccount(accountId);

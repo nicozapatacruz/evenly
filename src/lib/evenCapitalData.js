@@ -4,13 +4,13 @@ import { supabase } from "./supabaseClient.js";
 import { db } from "./localDb.js";
 import { dateInputValueInZone, parseAmountInput, daysInMonth, monthsBefore, normalizeForSearch } from "./helpers.jsx";
 import { hasActiveFilters, matchesFilters } from "./filterHelpers.js";
-import { reconcileSplitLedger, getPendienteTcReviewItems, acknowledgePendienteTcReviewItem } from "./splitLedgerSync.js";
+import { reconcileEvenGroup, getPendienteTcReviewItems, acknowledgePendienteTcReviewItem } from "./evenGroupSync.js";
 import { computeAccountTotals, computeCategoryMonthTotals, computeAccountMonthTotals } from "./localAggregates.js";
 import { offlineSupabase } from "./offlineSupabase.js";
 import { getIsOnline } from "./connectivity.js";
 
-// Todo lo de Money Manager vive en tablas con prefijo mm_, separadas de las
-// de Split Ledger a propósito (ver memoria "money-manager-categories-merge-pending":
+// Todo lo de EvenCapital vive en tablas con prefijo mm_, separadas de las
+// de EvenGroup a propósito (ver memoria "money-manager-categories-merge-pending":
 // unificar categorías es una decisión pendiente, no algo ya resuelto).
 //
 // Lectura local-first (ver OFFLINE_PLAN): todos los hooks de acá abajo leen
@@ -30,7 +30,7 @@ export const WEEKDAY_OPTIONS = [
 ];
 
 // Lo que trae la app original de fábrica en una cuenta nueva — se crea sola
-// la primera vez (mismo patrón que DEFAULT_CATEGORIES en Split Ledger).
+// la primera vez (mismo patrón que DEFAULT_CATEGORIES en EvenGroup).
 const DEFAULT_EXPENSE_CATEGORIES = [
   "Comida", "Entretenimiento", "Gastos propios", "Transporte", "Cultura",
   "Mantenimiento del hogar", "Ropa", "Productos de belleza", "Salud",
@@ -190,7 +190,7 @@ export function computeCreditCardBalance(accountId, transactions, statementDay, 
   let pasado = 0;
   let actual = 0;
   for (const t of transactions) {
-    // Una transferencia de préstamo de Split Ledger (Presté/Me prestaron)
+    // Una transferencia de préstamo de EvenGroup (Presté/Me prestaron)
     // que llega a esta tarjeta NO es un pago real de la tarjeta — es solo la
     // otra mitad de un gasto que ya se contó acá mismo este ciclo (el gasto
     // "compartido" + el préstamo se cancelan entre sí). Si se tratara como
@@ -236,7 +236,7 @@ function useLocalTable(table, userId, sortKey) {
   return result === LOADING ? { rows: [], loading: true } : { rows: result, loading: false };
 }
 
-export function useMoneyManager(userId, userEmail) {
+export function useEvenCapital(userId, userEmail) {
   const settingsRow = useLiveQuery(() => (userId ? db.mm_settings.get(userId) : undefined), [userId], LOADING);
   const { rows: groups } = useLocalTable("mm_account_groups", userId, "sort_order");
   const { rows: accounts } = useLocalTable("mm_accounts", userId, "sort_order");
@@ -258,7 +258,7 @@ export function useMoneyManager(userId, userEmail) {
   // syncEngine.js importa de acá (generateDueRecurring/runCreditCardAutoPay/
   // seedDefaults/fetchAllRows).
   // No se dispara sola al montar (eso lo hace AppShell una sola vez, con el
-  // gate de "Trayendo datos" — ver ReconnectSyncGate en SplitLedger.jsx):
+  // gate de "Trayendo datos" — ver ReconnectSyncGate en EvenlyApp.jsx):
   // acá queda como función para que cada pantalla la siga llamando después
   // de guardar, igual que ya hacía antes.
   const reload = useCallback(async () => {
@@ -267,10 +267,10 @@ export function useMoneyManager(userId, userEmail) {
     await runFullSync(userId, userEmail);
   }, [userId, userEmail]);
 
-  // Online-only (toca una tabla de Split Ledger, no de Money Manager) — sin
+  // Online-only (toca una tabla de EvenGroup, no de EvenCapital) — sin
   // señal falla en silencio (el aviso del banner se queda tal cual, sin
   // romper nada) en vez de quedar como una promesa rechazada sin atrapar,
-  // mismo criterio que ya usa handleRejectInvite en SplitLedger.jsx.
+  // mismo criterio que ya usa handleRejectInvite en EvenlyApp.jsx.
   const acknowledgePendienteTcReview = useCallback(async (id) => {
     try {
       await acknowledgePendienteTcReviewItem(id);
@@ -709,8 +709,8 @@ export function computeAmountMain(amount, currency, mainCurrency, rate) {
   return amount;
 }
 
-// Sincronizada desde Split Ledger, en una moneda distinta a la principal,
-// sin tasa todavía — ver splitLedgerSync.js. Compartida entre TransactionDayGroups,
+// Sincronizada desde EvenGroup, en una moneda distinta a la principal,
+// sin tasa todavía — ver evenGroupSync.js. Compartida entre TransactionDayGroups,
 // SearchScreen y DiarioTab (banner), para no repetir la misma condición 3 veces.
 export function isRatePending(t, mainCurrency) {
   return !!t.sl_link_id && t.exchange_rate == null && t.currency !== mainCurrency;

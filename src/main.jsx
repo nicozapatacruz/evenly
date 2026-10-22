@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import SplitLedger from "./SplitLedger.jsx";
+import EvenlyApp from "./EvenlyApp.jsx";
 
 // El navegador "recuerda" solo el scroll de la página entera y lo restaura
 // después de un refresh (F5), incluso en una SPA — eso pisaba el scroll que
@@ -11,6 +11,6 @@ if ("scrollRestoration" in history) history.scrollRestoration = "manual";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <SplitLedger />
+    <EvenlyApp />
   </React.StrictMode>
 );

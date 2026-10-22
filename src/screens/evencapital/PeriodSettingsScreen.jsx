@@ -2,14 +2,14 @@ import React, { useState } from "react";
 import { offlineSupabase as supabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, ToggleField, Field } from "../../components/Shared.jsx";
-import { WEEKDAY_OPTIONS } from "../../lib/moneyManagerData.js";
+import { WEEKDAY_OPTIONS } from "../../lib/evenCapitalData.js";
 
 const STARTUP_TAB_OPTIONS = [
   { value: "", label: "Sin preferencia" },
   { value: "ledger", label: "Transacciones" },
   { value: "stats", label: "Estadísticas" },
   { value: "accounts", label: "Cuentas" },
-  { value: "splitledger", label: "Split Ledger" },
+  { value: "evengroup", label: "EvenGroup" },
 ];
 
 /* =========================================================================

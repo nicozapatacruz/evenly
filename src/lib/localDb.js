@@ -1,11 +1,19 @@
 import Dexie from "dexie";
 
-// Espejo local (IndexedDB vía Dexie) de las tablas de Money Manager + el
-// cache de solo-lectura de Split Ledger — ver OFFLINE_PLAN en el repo para
+// Espejo local (IndexedDB vía Dexie) de las tablas de EvenCapital + el
+// cache de solo-lectura de EvenGroup — ver OFFLINE_PLAN en el repo para
 // el diseño completo. Un solo usuario a la vez usa la app en un dispositivo
 // dado, así que no hace falta "limpiar" entre usuarios: cada fila ya trae
 // su propio user_id y los queries siempre filtran por el userId de la
 // sesión activa.
+//
+// Nombres de tabla (acá y en Supabase): "mm_" = EvenCapital, "sl_" = EvenGroup
+// (prefijos de cuando la app se llamaba "Money Manager"/"Split Ledger" por
+// dentro). A propósito NO se renombraron al rebrand 2026-10 — son nombres
+// internos que el usuario nunca ve, y renombrar tablas reales en Supabase es
+// una migración de verdad (riesgo real, cero beneficio visible). Si hace
+// falta ubicar algo: mm_* es todo lo de EvenCapital, sl_* (y sl_mm_*, los
+// vínculos entre los dos) es todo lo de EvenGroup.
 export const db = new Dexie("evenly_offline");
 
 db.version(1).stores({
@@ -30,11 +38,11 @@ db.version(1).stores({
 });
 
 // v2: solo para que offlineSupabase.js pueda encolar escrituras de "perfil"
-// (nombre visible, toggle de Split Ledger, grupo por defecto, y el orden
+// (nombre visible, toggle de EvenGroup, grupo por defecto, y el orden
 // propio de "Tus grupos") -- esas filas son de un solo escritor (vos mismo),
-// mismo criterio que ya justifica que Money Manager sea offline completo.
+// mismo criterio que ya justifica que EvenCapital sea offline completo.
 // No se usan para lectura local-first (el perfil sigue viviendo en
-// `session`, ver patchSession en SplitLedger.jsx) -- están acá únicamente
+// `session`, ver patchSession en EvenlyApp.jsx) -- están acá únicamente
 // para que la cola tenga una tabla real donde apoyarse.
 db.version(2).stores({
   mm_settings: "user_id",

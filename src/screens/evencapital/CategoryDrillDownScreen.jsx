@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { styles } from "../../lib/styles.js";
 import { TopBar, MonthNav, HeaderMenu, EmptyState, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
 import { money, CURRENCIES } from "../../lib/helpers.jsx";
-import { useMonthTransactions, useCategoryTimeline, currenciesInUse } from "../../lib/moneyManagerData.js";
+import { useMonthTransactions, useCategoryTimeline, currenciesInUse } from "../../lib/evenCapitalData.js";
 import { TransactionDayGroups } from "./TransactionDayGroups.jsx";
 
 const MONTH_SHORT = (year, month) => new Date(year, month - 1, 1).toLocaleDateString("es-ES", { month: "short" }).replace(".", "");

@@ -1,10 +1,11 @@
 # Evenly
 
-App para dividir y gestionar gastos en grupo (tipo Splitwise), con planes de
-sumar un Money Manager de finanzas personales. Construida originalmente como
-un artifact de React de un solo archivo en Claude.ai, bajo el nombre
-"SplitLedger" (el componente principal en `src/SplitLedger.jsx` todavía
-conserva ese nombre internamente).
+App centrada en gestión de finanzas personales (EvenCapital), con una
+función secundaria para dividir y gestionar gastos en grupo (EvenGroup, tipo
+Splitwise). Construida originalmente como un artifact de React de un solo
+archivo en Claude.ai, bajo el nombre "SplitLedger" — el componente raíz
+(hoy `src/EvenlyApp.jsx`) conservó ese nombre internamente durante buena
+parte del desarrollo, hasta el rebrand a EvenCapital/EvenGroup.
 
 ## Cómo correrlo
 

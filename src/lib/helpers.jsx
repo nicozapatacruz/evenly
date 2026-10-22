@@ -268,7 +268,7 @@ export function dateInputValue(ms) {
 
 // Igual que dateInputValue, pero en la zona horaria de la transacción (donde
 // se creó), no en la del navegador de quien la está mirando/editando ahora —
-// para Money Manager, "dónde estoy" solo debe influir al CREAR un registro,
+// para EvenCapital, "dónde estoy" solo debe influir al CREAR un registro,
 // nunca al editar uno existente ni al agruparlo por día en las listas.
 export function dateInputValueInZone(ms, tz) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ms));
@@ -310,7 +310,7 @@ export function monthsBefore(viewMonth, n) {
 // componente que alterne entre un listado y un detalle/formulario con un
 // estado propio (no levantado al padre) tiene que llamar a este hook con ese
 // mismo estado, para no heredar el scroll que tenía la vista anterior. Ver
-// también el mismo patrón a nivel de pantalla completa en SplitLedger.jsx.
+// también el mismo patrón a nivel de pantalla completa en EvenlyApp.jsx.
 export function useScrollToTopOnChange(...deps) {
   // useLayoutEffect (no useEffect): corre antes de pintar, así la vista
   // nueva nunca se ve un instante en la posición vieja. El segundo intento
@@ -320,7 +320,7 @@ export function useScrollToTopOnChange(...deps) {
   useLayoutEffect(() => {
     // scrollIntoView (no window.scrollTo): en la PWA instalada de iOS,
     // scrollTo a veces no hace nada, pero scrollIntoView sí — ver el mismo
-    // cambio y motivo en SplitLedger.jsx.
+    // cambio y motivo en EvenlyApp.jsx.
     const scrollToTop = () => document.getElementById("root")?.scrollIntoView({ block: "start" });
     scrollToTop();
     const raf = requestAnimationFrame(scrollToTop);

@@ -8,19 +8,19 @@ import { BookOpen, BarChart3, Coins, Divide, MoreHorizontal, MailCheck } from "l
 import { styles, globalCss } from "./lib/styles.js";
 import { Field, PasswordInput } from "./components/Shared.jsx";
 import ReconnectSyncGate from "./components/ReconnectSyncGate.jsx";
-import SplitLedgerTab from "./screens/splitledger/SplitLedgerTab.jsx";
+import EvenGroupTab from "./screens/evengroup/EvenGroupTab.jsx";
 import ConfigScreen from "./screens/config/ConfigScreen.jsx";
-import CuentasTab from "./screens/moneymanager/CuentasTab.jsx";
-import DiarioTab from "./screens/moneymanager/DiarioTab.jsx";
-import TransactionForm from "./screens/moneymanager/TransactionForm.jsx";
-import EstadisticasTab from "./screens/moneymanager/EstadisticasTab.jsx";
-import CategoryDrillDownScreen from "./screens/moneymanager/CategoryDrillDownScreen.jsx";
-import SearchScreen from "./screens/moneymanager/SearchScreen.jsx";
-import BookmarksScreen from "./screens/moneymanager/BookmarksScreen.jsx";
-import PhotoImportEntryScreen from "./screens/moneymanager/PhotoImportEntryScreen.jsx";
-import PhotoImportWizardScreen from "./screens/moneymanager/PhotoImportWizardScreen.jsx";
-import { FiltersPanel } from "./screens/moneymanager/FiltersPanel.jsx";
-import { useMoneyManager } from "./lib/moneyManagerData.js";
+import CuentasTab from "./screens/evencapital/CuentasTab.jsx";
+import DiarioTab from "./screens/evencapital/DiarioTab.jsx";
+import TransactionForm from "./screens/evencapital/TransactionForm.jsx";
+import EstadisticasTab from "./screens/evencapital/EstadisticasTab.jsx";
+import CategoryDrillDownScreen from "./screens/evencapital/CategoryDrillDownScreen.jsx";
+import SearchScreen from "./screens/evencapital/SearchScreen.jsx";
+import BookmarksScreen from "./screens/evencapital/BookmarksScreen.jsx";
+import PhotoImportEntryScreen from "./screens/evencapital/PhotoImportEntryScreen.jsx";
+import PhotoImportWizardScreen from "./screens/evencapital/PhotoImportWizardScreen.jsx";
+import { FiltersPanel } from "./screens/evencapital/FiltersPanel.jsx";
+import { useEvenCapital } from "./lib/evenCapitalData.js";
 import { createBookmark } from "./lib/bookmarksData.js";
 import { EMPTY_FILTERS } from "./lib/filterHelpers.js";
 
@@ -79,7 +79,7 @@ function toSession(authUser, profile) {
     displayName: profile.display_name,
     photoUrl: profile.photo_url || null,
     defaultGroupId: profile.default_group_id || null,
-    splitLedgerEnabled: profile.split_ledger_enabled !== false,
+    evenGroupEnabled: profile.split_ledger_enabled !== false,
   };
 }
 
@@ -122,7 +122,7 @@ async function resolveSession(authUser) {
 }
 
 function useAuth() {
-  const [session, setSession] = useState(null); // { userId, email, username, displayName, photoUrl, defaultGroupId, splitLedgerEnabled } | null
+  const [session, setSession] = useState(null); // { userId, email, username, displayName, photoUrl, defaultGroupId, evenGroupEnabled } | null
   const [authLoading, setAuthLoading] = useState(true);
   // true mientras el usuario llegó acá desde el link de "recuperar contraseña"
   // del correo — en ese momento Supabase ya le arma una sesión válida, pero
@@ -223,7 +223,7 @@ function useAuth() {
   }, []);
 
   // Para los campos de "perfil" que ahora son offline-capaces (nombre
-  // visible, toggle de Split Ledger, grupo por defecto) — actualiza la
+  // visible, toggle de EvenGroup, grupo por defecto) — actualiza la
   // sesión en memoria y el cache directo, sin pasar por fetchProfile (que
   // necesita red). El caller ya mandó la escritura real por offlineSupabase
   // (online de una, o encolada) antes de llamar esto; acá solo se refleja
@@ -364,7 +364,7 @@ function useGroups(userId) {
         .filter((g) => g.members.some((m) => m.linkedUserId === userId));
       const sorted = sortGroupsForUser(mine, userId);
       setGroups(sorted);
-      // Split Ledger es online-preferred: este snapshot ya traducido es el
+      // EvenGroup es online-preferred: este snapshot ya traducido es el
       // único cache (sl_groups_cache), solo se lee offline como último
       // recurso — ver fallback más abajo.
       await db.sl_groups_cache.clear();
@@ -638,14 +638,14 @@ function RecoverPasswordScreen({ onComplete, onCancel }) {
 }
 
 /* =========================================================================
-   BARRA DE 5 TABS (3 de Money Manager "Coming Soon" + Split Ledger + Config)
+   BARRA DE 5 TABS (3 de EvenCapital "Coming Soon" + EvenGroup + Config)
    ========================================================================= */
 
 const TABS = [
   { key: "ledger", icon: BookOpen, comingSoon: false, label: () => new Date().toLocaleDateString("es-ES", { day: "numeric", month: "short" }) },
   { key: "stats", icon: BarChart3, comingSoon: false, label: () => "Estadísticas" },
   { key: "accounts", icon: Coins, comingSoon: false, label: () => "Cuentas" },
-  { key: "splitledger", icon: Divide, comingSoon: false, label: () => "Split Ledger" },
+  { key: "evengroup", icon: Divide, comingSoon: false, label: () => "EvenGroup" },
   { key: "config", icon: MoreHorizontal, comingSoon: false, label: () => "Config" },
 ];
 
@@ -656,7 +656,7 @@ const TABS = [
 
 function AppShell({ session, onLogout, refreshProfile, patchSession }) {
   const { groups, loading, reloadGroup, deleteGroup, reload: reloadGroups } = useGroups(session.userId);
-  const moneyManager = useMoneyManager(session.userId, session.email);
+  const evenCapital = useEvenCapital(session.userId, session.email);
   const isOnline = useConnectivity();
   // Banner de sincronización (no bloqueante, ver ReconnectSyncGate) — al
   // arrancar (si hay señal) y en toda transición offline→online. El efecto
@@ -698,12 +698,12 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
   const [activeTab, setActiveTab] = useState(() => {
     const saved = localStorage.getItem("evenly_activeTab");
     if (saved && TABS.some((t) => t.key === saved)) return saved;
-    return session.splitLedgerEnabled ? "splitledger" : "config";
+    return session.evenGroupEnabled ? "evengroup" : "config";
   });
   useEffect(() => {
     localStorage.setItem("evenly_activeTab", activeTab);
   }, [activeTab]);
-  const [splitLedgerView, setSplitLedgerView] = useState({ screen: "home" });
+  const [evenGroupView, setEvenGroupView] = useState({ screen: "home" });
   const [accountsView, setAccountsView] = useState({ screen: "list" });
   const [ledgerView, setLedgerView] = useState({ screen: "list" });
   const [statsView, setStatsView] = useState({ screen: "list" });
@@ -732,7 +732,7 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
   const [viewingProfile, setViewingProfile] = useState(false);
   const [creatingRecurring, setCreatingRecurring] = useState(false);
   const [editingRecurring, setEditingRecurring] = useState(null); // fila de mm_recurring, o null
-  const [moneyManagerScreen, setMoneyManagerScreen] = useState(null);
+  const [evenCapitalScreen, setEvenCapitalScreen] = useState(null);
   // Esta app no navega con URLs/router — cambiar de pantalla es solo React
   // mostrando otro árbol de componentes, así que el navegador nunca resetea
   // el scroll solo (eso sí pasaría con una navegación real de página). Sin
@@ -758,7 +758,7 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
     scrollToTop();
     const raf = requestAnimationFrame(scrollToTop);
     return () => cancelAnimationFrame(raf);
-  }, [activeTab, splitLedgerView.screen, accountsView.screen, ledgerView.screen, statsView.screen, moneyManagerScreen, changingPassword, viewingProfile, creatingRecurring, editingRecurring]);
+  }, [activeTab, evenGroupView.screen, accountsView.screen, ledgerView.screen, statsView.screen, evenCapitalScreen, changingPassword, viewingProfile, creatingRecurring, editingRecurring]);
   const [toast, setToast] = useState(null); // { message, type: "error" | "success" | "info" }
   const [invites, setInvites] = useState([]); // invitaciones que ME llegaron (bandeja)
 
@@ -766,7 +766,7 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
   const showSuccess = (msg) => setToast({ message: msg, type: "success" });
   const showInfo = (msg) => setToast({ message: msg, type: "info" });
 
-  // Guarda una transacción de Money Manager y, si venía con recurrencia
+  // Guarda una transacción de EvenCapital y, si venía con recurrencia
   // activada, también crea su plantilla en mm_recurring. Un solo lugar para
   // esto porque lo usan tanto "Hoy" (FAB) como "Transacciones recurrentes" en Config.
   const saveMoneyTransaction = async ({ recurring, id, ...tx }) => {
@@ -799,7 +799,7 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
         });
         if (recError) throw recError;
       }
-      await moneyManager.reload();
+      await evenCapital.reload();
       return true;
     } catch (e) {
       showError(`No se pudo guardar: ${e?.message || e}`);
@@ -809,12 +809,12 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
 
   // Edita en el lugar la plantilla de una recurrente ya existente (nunca
   // crea una transacción) -- mm_recurring es de un solo escritor, igual que
-  // el resto de Money Manager, así que esto también se encola offline.
+  // el resto de EvenCapital, así que esto también se encola offline.
   const saveRecurring = async (id, payload) => {
     try {
       const { error } = await offlineSupabase.from("mm_recurring").update(payload).eq("id", id);
       if (error) throw error;
-      await moneyManager.reload();
+      await evenCapital.reload();
       return true;
     } catch (e) {
       showError(`No se pudo guardar: ${e?.message || e}`);
@@ -830,7 +830,7 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
     try {
       const { error } = await offlineSupabase.from("mm_recurring").delete().eq("id", id);
       if (error) throw error;
-      await moneyManager.reload();
+      await evenCapital.reload();
       showInfo("Transacción recurrente eliminada.");
       return true;
     } catch (e) {
@@ -845,7 +845,7 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
     try {
       const { error } = await offlineSupabase.from("mm_transactions").update({ deleted: true }).eq("id", id);
       if (error) throw error;
-      await moneyManager.reload();
+      await evenCapital.reload();
       showInfo("Transacción eliminada.");
       return true;
     } catch (e) {
@@ -921,13 +921,13 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
       if (e2) throw e2;
       await loadInvites();
       await reloadGroup(invite.groupId);
-      setActiveTab("splitledger");
-      setSplitLedgerView({ screen: "group", groupId: invite.groupId });
+      setActiveTab("evengroup");
+      setEvenGroupView({ screen: "group", groupId: invite.groupId });
     } catch (e) { showError(`No se pudo aceptar la invitación: ${e?.message || e}`); }
   }, [session.userId, session.displayName, reloadGroup, loadInvites, isOnline]);
 
   // De dónde vinimos al saltar de pestaña "de golpe" (Cuentas o una
-  // transacción sincronizada → Split Ledger; Estadísticas → Buscador) — para
+  // transacción sincronizada → EvenGroup; Estadísticas → Buscador) — para
   // que el botón de volver de ESA pantalla puntual (no cualquier otra)
   // regrese ahí en vez de a la navegación interna normal de la pestaña de
   // destino. `screens` (no un solo `screen`) porque la pantalla de destino a
@@ -940,12 +940,12 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
   // lista — ahí sí asumimos que el usuario se fue a navegar por su cuenta.
   // Dos pares (uno por pestaña de destino) porque cada uno mira el `view` de
   // una pestaña distinta.
-  const [splitLedgerReturn, setSplitLedgerReturn] = useState(null); // { tab, screens }
+  const [evenGroupReturn, setEvenGroupReturn] = useState(null); // { tab, screens }
   useEffect(() => {
-    setSplitLedgerReturn((r) => (r && !r.screens.includes(splitLedgerView.screen) ? null : r));
-  }, [splitLedgerView.screen]);
-  const deepLinkBack = splitLedgerReturn && splitLedgerReturn.screens.includes(splitLedgerView.screen)
-    ? () => { setActiveTab(splitLedgerReturn.tab); setSplitLedgerReturn(null); }
+    setEvenGroupReturn((r) => (r && !r.screens.includes(evenGroupView.screen) ? null : r));
+  }, [evenGroupView.screen]);
+  const deepLinkBack = evenGroupReturn && evenGroupReturn.screens.includes(evenGroupView.screen)
+    ? () => { setActiveTab(evenGroupReturn.tab); setEvenGroupReturn(null); }
     : null;
 
   const [ledgerReturn, setLedgerReturn] = useState(null); // { tab, screens }
@@ -956,34 +956,34 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
     ? () => { setActiveTab(ledgerReturn.tab); setLedgerReturn(null); }
     : null;
 
-  // Punto único para saltar a Split Ledger desde otra pestaña, marcando de
+  // Punto único para saltar a EvenGroup desde otra pestaña, marcando de
   // dónde volver — mirar `deepLinkBack` arriba. `alsoScreens`: otras
   // pantallas que cuentan como "la misma tarea" (ver comentario de arriba).
-  const goToSplitLedger = useCallback((screen, extra = {}, alsoScreens = []) => {
-    setSplitLedgerReturn({ tab: activeTab, screens: [screen, ...alsoScreens] });
-    setActiveTab("splitledger");
-    setSplitLedgerView({ screen, ...extra });
+  const goToEvenGroup = useCallback((screen, extra = {}, alsoScreens = []) => {
+    setEvenGroupReturn({ tab: activeTab, screens: [screen, ...alsoScreens] });
+    setActiveTab("evengroup");
+    setEvenGroupView({ screen, ...extra });
   }, [activeTab]);
 
-  // Usado por la cuenta pseudo "Split Ledger" en Cuentas/Config — su flecha
-  // no edita una cuenta real, lleva derecho a "Editar grupo" en Split Ledger.
+  // Usado por la cuenta pseudo "EvenGroup" en Cuentas/Config — su flecha
+  // no edita una cuenta real, lleva derecho a "Editar grupo" en EvenGroup.
   // "inviteScreen" cuenta como la misma tarea (se navega ahí y se vuelve sin
   // perder el hilo de "estoy editando este grupo").
-  const openSplitLedgerGroup = useCallback((groupId) => goToSplitLedger("editGroup", { groupId }, ["inviteScreen"]), [goToSplitLedger]);
+  const openEvenGroup = useCallback((groupId) => goToEvenGroup("editGroup", { groupId }, ["inviteScreen"]), [goToEvenGroup]);
 
   // Usado por TransactionForm en una transacción sincronizada — lleva al
   // detalle (solo lectura) del gasto/pago de origen, igual que tocar esa
   // fila dentro del grupo; "Editar" desde ahí es una acción aparte, no algo
   // que "Original" haga por su cuenta. "newExpense"/"settleUp" cuentan como
   // la misma tarea para que el botón Cancelar/Guardar de esa edición (si se
-  // llega a abrir desde acá) también vuelva derecho a Money Manager.
-  const openSplitLedgerExpense = useCallback((groupId, sourceKind, sourceId) => {
-    goToSplitLedger(
+  // llega a abrir desde acá) también vuelva derecho a EvenCapital.
+  const openEvenGroupExpense = useCallback((groupId, sourceKind, sourceId) => {
+    goToEvenGroup(
       sourceKind === "expense" ? "expenseDetail" : "paymentDetail",
       sourceKind === "expense" ? { groupId, expenseId: sourceId } : { groupId, paymentId: sourceId },
       [sourceKind === "expense" ? "newExpense" : "settleUp"]
     );
-  }, [goToSplitLedger]);
+  }, [goToEvenGroup]);
 
   const handleRejectInvite = useCallback(async (invite) => {
     let rejected = false;
@@ -996,24 +996,24 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
     if (rejected) showInfo("Invitación rechazada.");
   }, [loadInvites]);
 
-  // Si se apaga "Use Split Ledger" mientras estás parado ahí, te manda a Configuración
+  // Si se apaga "Use EvenGroup" mientras estás parado ahí, te manda a Configuración
   useEffect(() => {
-    if (!session.splitLedgerEnabled && activeTab === "splitledger") setActiveTab("config");
-  }, [session.splitLedgerEnabled, activeTab]);
+    if (!session.evenGroupEnabled && activeTab === "evengroup") setActiveTab("config");
+  }, [session.evenGroupEnabled, activeTab]);
 
-  // "Pantalla de inicio" de Money Manager (Detalles del período) — se aplica
-  // una sola vez, apenas termina de cargar por primera vez (moneyManager.loading
+  // "Pantalla de inicio" de EvenCapital (Detalles del período) — se aplica
+  // una sola vez, apenas termina de cargar por primera vez (evenCapital.loading
   // solo pasa de true a false una vez en la vida del hook, reload() no lo
   // vuelve a poner en true), para no pisar la pestaña donde ya estés parado.
   useEffect(() => {
-    if (moneyManager.loading) return;
-    const tab = moneyManager.settings.startup_tab;
-    const valid = ["ledger", "stats", "accounts", "splitledger"];
-    if (tab && valid.includes(tab) && (tab !== "splitledger" || session.splitLedgerEnabled)) {
+    if (evenCapital.loading) return;
+    const tab = evenCapital.settings.startup_tab;
+    const valid = ["ledger", "stats", "accounts", "evengroup"];
+    if (tab && valid.includes(tab) && (tab !== "evengroup" || session.evenGroupEnabled)) {
       setActiveTab(tab);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [moneyManager.loading]);
+  }, [evenCapital.loading]);
 
   const handleTabClick = (tab) => {
     if (tab.comingSoon) { showInfo("Próximamente"); return; }
@@ -1029,15 +1029,15 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
       // pestaña, no solo cambia el mes.
       if (tab.key === "stats") setStatsView({ screen: "list" });
       if (tab.key === "accounts") setAccountsView({ screen: "list" });
-      // Mismo gesto en Split Ledger y Config: re-tocar la tab te saca de
+      // Mismo gesto en EvenGroup y Config: re-tocar la tab te saca de
       // cualquier drill-down/sub-pantalla y te deja en la principal.
-      if (tab.key === "splitledger") setSplitLedgerView({ screen: "home" });
+      if (tab.key === "evengroup") setEvenGroupView({ screen: "home" });
       if (tab.key === "config") {
         setChangingPassword(false);
         setViewingProfile(false);
         setCreatingRecurring(false);
         setEditingRecurring(null);
-        setMoneyManagerScreen(null);
+        setEvenCapitalScreen(null);
         loadInvites();
       }
       return;
@@ -1048,16 +1048,16 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
     setActiveTab(tab.key);
   };
 
-  const visibleTabs = TABS.filter((t) => t.key !== "splitledger" || session.splitLedgerEnabled);
+  const visibleTabs = TABS.filter((t) => t.key !== "evengroup" || session.evenGroupEnabled);
   const showTabBar = activeTab === "config"
-    ? (!changingPassword && !viewingProfile && !creatingRecurring && !editingRecurring && (!moneyManagerScreen || moneyManagerScreen === "recurring"))
+    ? (!changingPassword && !viewingProfile && !creatingRecurring && !editingRecurring && (!evenCapitalScreen || evenCapitalScreen === "recurring"))
     : activeTab === "accounts"
       ? (accountsView.screen === "list" || accountsView.screen === "activity")
       : activeTab === "ledger"
         ? ledgerView.screen === "list"
         : activeTab === "stats"
           ? (statsView.screen === "list" || statsView.screen === "drilldown")
-          : ["home", "group", "expenseDetail", "paymentDetail"].includes(splitLedgerView.screen);
+          : ["home", "group", "expenseDetail", "paymentDetail"].includes(evenGroupView.screen);
 
   return (
     <div style={styles.app}>
@@ -1071,19 +1071,19 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
         </div>
       )}
 
-      {activeTab === "splitledger" && (
-        <SplitLedgerTab
+      {activeTab === "evengroup" && (
+        <EvenGroupTab
           session={session}
           groups={groups}
           loading={loading}
           reloadGroup={reloadGroup}
           deleteGroup={deleteGroup}
-          view={splitLedgerView}
-          setView={setSplitLedgerView}
+          view={evenGroupView}
+          setView={setEvenGroupView}
           showError={showError}
           showSuccess={showSuccess}
           showInfo={showInfo}
-          moneyManager={moneyManager}
+          evenCapital={evenCapital}
           onBackOverride={deepLinkBack}
           isOnline={isOnline}
         />
@@ -1092,16 +1092,16 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
       {activeTab === "accounts" && (
         <CuentasTab
           session={session}
-          settings={moneyManager.settings}
-          groups={moneyManager.groups}
-          accounts={moneyManager.accounts}
-          accountTotals={moneyManager.accountTotals}
-          categories={moneyManager.categories}
-          slLinks={moneyManager.slLinks}
-          onOpenSplitLedgerGroup={openSplitLedgerGroup}
-          onOpenSplitLedgerExpense={openSplitLedgerExpense}
-          reload={moneyManager.reload}
-          reloadCategories={moneyManager.reload}
+          settings={evenCapital.settings}
+          groups={evenCapital.groups}
+          accounts={evenCapital.accounts}
+          accountTotals={evenCapital.accountTotals}
+          categories={evenCapital.categories}
+          slLinks={evenCapital.slLinks}
+          onOpenEvenGroup={openEvenGroup}
+          onOpenEvenGroupExpense={openEvenGroupExpense}
+          reload={evenCapital.reload}
+          reloadCategories={evenCapital.reload}
           showError={showError}
           showInfo={showInfo}
           view={accountsView}
@@ -1116,9 +1116,9 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
       {activeTab === "stats" && statsView.screen === "list" && (
         <EstadisticasTab
           userId={session.userId}
-          settings={moneyManager.settings}
-          accounts={moneyManager.accounts}
-          categories={moneyManager.categories}
+          settings={evenCapital.settings}
+          accounts={evenCapital.accounts}
+          categories={evenCapital.categories}
           viewMonth={ledgerMonth}
           setViewMonth={setLedgerMonth}
           onDrillDown={(drill) => setStatsView({ screen: "drilldown", ...drill })}
@@ -1133,9 +1133,9 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
         <DiarioFiltersScreen
           filters={diarioFilters}
           setFilters={setDiarioFilters}
-          groups={moneyManager.groups}
-          accounts={moneyManager.accounts}
-          categories={moneyManager.categories}
+          groups={evenCapital.groups}
+          accounts={evenCapital.accounts}
+          categories={evenCapital.categories}
           onBack={() => setStatsView({ screen: "list" })}
         />
       )}
@@ -1143,10 +1143,10 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
       {activeTab === "stats" && statsView.screen === "drilldown" && (
         <CategoryDrillDownScreen
           userId={session.userId}
-          settings={moneyManager.settings}
-          accounts={moneyManager.accounts}
-          categories={moneyManager.categories}
-          slLinks={moneyManager.slLinks}
+          settings={evenCapital.settings}
+          accounts={evenCapital.accounts}
+          categories={evenCapital.categories}
+          slLinks={evenCapital.slLinks}
           type={statsView.type}
           categoryId={statsView.categoryId}
           categoryName={statsView.categoryName}
@@ -1163,13 +1163,13 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
       {activeTab === "stats" && (statsView.screen === "newTransaction" || statsView.screen === "editTransaction") && (
         <TransactionForm
           session={session}
-          settings={moneyManager.settings}
-          groups={moneyManager.groups}
-          accounts={moneyManager.accounts}
-          categories={moneyManager.categories}
-          slLinks={moneyManager.slLinks}
-          onOpenSplitLedgerExpense={openSplitLedgerExpense}
-          reloadCategories={moneyManager.reload}
+          settings={evenCapital.settings}
+          groups={evenCapital.groups}
+          accounts={evenCapital.accounts}
+          categories={evenCapital.categories}
+          slLinks={evenCapital.slLinks}
+          onOpenEvenGroupExpense={openEvenGroupExpense}
+          reloadCategories={evenCapital.reload}
           showError={showError}
           showInfo={showInfo}
           isOnline={isOnline}
@@ -1191,11 +1191,11 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
       {activeTab === "ledger" && ledgerView.screen === "list" && (
         <DiarioTab
           userId={session.userId}
-          settings={moneyManager.settings}
-          groups={moneyManager.groups}
-          accounts={moneyManager.accounts}
-          categories={moneyManager.categories}
-          slLinks={moneyManager.slLinks}
+          settings={evenCapital.settings}
+          groups={evenCapital.groups}
+          accounts={evenCapital.accounts}
+          categories={evenCapital.categories}
+          slLinks={evenCapital.slLinks}
           viewMonth={ledgerMonth}
           setViewMonth={setLedgerMonth}
           onNewTransaction={(date) => setLedgerView({ screen: "newTransaction", date, returnTo: "list" })}
@@ -1206,16 +1206,16 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
           filters={diarioFilters}
           onOpenFilters={() => setLedgerView({ screen: "filters" })}
           onClearFilters={() => setDiarioFilters(EMPTY_FILTERS)}
-          pendienteTcReview={moneyManager.pendienteTcReview}
-          onAcknowledgePendienteTcReview={moneyManager.acknowledgePendienteTcReview}
+          pendienteTcReview={evenCapital.pendienteTcReview}
+          onAcknowledgePendienteTcReview={evenCapital.acknowledgePendienteTcReview}
         />
       )}
 
       {activeTab === "ledger" && ledgerView.screen === "bookmarks" && (
         <BookmarksScreen
           userId={session.userId}
-          accounts={moneyManager.accounts}
-          categories={moneyManager.categories}
+          accounts={evenCapital.accounts}
+          categories={evenCapital.categories}
           showError={showError}
           showInfo={showInfo}
           onBack={() => setLedgerView({ screen: "list" })}
@@ -1225,8 +1225,8 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
 
       {activeTab === "ledger" && ledgerView.screen === "photoImportPick" && (
         <PhotoImportEntryScreen
-          groups={moneyManager.groups}
-          accounts={moneyManager.accounts}
+          groups={evenCapital.groups}
+          accounts={evenCapital.accounts}
           showError={showError}
           onBack={() => setLedgerView({ screen: "list" })}
           onExtracted={(candidates, accountId, date) =>
@@ -1237,9 +1237,9 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
       {activeTab === "ledger" && ledgerView.screen === "photoImportWizard" && (
         <PhotoImportWizardScreen
           userId={session.userId}
-          settings={moneyManager.settings}
-          accounts={moneyManager.accounts}
-          categories={moneyManager.categories}
+          settings={evenCapital.settings}
+          accounts={evenCapital.accounts}
+          categories={evenCapital.categories}
           accountId={ledgerView.accountId}
           candidates={ledgerView.candidates}
           date={ledgerView.date}
@@ -1254,9 +1254,9 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
         <DiarioFiltersScreen
           filters={diarioFilters}
           setFilters={setDiarioFilters}
-          groups={moneyManager.groups}
-          accounts={moneyManager.accounts}
-          categories={moneyManager.categories}
+          groups={evenCapital.groups}
+          accounts={evenCapital.accounts}
+          categories={evenCapital.categories}
           onBack={() => setLedgerView({ screen: "list" })}
         />
       )}
@@ -1264,11 +1264,11 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
       {activeTab === "ledger" && ledgerView.screen === "search" && (
         <SearchScreen
           session={session}
-          settings={moneyManager.settings}
-          groups={moneyManager.groups}
-          accounts={moneyManager.accounts}
-          categories={moneyManager.categories}
-          slLinks={moneyManager.slLinks}
+          settings={evenCapital.settings}
+          groups={evenCapital.groups}
+          accounts={evenCapital.accounts}
+          categories={evenCapital.categories}
+          slLinks={evenCapital.slLinks}
           query={searchQuery}
           setQuery={setSearchQuery}
           filters={searchFilters}
@@ -1282,13 +1282,13 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
       {activeTab === "ledger" && (ledgerView.screen === "newTransaction" || ledgerView.screen === "editTransaction") && (
         <TransactionForm
           session={session}
-          settings={moneyManager.settings}
-          groups={moneyManager.groups}
-          accounts={moneyManager.accounts}
-          categories={moneyManager.categories}
-          slLinks={moneyManager.slLinks}
-          onOpenSplitLedgerExpense={openSplitLedgerExpense}
-          reloadCategories={moneyManager.reload}
+          settings={evenCapital.settings}
+          groups={evenCapital.groups}
+          accounts={evenCapital.accounts}
+          categories={evenCapital.categories}
+          slLinks={evenCapital.slLinks}
+          onOpenEvenGroupExpense={openEvenGroupExpense}
+          reloadCategories={evenCapital.reload}
           showError={showError}
           showInfo={showInfo}
           isOnline={isOnline}
@@ -1319,8 +1319,8 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
           patchSession={patchSession}
           groups={groups}
           reloadGroups={reloadGroups}
-          onCreateGroup={() => goToSplitLedger("newGroup")}
-          onOpenGroup={(groupId) => goToSplitLedger("group", { groupId })}
+          onCreateGroup={() => goToEvenGroup("newGroup")}
+          onOpenGroup={(groupId) => goToEvenGroup("group", { groupId })}
           showError={showError}
           showSuccess={showSuccess}
           showInfo={showInfo}
@@ -1328,7 +1328,7 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
           setChangingPassword={setChangingPassword}
           viewingProfile={viewingProfile}
           setViewingProfile={setViewingProfile}
-          moneyManager={moneyManager}
+          evenCapital={evenCapital}
           onSaveMoneyTransaction={saveMoneyTransaction}
           onSaveRecurring={saveRecurring}
           onDeleteRecurring={deleteRecurring}
@@ -1336,9 +1336,9 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
           setCreatingRecurring={setCreatingRecurring}
           editingRecurring={editingRecurring}
           setEditingRecurring={setEditingRecurring}
-          moneyManagerScreen={moneyManagerScreen}
-          setMoneyManagerScreen={setMoneyManagerScreen}
-          onOpenSplitLedgerGroup={openSplitLedgerGroup}
+          evenCapitalScreen={evenCapitalScreen}
+          setEvenCapitalScreen={setEvenCapitalScreen}
+          onOpenEvenGroup={openEvenGroup}
           isOnline={isOnline}
         />
       )}
@@ -1366,7 +1366,7 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
   );
 }
 
-export default function SplitLedger() {
+export default function EvenlyApp() {
   const {
     session, authLoading, register, login, logout, refreshProfile, patchSession,
     recovering, resetPassword, completeRecovery, cancelRecovery,

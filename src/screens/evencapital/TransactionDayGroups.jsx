@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { Trash2, Divide, ArrowLeftRight, AlertCircle } from "lucide-react";
 import { money, measureTextWidth, dateInputValueInZone } from "../../lib/helpers.jsx";
-import { isRatePending } from "../../lib/moneyManagerData.js";
+import { isRatePending } from "../../lib/evenCapitalData.js";
 
 const DAY_AMOUNTS_FONT = "12.5px system-ui, sans-serif";
 const DAY_LABEL = (d) => d.toLocaleDateString("es-ES", { weekday: "short" }).replace(".", "");
@@ -29,7 +29,7 @@ export function TransactionDayGroups({ transactions, settings, accounts, categor
   const categoryIcon = (id) => categories.find((c) => c.id === id)?.icon;
   const categoryDeleted = (id) => !!categories.find((c) => c.id === id)?.deleted;
 
-  // Nombre/ícono del grupo de Split Ledger — se toma de la cuenta pseudo del
+  // Nombre/ícono del grupo de EvenGroup — se toma de la cuenta pseudo del
   // vínculo (su nombre/ícono quedan fijos desde que se vinculó, protegidos
   // contra edición en Cuentas), no de `memo` (ese queda libre, el usuario lo
   // puede cambiar sin que la marca visual se rompa).

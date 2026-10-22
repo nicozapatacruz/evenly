@@ -7,7 +7,7 @@ import { offlineSupabase as supabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, Footer, ConfirmInline, IconInput, PickerField, Field, Modal, CalculatorAmountInput, CurrencyConversionField, SegmentedControl } from "../../components/Shared.jsx";
 import { parseAmountInput, todayInputValue, dateInputValue, dateInputValueInZone, money, fmtDate, useScrollToTopOnChange, normalizeForSearch } from "../../lib/helpers.jsx";
-import { RECURRING_FREQUENCIES, nextOccurrence, computeAmountMain, useRecentNoteTitles } from "../../lib/moneyManagerData.js";
+import { RECURRING_FREQUENCIES, nextOccurrence, computeAmountMain, useRecentNoteTitles } from "../../lib/evenCapitalData.js";
 
 const TYPE_INFO = {
   income: { label: "Ingreso", newLabel: "Nuevo ingreso", color: "#3B6E62" },
@@ -35,7 +35,7 @@ function recurringToFreqState(r) {
 export default function TransactionForm({
   session, settings, groups, accounts, categories, onCancel, onSave, onSaveRecurring, onDelete, onDeleteRecurring, onBookmark, reloadCategories, showError, showInfo,
   forceRecurringOpen = false, hideRemoveRecurring = false, editingTransaction = null, editingRecurring = null, defaultDate = null, defaultAccountId = null,
-  prefillBookmark = null, slLinks = null, onOpenSplitLedgerExpense = null, isOnline = true,
+  prefillBookmark = null, slLinks = null, onOpenEvenGroupExpense = null, isOnline = true,
 }) {
   const [managingCategoryType, setManagingCategoryType] = useState(null); // "income" | "expense" | null
   useScrollToTopOnChange(managingCategoryType);
@@ -49,13 +49,13 @@ export default function TransactionForm({
   const [isCopyMode, setIsCopyMode] = useState(false);
   const effectiveEditing = isCopyMode ? null : editingTransaction;
 
-  // Viene de Split Ledger — la reconciliación controla para siempre monto,
+  // Viene de EvenGroup — la reconciliación controla para siempre monto,
   // cuenta, fecha y tipo (se recalculan solos la próxima vez que corra); acá
   // quedan bloqueados para no pelear contra eso. Categoría y nota quedan
   // libres — esos nunca los toca la reconciliación. En modo copia deja de
   // aplicar: la copia es una transacción independiente, no sincronizada.
   const isSynced = !isCopyMode && !!editingTransaction?.sl_link_id;
-  // De dónde volver en Split Ledger — `sl_link_id` es el vínculo, no el
+  // De dónde volver en EvenGroup — `sl_link_id` es el vínculo, no el
   // grupo directamente.
   const splitGroupId = isSynced ? slLinks?.find((l) => l.id === editingTransaction.sl_link_id)?.group_id : null;
 
@@ -355,14 +355,14 @@ export default function TransactionForm({
         onBack={onCancel}
         right={(effectiveEditing || editingRecurring) && (
           <div style={{ display: "flex", gap: 4 }}>
-            {isSynced && splitGroupId && onOpenSplitLedgerExpense && (
+            {isSynced && splitGroupId && onOpenEvenGroupExpense && (
               // Ya no hace falta bloquear esto offline: lleva al detalle
               // (solo lectura) del gasto/pago, no directo a editarlo — ese
               // detalle ya sabe mostrarse con el último estado en caché, y
               // "Editar" desde ahí tiene su propio guard offline.
               <button
                 style={{ ...styles.btnToday, display: "flex", alignItems: "center", gap: 4 }}
-                onClick={() => onOpenSplitLedgerExpense(splitGroupId, editingTransaction.sl_source_kind, editingTransaction.sl_source_id)}
+                onClick={() => onOpenEvenGroupExpense(splitGroupId, editingTransaction.sl_source_kind, editingTransaction.sl_source_id)}
               >
                 <Divide size={13} color="#A8754A" />
                 Original
@@ -423,15 +423,15 @@ export default function TransactionForm({
           arranque, dando la sensación de "pantalla nueva" aunque sea el
           mismo formulario. Sin className al abrir normalmente (isCopyMode
           empieza en false) — la animación es solo para esa transición. */}
-      {/* animationDuration inline (no tocar .mm-slide-next en sí) — esa clase
+      {/* animationDuration inline (no tocar .ec-slide-next en sí) — esa clase
           es compartida con el cambio de mes, y acá se quiere un poco más
           lenta que ahí sin afectarlo. */}
-      <div key={isCopyMode ? "copy" : "orig"} className={isCopyMode ? "mm-slide-next" : undefined} style={{ ...styles.form, animationDuration: isCopyMode ? "0.32s" : undefined }}>
+      <div key={isCopyMode ? "copy" : "orig"} className={isCopyMode ? "ec-slide-next" : undefined} style={{ ...styles.form, animationDuration: isCopyMode ? "0.32s" : undefined }}>
         {isSynced && (
           <p style={{ ...styles.muted, padding: 0 }}>
             {needsRate
-              ? "Viene de Split Ledger, en una moneda distinta a tu principal. El monto, la cuenta, la fecha y el tipo se actualizan solos. Ingresá la tasa de cambio para que se calcule bien en tus totales."
-              : "Viene de Split Ledger. El monto, la cuenta, la fecha y el tipo se actualizan solos. Podés cambiarle la categoría o la nota."}
+              ? "Viene de EvenGroup, en una moneda distinta a tu principal. El monto, la cuenta, la fecha y el tipo se actualizan solos. Ingresá la tasa de cambio para que se calcule bien en tus totales."
+              : "Viene de EvenGroup. El monto, la cuenta, la fecha y el tipo se actualizan solos. Podés cambiarle la categoría o la nota."}
           </p>
         )}
         <SegmentedControl
@@ -457,7 +457,7 @@ export default function TransactionForm({
             {needsRate ? (
               // A diferencia del resto del formulario cuando isSynced, la
               // tasa/el monto convertido sí quedan editables acá: es el único
-              // dato que la reconciliación de Split Ledger NO puede completar
+              // dato que la reconciliación de EvenGroup NO puede completar
               // sola (no hay nadie mirando un formulario en ese momento), así
               // que queda "pendiente" hasta que lo cargues. El importe en sí
               // sigue bloqueado cuando isSynced, igual que el resto del form.
@@ -525,7 +525,7 @@ export default function TransactionForm({
             placeholder="Elegí una cuenta"
             disabled={isSynced}
             groups={groups
-              // El grupo "Split Ledger" (auto-creado al vincular un grupo
+              // El grupo "EvenGroup" (auto-creado al vincular un grupo
               // compartido) no se elige a mano acá — lo maneja solo la
               // sincronización. Si esta transacción YA es una sincronizada,
               // se deja ver igual (si no, el picker no encuentra el value

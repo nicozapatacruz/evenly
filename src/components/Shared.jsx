@@ -1,17 +1,17 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, Ban, Camera, Check, ChevronLeft, ChevronRight, Eye, EyeOff, Info, Trash2, User, X } from "lucide-react";
 import { styles } from "../lib/styles.js";
-import { ICON_OPTIONS } from "../lib/moneyManagerData.js";
+import { ICON_OPTIONS } from "../lib/evenCapitalData.js";
 import { money, parseAmountInput } from "../lib/helpers.jsx";
 
 const MONTH_LABEL = (d) => d.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
 
-// Logo de Split Ledger (el nudo de cintas entrelazadas) — se usa como
-// marca/badge para señalar "esto está vinculado a Money Manager" (lista de
+// Logo de EvenGroup (el nudo de cintas entrelazadas) — se usa como
+// marca/badge para señalar "esto está vinculado a EvenCapital" (lista de
 // grupos, selector de grupo al cargar un gasto). Colores propios del logo,
 // no currentColor — es una marca, no un ícono que deba heredar el color del
 // texto que lo rodea.
-export function SplitLedgerIcon({ size = 18, color = "#ba5331", style }) {
+export function EvenGroupIcon({ size = 18, color = "#ba5331", style }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2048 2048" width={size} height={size} style={style}>
       <path d="M 1298 1156 L 1280 1136 L 1242 1105 L 1144 1043 L 1112 1069 L 1076 1105 L 1051 1135 L 1016 1185 L 963 1279 L 943 1308 L 915 1339 L 890 1359 L 859 1374 L 835 1379 L 805 1379 L 776 1372 L 747 1358 L 730 1345 L 707 1320 L 699 1308 L 687 1281 L 682 1262 L 679 1236 L 682 1201 L 695 1161 L 624 1101 L 571 1048 L 556 1071 L 547 1089 L 530 1138 L 522 1188 L 522 1229 L 524 1250 L 530 1285 L 536 1307 L 548 1340 L 562 1369 L 581 1400 L 601 1427 L 624 1453 L 648 1475 L 666 1489 L 704 1513 L 736 1528 L 756 1535 L 788 1543 L 810 1546 L 840 1547 L 866 1545 L 901 1538 L 946 1521 L 981 1501 L 1023 1468 L 1053 1437 L 1075 1410 L 1141 1317 L 1198 1246 L 1243 1201 Z" fill={color} fillRule="evenodd" />
@@ -92,12 +92,12 @@ export function InfoTooltip({ text, blocked }) {
   // Si se abre OTRO tooltip, este se cierra solo — mismo mecanismo que
   // PickerField (nunca hay dos abiertos a la vez).
   useEffect(() => {
-    if (open) window.dispatchEvent(new CustomEvent("mm-info-open", { detail: idRef.current }));
+    if (open) window.dispatchEvent(new CustomEvent("ec-info-open", { detail: idRef.current }));
   }, [open]);
   useEffect(() => {
     const onOtherOpen = (e) => { if (e.detail !== idRef.current) setOpen(false); };
-    window.addEventListener("mm-info-open", onOtherOpen);
-    return () => window.removeEventListener("mm-info-open", onOtherOpen);
+    window.addEventListener("ec-info-open", onOtherOpen);
+    return () => window.removeEventListener("ec-info-open", onOtherOpen);
   }, []);
 
   useEffect(() => {
@@ -277,11 +277,11 @@ export function useMonthSwipe(viewMonth, setViewMonth, unit = "month") {
 // y la clase decide de qué lado entra según hacia dónde se movió el mes.
 export function useMonthSlide(viewMonth) {
   const prevRef = useRef(viewMonth);
-  const [dir, setDir] = useState("mm-slide-next");
+  const [dir, setDir] = useState("ec-slide-next");
   useEffect(() => {
     const prev = prevRef.current;
     if (prev.getTime() !== viewMonth.getTime()) {
-      setDir(viewMonth.getTime() > prev.getTime() ? "mm-slide-next" : "mm-slide-prev");
+      setDir(viewMonth.getTime() > prev.getTime() ? "ec-slide-next" : "ec-slide-prev");
       prevRef.current = viewMonth;
     }
   }, [viewMonth]);
@@ -342,7 +342,7 @@ export function PendingRateBanner({ count, onOpen }) {
   );
 }
 
-// Aviso de "Pendiente TC" (ver applyPendienteTcAutoSum en splitLedgerSync.js,
+// Aviso de "Pendiente TC" (ver applyPendienteTcAutoSum en evenGroupSync.js,
 // solo le sale a quien tiene esa automatización custom): un gasto de Split
 // Ledger que ya había sumado algo ahí se borró después, y esa suma nunca se
 // revierte sola (podría ya estar mezclada con otro mes). Un solo tap marca
@@ -368,7 +368,7 @@ export function TodayButton({ viewMonth, setViewMonth }) {
   );
 }
 
-// Selector de ícono (categorías y cuentas de Money Manager) — botón compacto
+// Selector de ícono (categorías y cuentas de EvenCapital) — botón compacto
 // que abre una grilla con la misma lista curada de emojis, agrupada por
 // tema. Antes fue un input de texto libre (no confiable: no abre el teclado
 // de emoji solo en mobile, sin atajo simple en desktop) y después un
@@ -529,7 +529,7 @@ export function SegmentedControl({ options, value, onChange, disabled = false, s
 // input de arriba (10 por defecto, el más común) — el caller es responsable
 // de achatar las esquinas de ABAJO de esa fila mientras el confirm está
 // abierto, y de que el contenedor de los dos no tenga gap, para que quede
-// pegado como una sola tarjeta (ver "Quitar persona" en SplitLedgerTab.jsx).
+// pegado como una sola tarjeta (ver "Quitar persona" en EvenGroupTab.jsx).
 export function ConfirmInline({ title, message, confirmLabel = "Confirmar", onCancel, onConfirm, style, danger = true, confirmDisabled = false, radius = 10 }) {
   return (
     <div style={{ ...styles.confirmBox, borderRadius: `0 0 ${radius}px ${radius}px`, ...style }}>
@@ -573,7 +573,7 @@ export function Footer({ children }) {
   return <div style={styles.footer}>{children}</div>;
 }
 
-// Selector en grilla (categoría/cuenta en Money Manager) — en vez de abrir el
+// Selector en grilla (categoría/cuenta en EvenCapital) — en vez de abrir el
 // picker nativo del navegador, toca el campo y despliega una grilla de
 // ícono+nombre justo debajo, como en la app original. `groups` es
 // [{ label, items: [{ value, label, icon }] }] — pasar `label: null` para
@@ -610,12 +610,12 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", o
   // la vez (se avisan entre ellos con un evento propio, en vez de levantar
   // el estado al padre, que tendría que coordinar N pickers distintos).
   useEffect(() => {
-    if (open) window.dispatchEvent(new CustomEvent("mm-picker-open", { detail: idRef.current }));
+    if (open) window.dispatchEvent(new CustomEvent("ec-picker-open", { detail: idRef.current }));
   }, [open]);
   useEffect(() => {
     const onOtherOpen = (e) => { if (e.detail !== idRef.current) setOpen(false); };
-    window.addEventListener("mm-picker-open", onOtherOpen);
-    return () => window.removeEventListener("mm-picker-open", onOtherOpen);
+    window.addEventListener("ec-picker-open", onOtherOpen);
+    return () => window.removeEventListener("ec-picker-open", onOtherOpen);
   }, []);
 
   // Click afuera de este picker (mientras está abierto) lo cierra. A
@@ -741,7 +741,7 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", o
 // de una sola fila: [{ icon, label, onClick, badge }]. `currencies` (si
 // hay más de una) agrega una sección "Moneda" al final con un check en la
 // elegida — si `items` viene vacío, el popover es solo esa sección.
-// Mismo mecanismo de click-afuera-cierra + evento global "mm-picker-open"
+// Mismo mecanismo de click-afuera-cierra + evento global "ec-picker-open"
 // que ya usa PickerField (un solo popover abierto a la vez en toda la app).
 // Mismo patrón repetido en cargando/sin resultados/nada registrado en toda
 // la app: ícono opcional, título siempre, subtítulo opcional. El subtítulo
@@ -881,12 +881,12 @@ export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, 
   }, [tokens]);
 
   useEffect(() => {
-    if (open) window.dispatchEvent(new CustomEvent("mm-picker-open", { detail: idRef.current }));
+    if (open) window.dispatchEvent(new CustomEvent("ec-picker-open", { detail: idRef.current }));
   }, [open]);
   useEffect(() => {
     const onOtherOpen = (e) => { if (e.detail !== idRef.current) setOpen(false); };
-    window.addEventListener("mm-picker-open", onOtherOpen);
-    return () => window.removeEventListener("mm-picker-open", onOtherOpen);
+    window.addEventListener("ec-picker-open", onOtherOpen);
+    return () => window.removeEventListener("ec-picker-open", onOtherOpen);
   }, []);
   useEffect(() => {
     if (!open) return;
@@ -958,7 +958,7 @@ export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, 
   return (
     // stopPropagation acá (no en cada botón del teclado): si este input
     // vive adentro de otro elemento clickeable (ej. la fila de "Varias
-    // personas" en Split Ledger, que es un <button> entero), ningún toque
+    // personas" en EvenGroup, que es un <button> entero), ningún toque
     // acá adentro debería llegarle a ese padre.
     <div ref={containerRef} onClick={(e) => e.stopPropagation()}>
       <div style={{ position: "relative" }}>
@@ -1065,12 +1065,12 @@ export function CurrencyConversionField({ amount, onChangeAmount, currency, acco
   useKeypadScrollIntoView(open, boxRef, sheetRef);
 
   useEffect(() => {
-    if (open) window.dispatchEvent(new CustomEvent("mm-picker-open", { detail: idRef.current }));
+    if (open) window.dispatchEvent(new CustomEvent("ec-picker-open", { detail: idRef.current }));
   }, [open]);
   useEffect(() => {
     const onOtherOpen = (e) => { if (e.detail !== idRef.current) setOpen(false); };
-    window.addEventListener("mm-picker-open", onOtherOpen);
-    return () => window.removeEventListener("mm-picker-open", onOtherOpen);
+    window.addEventListener("ec-picker-open", onOtherOpen);
+    return () => window.removeEventListener("ec-picker-open", onOtherOpen);
   }, []);
   useEffect(() => {
     if (!open) return;
@@ -1305,12 +1305,12 @@ export function HeaderMenu({ trigger, items = [], currencies = [], currency, onC
   const containerRef = useRef(null);
 
   useEffect(() => {
-    if (open) window.dispatchEvent(new CustomEvent("mm-picker-open", { detail: idRef.current }));
+    if (open) window.dispatchEvent(new CustomEvent("ec-picker-open", { detail: idRef.current }));
   }, [open]);
   useEffect(() => {
     const onOtherOpen = (e) => { if (e.detail !== idRef.current) setOpen(false); };
-    window.addEventListener("mm-picker-open", onOtherOpen);
-    return () => window.removeEventListener("mm-picker-open", onOtherOpen);
+    window.addEventListener("ec-picker-open", onOtherOpen);
+    return () => window.removeEventListener("ec-picker-open", onOtherOpen);
   }, []);
   useEffect(() => {
     if (!open) return;
@@ -1371,12 +1371,12 @@ export function MultiPickerField({ value, onChange, groups, placeholder = "Elegi
   const selectedItems = groups.flatMap((g) => g.items).filter((it) => value.includes(it.value));
 
   useEffect(() => {
-    if (open) window.dispatchEvent(new CustomEvent("mm-picker-open", { detail: `multi-${idRef.current}` }));
+    if (open) window.dispatchEvent(new CustomEvent("ec-picker-open", { detail: `multi-${idRef.current}` }));
   }, [open]);
   useEffect(() => {
     const onOtherOpen = (e) => { if (e.detail !== `multi-${idRef.current}`) setOpen(false); };
-    window.addEventListener("mm-picker-open", onOtherOpen);
-    return () => window.removeEventListener("mm-picker-open", onOtherOpen);
+    window.addEventListener("ec-picker-open", onOtherOpen);
+    return () => window.removeEventListener("ec-picker-open", onOtherOpen);
   }, []);
 
   useEffect(() => {

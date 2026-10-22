@@ -3,7 +3,7 @@ import { Search as SearchIcon, SlidersHorizontal, Trash2, Divide, AlertCircle } 
 import { styles } from "../../lib/styles.js";
 import { TopBar, HeaderMenu, EmptyState } from "../../components/Shared.jsx";
 import { money, dateInputValueInZone, measureTextWidth, useScrollToTopOnChange, normalizeForSearch } from "../../lib/helpers.jsx";
-import { useRecentNoteTitles, searchTransactions, isRatePending, currenciesInUse } from "../../lib/moneyManagerData.js";
+import { useRecentNoteTitles, searchTransactions, isRatePending, currenciesInUse } from "../../lib/evenCapitalData.js";
 import { EMPTY_FILTERS, hasActiveFilters } from "../../lib/filterHelpers.js";
 import { FiltersPanel } from "./FiltersPanel.jsx";
 
@@ -156,7 +156,7 @@ function SearchResults({ results, settings, accounts, categories, slLinks, onEdi
    fecha, cuenta, categoría e importe. Busca sobre todo el historial (no un
    mes como el resto de las pantallas), así que los filtros se aplican del
    lado del servidor (`searchTransactions`) en vez de traer toda la tabla.
-   query/filters viven en el padre (SplitLedger.jsx) para sobrevivir el viaje
+   query/filters viven en el padre (EvenlyApp.jsx) para sobrevivir el viaje
    de ida y vuelta a "editar transacción" — al volver, se re-corre la
    búsqueda sola (ver el useEffect de abajo), así el resultado queda al día
    con lo que acabás de cambiar.

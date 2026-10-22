@@ -9,9 +9,9 @@ import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCen
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { styles } from "../../lib/styles.js";
-import { TopBar, RootHeader, ConfirmInline, Modal, Footer, PhotoPicker, ImageWithFallback, Field, ToggleField, PickerField, SplitLedgerIcon, EmptyState, CalculatorAmountInput, SegmentedControl } from "../../components/Shared.jsx";
-import { linkGroupToAccount, updateLinkDefaults, unlinkGroup } from "../../lib/splitLedgerLink.js";
-import { useRecentNoteTitles } from "../../lib/moneyManagerData.js";
+import { TopBar, RootHeader, ConfirmInline, Modal, Footer, PhotoPicker, ImageWithFallback, Field, ToggleField, PickerField, EvenGroupIcon, EmptyState, CalculatorAmountInput, SegmentedControl } from "../../components/Shared.jsx";
+import { linkGroupToAccount, updateLinkDefaults, unlinkGroup } from "../../lib/evenGroupLink.js";
+import { useRecentNoteTitles } from "../../lib/evenCapitalData.js";
 import {
   uid, CURRENCIES, CURRENCY_LIST, money, parseAmountInput, ICON_KEYS, IconComp,
   DEFAULT_CATEGORIES, groupCategories, catInfo, colorFor, initials, shortName, nameOf,
@@ -21,22 +21,22 @@ import {
 } from "../../lib/helpers.jsx";
 
 /* =========================================================================
-   TAB DE SPLIT LEDGER — recibe del shell raíz: la sesión, los grupos
+   TAB DE EVENGROUP — recibe del shell raíz: la sesión, los grupos
    (useGroups vive arriba porque Configuración también los necesita), el
    estado de navegación interna (view/setView, también levantado para que
    Configuración pueda abrir "crear grupo" o "ver invitación" empujando
    este mismo estado) y los toasts (compartidos con Configuración).
    ========================================================================= */
 
-export default function SplitLedgerTab({
+export default function EvenGroupTab({
   session, groups, loading, reloadGroup, deleteGroup,
   view, setView, showError, showSuccess, showInfo,
-  moneyManager, onBackOverride, isOnline = true,
+  evenCapital, onBackOverride, isOnline = true,
 }) {
   const [groupInvites, setGroupInvites] = useState([]); // invitaciones pendientes del grupo que estoy editando
 
-  // Split Ledger es online-only (varios miembros escriben el mismo grupo,
-  // a diferencia de Money Manager) — offline se puede VER el último estado
+  // EvenGroup es online-only (varios miembros escriben el mismo grupo,
+  // a diferencia de EvenCapital) — offline se puede VER el último estado
   // cacheado, pero cualquier escritura se bloquea acá, en el único lugar
   // donde este archivo de verdad habla con la base (ver comentario arriba
   // del export default).
@@ -73,7 +73,7 @@ export default function SplitLedgerTab({
           groups={groups}
           loading={loading}
           session={session}
-          moneyManager={moneyManager}
+          evenCapital={evenCapital}
           onOpen={(id) => { setView({ screen: "group", groupId: id }); reloadGroup(id); }}
           onNewExpense={() => setView({ screen: "newExpense" })}
           isOnline={isOnline}
@@ -133,7 +133,7 @@ export default function SplitLedgerTab({
               const { error } = await supabase.from("expenses").update({ deleted: true }).eq("id", expenseId);
               if (error) throw error;
               await reloadGroup(activeGroup.id);
-              await moneyManager?.reload();
+              await evenCapital?.reload();
               showInfo("Gasto eliminado.");
             } catch (e) { showError(`No se pudo borrar el gasto: ${e?.message || e}`); }
           }}
@@ -169,7 +169,7 @@ export default function SplitLedgerTab({
           defaultGroupId={session.defaultGroupId}
           expenseId={view.expenseId}
           session={session}
-          moneyManager={moneyManager}
+          evenCapital={evenCapital}
           onCancel={onBackOverride || (() => setView(
             view.groupId
               ? (view.expenseId
@@ -205,11 +205,11 @@ export default function SplitLedgerTab({
                 savedId = data.id;
               }
               await reloadGroup(groupId);
-              await moneyManager?.reload();
+              await evenCapital?.reload();
               // Si llegamos acá por "Ver original" desde una transacción
               // sincronizada (onBackOverride todavía activo porque no nos
               // movimos de pantalla), guardar nos manda derecho de vuelta a
-              // Money Manager — no tiene sentido pasar por el detalle del
+              // EvenCapital — no tiene sentido pasar por el detalle del
               // gasto en el medio cuando el usuario ya terminó lo que vino a
               // hacer acá.
               if (onBackOverride) {
@@ -228,13 +228,13 @@ export default function SplitLedgerTab({
             if (!isOnline) { blockOffline(); return; }
             try {
               // Soft-delete, no DELETE real: un gasto ya sincronizado hacia
-              // Money Manager (de cualquier miembro vinculado) guarda este id
+              // EvenCapital (de cualquier miembro vinculado) guarda este id
               // en sl_source_id -- borrarlo de verdad rompe "Ver original"
               // para siempre, sin ningún error visible.
               const { error } = await supabase.from("expenses").update({ deleted: true }).eq("id", expenseId);
               if (error) throw error;
               await reloadGroup(activeGroup.id);
-              await moneyManager?.reload();
+              await evenCapital?.reload();
               setView({ screen: "group", groupId: activeGroup.id });
               showInfo("Gasto eliminado.");
             } catch (e) { showError(`No se pudo borrar el gasto: ${e?.message || e}`); }
@@ -248,7 +248,7 @@ export default function SplitLedgerTab({
           paymentId={view.paymentId}
           prefill={view.prefill}
           session={session}
-          moneyManager={moneyManager}
+          evenCapital={evenCapital}
           onCancel={onBackOverride || (() => setView(
             view.paymentId
               ? { screen: "paymentDetail", groupId: activeGroup.id, paymentId: view.paymentId }
@@ -276,9 +276,9 @@ export default function SplitLedgerTab({
                 savedId = data.id;
               }
               await reloadGroup(activeGroup.id);
-              await moneyManager?.reload();
+              await evenCapital?.reload();
               // Mismo criterio que al guardar un gasto: si vinimos por "Ver
-              // original", volver manda derecho a Money Manager en vez de
+              // original", volver manda derecho a EvenCapital en vez de
               // pasar por el detalle del pago.
               if (onBackOverride) {
                 onBackOverride();
@@ -296,11 +296,11 @@ export default function SplitLedgerTab({
             if (!isOnline) { blockOffline(); return; }
             try {
               // Mismo motivo que el soft-delete de gastos: no romper "Ver
-              // original" para un pago ya sincronizado hacia Money Manager.
+              // original" para un pago ya sincronizado hacia EvenCapital.
               const { error } = await supabase.from("payments").update({ deleted: true }).eq("id", paymentId);
               if (error) throw error;
               await reloadGroup(activeGroup.id);
-              await moneyManager?.reload();
+              await evenCapital?.reload();
               setView({ screen: "group", groupId: activeGroup.id });
               showInfo("Pago eliminado.");
             } catch (e) { showError(`No se pudo borrar el pago: ${e?.message || e}`); }
@@ -313,7 +313,7 @@ export default function SplitLedgerTab({
           key={`${JSON.stringify(groupInvites)}-${activeGroup.members.length}`}
           group={activeGroup}
           session={session}
-          moneyManager={moneyManager}
+          evenCapital={evenCapital}
           isOnline={isOnline}
           onCancel={onBackOverride || (() => setView({ screen: "group", groupId: activeGroup.id }))}
           onSave={async ({ name, baseCurrency, photoUrl, membersToAdd, memberIdsToRemove, categoriesToAdd, categoriesToUpdate, categoryIdsToRemove }) => {
@@ -358,7 +358,7 @@ export default function SplitLedgerTab({
               }
               await reloadGroup(activeGroup.id);
               // Mismo criterio que al guardar un gasto/pago: si vinimos por
-              // un deep link (ej. desde la cuenta pseudo "Split Ledger" en
+              // un deep link (ej. desde la cuenta pseudo "EvenGroup" en
               // Cuentas), guardar manda derecho de vuelta ahí en vez de a la
               // pantalla de grupo.
               if (onBackOverride) {
@@ -466,7 +466,7 @@ function groupCardLines(g, session) {
   return lines.length > 0 ? lines : [{ key: "settled", node: "Saldado" }];
 }
 
-function Home({ groups, loading, session, moneyManager, onOpen, onNewExpense, isOnline = true, showError }) {
+function Home({ groups, loading, session, evenCapital, onOpen, onNewExpense, isOnline = true, showError }) {
   return (
     <div style={styles.screenWithFab}>
       <RootHeader title="Tus grupos" />
@@ -475,7 +475,7 @@ function Home({ groups, loading, session, moneyManager, onOpen, onNewExpense, is
 
       {!loading && groups && groups.length === 0 && (
         <EmptyState icon={<Receipt size={28} strokeWidth={1.5} />} title="Todavía no hay ningún grupo">
-          Crea tu primer grupo desde Configuración → Split Ledger (un viaje, un
+          Crea tu primer grupo desde Configuración → EvenGroup (un viaje, un
           piso, una junta) y empieza a anotar quién paga qué.
         </EmptyState>
       )}
@@ -483,7 +483,7 @@ function Home({ groups, loading, session, moneyManager, onOpen, onNewExpense, is
       {!loading && groups && groups.length > 0 && (
         <ul style={styles.groupList}>
           {groups.map((g) => {
-            const isLinked = moneyManager?.slLinks?.some((l) => l.active && l.group_id === g.id && l.user_id === session.userId);
+            const isLinked = evenCapital?.slLinks?.some((l) => l.active && l.group_id === g.id && l.user_id === session.userId);
             return (
               <li key={g.id}>
                 <button style={styles.groupCard} onClick={() => onOpen(g.id)}>
@@ -504,8 +504,8 @@ function Home({ groups, loading, session, moneyManager, onOpen, onNewExpense, is
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                     {isLinked && (
-                      <span style={{ display: "flex" }} title="Vinculado a Money Manager">
-                        <SplitLedgerIcon size={26} />
+                      <span style={{ display: "flex" }} title="Vinculado a EvenCapital">
+                        <EvenGroupIcon size={26} />
                       </span>
                     )}
                     <ChevronRight size={20} color="#A89A87" />
@@ -543,7 +543,7 @@ function Home({ groups, loading, session, moneyManager, onOpen, onNewExpense, is
 // con id/invitación/balance pendiente; sin categorías vs. reordenar con
 // drag-and-drop; sin borrar vs. modal de "escribí Confirmar") — se dejan
 // como secciones propias de cada modo, no forzadas a parecerse.
-function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, onSave, onDeleteGroup, onInvite, groupInvites = [], showError, isOnline = true }) {
+function GroupForm({ group = null, session, evenCapital, onCancel, onCreate, onSave, onDeleteGroup, onInvite, groupInvites = [], showError, isOnline = true }) {
   const isEditing = !!group;
   const [name, setName] = useState(group?.name || "");
   const [baseCurrency, setBaseCurrency] = useState(group?.baseCurrency || "EUR");
@@ -609,13 +609,13 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
   }, [name, baseCurrency, pendingFile, removed, members, categories, group]);
   const hasEmptyCategory = categories.some((c) => !c.label.trim());
 
-  // --- Vínculo con Money Manager: personal (no lo ven otros miembros), pero
+  // --- Vínculo con EvenCapital: personal (no lo ven otros miembros), pero
   // se guarda con el mismo botón "Guardar" de este formulario — no amerita
   // un botón propio aparte. Desvincular es la excepción: queda inmediato,
-  // con su propia confirmación, en SplitLedgerMoneyLink más abajo.
+  // con su propia confirmación, en EvenGroupCapitalLink más abajo.
   const myMemberId = group?.members.find((m) => m.linkedUserId === session.userId)?.id;
   const activeMmLink = isEditing && myMemberId
-    ? moneyManager?.slLinks?.find((l) => l.active && l.group_id === group.id && l.user_id === session.userId)
+    ? evenCapital?.slLinks?.find((l) => l.active && l.group_id === group.id && l.user_id === session.userId)
     : null;
   const [mmLinked, setMmLinked] = useState(!!activeMmLink);
   const [mmOwnAccountId, setMmOwnAccountId] = useState(activeMmLink?.default_own_account_id || "");
@@ -703,10 +703,10 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
             defaultOwnAccountId: mmOwnAccountId,
             defaultOtherAccountId: mmOtherAccountId,
             loanAccountId: mmLoanAccountId || null,
-            currency: moneyManager.settings.main_currency,
+            currency: evenCapital.settings.main_currency,
           });
         }
-        await moneyManager.reload();
+        await evenCapital.reload();
       }
 
       await onSave({
@@ -923,15 +923,15 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
           </>
         )}
 
-        {/* Vincular a Money Manager — personal, no grupal, pero se guarda
+        {/* Vincular a EvenCapital — personal, no grupal, pero se guarda
             con el mismo botón "Guardar" de arriba (el vínculo en sí no
             amerita su propio botón). Desvincular es la excepción, queda
             inmediato. */}
-        {isEditing && moneyManager && (
-          <SplitLedgerMoneyLink
+        {isEditing && evenCapital && (
+          <EvenGroupCapitalLink
             group={group}
             session={session}
-            moneyManager={moneyManager}
+            evenCapital={evenCapital}
             showError={showError}
             isOnline={isOnline}
             linked={mmLinked}
@@ -1019,14 +1019,14 @@ function GroupForm({ group = null, session, moneyManager, onCancel, onCreate, on
   );
 }
 
-// Sección "Mi Money Manager" dentro de Editar grupo — vincular este grupo a
+// Sección "Mi EvenCapital" dentro de Editar grupo — vincular este grupo a
 // 2 cuentas default (propios/ajenos). Controlado desde GroupForm: el toggle
 // y los 2 selectores son borrador suyo, se guardan con su mismo botón
 // "Guardar" (no amerita uno propio). Desvincular es la excepción — queda acá
 // adentro como acción inmediata con su propia confirmación, porque es más
 // parecida a borrar algo que a editar un campo del formulario.
-function SplitLedgerMoneyLink({
-  group, session, moneyManager, showError,
+function EvenGroupCapitalLink({
+  group, session, evenCapital, showError,
   linked, onToggle, ownAccountId, onOwnAccountChange, otherAccountId, onOtherAccountChange,
   loanAccountId, onLoanAccountChange,
   touched, touch, disabled, isOnline = true,
@@ -1035,17 +1035,17 @@ function SplitLedgerMoneyLink({
   const [confirmingUnlink, setConfirmingUnlink] = useState(false);
 
   const myMemberId = group.members.find((m) => m.linkedUserId === session.userId)?.id;
-  const activeLink = moneyManager.slLinks.find((l) => l.active && l.group_id === group.id && l.user_id === session.userId);
+  const activeLink = evenCapital.slLinks.find((l) => l.active && l.group_id === group.id && l.user_id === session.userId);
 
   // Cuentas elegibles: ninguna cuenta eliminada, ninguna del propio grupo
-  // "Split Ledger" (no tiene sentido vincular un grupo a su propia cuenta
+  // "EvenGroup" (no tiene sentido vincular un grupo a su propia cuenta
   // pseudo, ni a la de otro grupo vinculado). Tarjetas de crédito sí se
   // permiten — un gasto del grupo puede perfectamente haberse pagado con una.
-  const accountGroups = moneyManager.groups
+  const accountGroups = evenCapital.groups
     .filter((g) => !g.deleted && g.system_key !== "split_ledger")
     .map((g) => ({
       label: g.name,
-      items: moneyManager.accounts
+      items: evenCapital.accounts
         .filter((a) => a.group_id === g.id && !a.hidden && !a.deleted)
         .map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
     }))
@@ -1061,7 +1061,7 @@ function SplitLedgerMoneyLink({
     setUnlinking(true);
     try {
       await unlinkGroup(activeLink.id);
-      await moneyManager.reload();
+      await evenCapital.reload();
     } catch (e) {
       showError(`No se pudo desvincular: ${e?.message || e}`);
     } finally {
@@ -1074,7 +1074,7 @@ function SplitLedgerMoneyLink({
 
   // Aviso de saldo previo: la sincronización solo mira gastos/pagos desde
   // que se vincula ("nada retroactivo") — si ya había un saldo pendiente
-  // antes, ese nunca se va a reflejar en Money Manager. Solo tiene sentido
+  // antes, ese nunca se va a reflejar en EvenCapital. Solo tiene sentido
   // mostrarlo al crear un vínculo nuevo, no en uno ya activo.
   const pendingBalances = !activeLink
     ? Object.entries(computeBalances(group))
@@ -1085,7 +1085,7 @@ function SplitLedgerMoneyLink({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       <ToggleField
-        label="Vincular grupo a Money Manager"
+        label="Vincular grupo a EvenCapital"
         description="Tus gastos del grupo se reflejan en tus cuentas."
         checked={linked}
         disabled={disabled || unlinking}
@@ -1093,12 +1093,12 @@ function SplitLedgerMoneyLink({
       />
       {linked && pendingBalances.length > 0 && (
         <p style={{ ...styles.muted, padding: 0, color: "#B0473A" }}>
-          Ya tenías un saldo pendiente en este grupo ({pendingBalances.map(([currency, amt]) => money(amt, currency)).join(", ")}). No se va a reflejar en Money Manager, solo lo que pase de acá en adelante.
+          Ya tenías un saldo pendiente en este grupo ({pendingBalances.map(([currency, amt]) => money(amt, currency)).join(", ")}). No se va a reflejar en EvenCapital, solo lo que pase de acá en adelante.
         </p>
       )}
       {confirmingUnlink && (
         <ConfirmInline
-          message="¿Desvincular este grupo de tu Money Manager? Las transacciones ya sincronizadas no se borran, pero vas a dejar de ver las nuevas."
+          message="¿Desvincular este grupo de tu EvenCapital? Las transacciones ya sincronizadas no se borran, pero vas a dejar de ver las nuevas."
           confirmLabel={unlinking ? "Desvinculando…" : "Desvincular"}
           confirmDisabled={unlinking}
           onCancel={() => setConfirmingUnlink(false)}
@@ -1695,7 +1695,7 @@ function ExpenseDetail({ group, expenseId, onBack, onEdit, isOnline = true, show
 // El wrapper `NewExpense` (al final del archivo) decide si ese grupo viene
 // dado (abierto desde dentro de un grupo) o hay que elegirlo primero (abierto
 // desde el FAB del listado principal, sin grupo en contexto).
-function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onDelete, session, moneyManager }) {
+function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onDelete, session, evenCapital }) {
   const { baseCurrency } = group;
   const existing = expenseId ? group.expenses.find((e) => e.id === expenseId) : null;
   // Alguien ya quitado del grupo no se ofrece como pagador/participante nuevo,
@@ -1709,10 +1709,10 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
   const myMemberId = group.members.find((m) => m.linkedUserId === session?.userId)?.id;
 
   const [description, setDescription] = useState(existing?.description || "");
-  // Autocompletado de Descripción con lo que ya tenés en Money Manager (no
-  // con otros gastos de Split Ledger -- se pensó y se descartó a propósito)
+  // Autocompletado de Descripción con lo que ya tenés en EvenCapital (no
+  // con otros gastos de EvenGroup -- se pensó y se descartó a propósito)
   // cuando el grupo está vinculado, igual que ya hace el campo "Descripción"
-  // de un gasto de Money Manager (mismo hook, mismo criterio de "activado
+  // de un gasto de EvenCapital (mismo hook, mismo criterio de "activado
   // en Config"). Mismas 2 banderas que allá: "Focused" sigue el foco real,
   // "Dismissed" se prende solo al elegir una sugerencia.
   const [descriptionFocused, setDescriptionFocused] = useState(false);
@@ -1764,9 +1764,9 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
   const [showFullPhoto, setShowFullPhoto] = useState(false);
   const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
 
-  // Mi Money Manager — solo si YO tengo este grupo vinculado. (myMemberId ya
+  // Mi EvenCapital — solo si YO tengo este grupo vinculado. (myMemberId ya
   // se calculó arriba, lo necesitaba el default de "¿quién pagó?")
-  const activeLink = moneyManager?.slLinks?.find((l) => l.active && l.group_id === group.id && l.user_id === session?.userId);
+  const activeLink = evenCapital?.slLinks?.find((l) => l.active && l.group_id === group.id && l.user_id === session?.userId);
   const [mmAccountId, setMmAccountId] = useState("");
   const [mmCategoryId, setMmCategoryId] = useState("");
   const [mmLoanAccountId, setMmLoanAccountId] = useState("");
@@ -1854,7 +1854,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
   const iParticipate = participants.has(myMemberId);
   const mmInvolved = !!(activeLink && myMemberId && (iPay || iParticipate));
   const showMmCategory = !!(activeLink && myMemberId && iParticipate);
-  const descriptionSuggestions = activeLink && moneyManager.settings.autocomplete_notes && description.trim()
+  const descriptionSuggestions = activeLink && evenCapital.settings.autocomplete_notes && description.trim()
     ? recentNoteTitles.filter((t) => normalizeForSearch(t).includes(normalizeForSearch(description.trim())) && normalizeForSearch(t) !== normalizeForSearch(description.trim())).slice(0, 5)
     : [];
 
@@ -1932,7 +1932,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
         imageUrl: resolvedImageUrl,
       });
       // Se fija la cuenta/categoría elegidas para ESTE gasto puntual — la
-      // reconciliación nunca las vuelve a recalcular sola (ver splitLedgerSync.js).
+      // reconciliación nunca las vuelve a recalcular sola (ver evenGroupSync.js).
       // Upsert con overwrite (no ignoreDuplicates): tu elección de ahora
       // siempre gana, nunca importa si la reconciliación ya había sembrado
       // un default antes de que llegaras acá.
@@ -1945,16 +1945,16 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
         // Custom para Nico/Paulina (ver sync_split_category_to_other_members
         // en la base, y customUserConfig.js): tu "Categoría personal" se le
         // sugiere al otro miembro vinculado del grupo, buscando el nombre
-        // equivalente en SU propio Money Manager -- no pisa una categoría
+        // equivalente en SU propio EvenCapital -- no pisa una categoría
         // que el otro ya tenga elegida, solo la rellena si está vacía.
-        const categoryName = moneyManager.categories.find((c) => c.id === mmCategoryId)?.name;
+        const categoryName = evenCapital.categories.find((c) => c.id === mmCategoryId)?.name;
         if (categoryName) {
           const { error: syncError } = await supabase.rpc("sync_split_category_to_other_members", {
             p_link_id: activeLink.id, p_source_kind: "expense", p_source_id: finalId, p_category_name: categoryName,
           });
           if (syncError) console.error("No se pudo sincronizar la categoría con el otro miembro", syncError);
         }
-        await moneyManager.reload();
+        await evenCapital.reload();
       }
     } catch (e) {
       setErr(`No se pudo guardar: ${e?.message || e}`);
@@ -2030,11 +2030,11 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
                 onChange={setMmAccountId}
                 onBlur={() => touch("mmAccountId")}
                 placeholder="Elegí una cuenta"
-                groups={moneyManager.groups
+                groups={evenCapital.groups
                   .filter((g) => !g.deleted && g.system_key !== "split_ledger")
                   .map((g) => ({
                     label: g.name,
-                    items: moneyManager.accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
+                    items: evenCapital.accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
                   }))
                   .filter((g) => g.items.length > 0)}
               />
@@ -2044,8 +2044,8 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
                   está abierto — con "50%" el ícono terminaba centrado en
                   medio de la grilla abierta en vez de quedarse pegado al
                   campo cerrado. */}
-              <span style={{ position: "absolute", right: 12, top: 22, transform: "translateY(-50%)", display: "flex", pointerEvents: "none" }} title="Viene de/va a Money Manager">
-                <SplitLedgerIcon size={26} />
+              <span style={{ position: "absolute", right: 12, top: 22, transform: "translateY(-50%)", display: "flex", pointerEvents: "none" }} title="Viene de/va a EvenCapital">
+                <EvenGroupIcon size={26} />
               </span>
             </div>
           </Field>
@@ -2058,11 +2058,11 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
               onChange={setMmLoanAccountId}
               onClear={() => setMmLoanAccountId("")}
               placeholder="Misma que 'Cuenta'"
-              groups={moneyManager.groups
+              groups={evenCapital.groups
                 .filter((g) => !g.deleted && g.system_key !== "split_ledger")
                 .map((g) => ({
                   label: g.name,
-                  items: moneyManager.accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
+                  items: evenCapital.accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
                 }))
                 .filter((g) => g.items.length > 0)}
             />
@@ -2079,7 +2079,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
                 placeholder="Sin categoría"
                 groups={[{
                   label: null,
-                  items: moneyManager.categories.filter((c) => c.type === "expense" && !c.deleted).map((c) => ({ value: c.id, label: c.name, icon: c.icon })),
+                  items: evenCapital.categories.filter((c) => c.type === "expense" && !c.deleted).map((c) => ({ value: c.id, label: c.name, icon: c.icon })),
                 }]}
               />
               {/* right:40 (no 12, como Cuenta) SOLO cuando hay una categoría
@@ -2087,8 +2087,8 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
                   en right:6 y se superponía con este ícono. Sin selección no
                   hay "X", así que usa el mismo offset que el resto para
                   quedar alineado con Cuenta/Grupo. */}
-              <span style={{ position: "absolute", right: mmCategoryId ? 40 : 12, top: 22, transform: "translateY(-50%)", display: "flex", pointerEvents: "none" }} title="Viene de/va a Money Manager">
-                <SplitLedgerIcon size={26} />
+              <span style={{ position: "absolute", right: mmCategoryId ? 40 : 12, top: 22, transform: "translateY(-50%)", display: "flex", pointerEvents: "none" }} title="Viene de/va a EvenCapital">
+                <EvenGroupIcon size={26} />
               </span>
             </div>
           </Field>
@@ -2096,7 +2096,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
 
         {/* La categoría de Split siempre está — la ve todo el grupo. El label
             queda fijo en "Categoría de {grupo}" apenas el grupo está
-            vinculado a Money Manager (participes/pagues o no) — así no
+            vinculado a EvenCapital (participes/pagues o no) — así no
             cambia de nombre según el caso, que sería más confuso que útil. */}
         <Field label={activeLink ? `Categoría de ${group.name}` : "Categoría"}>
           <PickerField
@@ -2397,7 +2397,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
 // Si no (abierto desde el FAB del listado principal), muestra un selector de
 // grupo arriba del formulario; ExpenseForm recién se monta cuando hay un
 // grupo elegido, con key={group.id} para arrancar limpio si lo cambian.
-function NewExpense({ group, groups, defaultGroupId, expenseId, onCancel, onSave, onDelete, session, moneyManager }) {
+function NewExpense({ group, groups, defaultGroupId, expenseId, onCancel, onSave, onDelete, session, evenCapital }) {
   const [pickedGroupId, setPickedGroupId] = useState(group?.id ?? defaultGroupId ?? "");
 
   if (group) {
@@ -2409,13 +2409,13 @@ function NewExpense({ group, groups, defaultGroupId, expenseId, onCancel, onSave
         onSave={onSave}
         onDelete={onDelete}
         session={session}
-        moneyManager={moneyManager}
+        evenCapital={evenCapital}
       />
     );
   }
 
   const effectiveGroup = (groups || []).find((g) => g.id === pickedGroupId) || null;
-  const isGroupLinked = effectiveGroup && moneyManager?.slLinks?.some(
+  const isGroupLinked = effectiveGroup && evenCapital?.slLinks?.some(
     (l) => l.active && l.group_id === effectiveGroup.id && l.user_id === session.userId
   );
   const groupPicker = (
@@ -2426,8 +2426,8 @@ function NewExpense({ group, groups, defaultGroupId, expenseId, onCancel, onSave
           {(groups || []).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
         {isGroupLinked && (
-          <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", display: "flex", pointerEvents: "none" }} title="Vinculado a Money Manager">
-            <SplitLedgerIcon size={26} />
+          <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", display: "flex", pointerEvents: "none" }} title="Vinculado a EvenCapital">
+            <EvenGroupIcon size={26} />
           </span>
         )}
       </div>
@@ -2452,7 +2452,7 @@ function NewExpense({ group, groups, defaultGroupId, expenseId, onCancel, onSave
       onCancel={onCancel}
       onSave={onSave}
       session={session}
-      moneyManager={moneyManager}
+      evenCapital={evenCapital}
     />
   );
 }
@@ -2524,7 +2524,7 @@ function PaymentDetail({ group, paymentId, onBack, onEdit, isOnline = true, show
    SETTLE UP (registrar pago directo entre dos personas)
    ========================================================================= */
 
-function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, session, moneyManager }) {
+function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, session, evenCapital }) {
   const { baseCurrency } = group;
   const existing = paymentId ? group.payments.find((p) => p.id === paymentId) : null;
   // Mismo motivo que en ExpenseForm: alguien ya quitado del grupo no se
@@ -2543,12 +2543,12 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
   const [amountTouched, setAmountTouched] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // Mi Money Manager — mismo mecanismo que en el gasto (ExpenseForm): si este
+  // Mi EvenCapital — mismo mecanismo que en el gasto (ExpenseForm): si este
   // pago me involucra (lo pago yo o lo recibo yo), elegís de qué cuenta mía
   // sale/entra, y esa elección se fija para siempre en sl_mm_expense_choices
   // (antes esto no existía para pagos, solo para gastos — ver
   // MULTI_CURRENCY_PLAN.md / conversación 2026-10-08).
-  const activeLink = moneyManager?.slLinks?.find((l) => l.active && l.group_id === group.id && l.user_id === session?.userId);
+  const activeLink = evenCapital?.slLinks?.find((l) => l.active && l.group_id === group.id && l.user_id === session?.userId);
   const [mmAccountId, setMmAccountId] = useState("");
   const [mmLoanAccountId, setMmLoanAccountId] = useState("");
   const [touched, setTouched] = useState({});
@@ -2610,14 +2610,14 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
         note: note.trim(),
       });
       // Se fija la cuenta elegida para ESTE pago puntual — la reconciliación
-      // nunca la vuelve a recalcular sola (ver splitLedgerSync.js).
+      // nunca la vuelve a recalcular sola (ver evenGroupSync.js).
       if (mmInvolved && savedId) {
         const finalId = existing?.id || savedId;
         await supabase.from("sl_mm_expense_choices").upsert(
           { link_id: activeLink.id, source_kind: "payment", source_id: finalId, account_id: mmAccountId, loan_account_id: mmLoanAccountId || null },
           { onConflict: "link_id,source_kind,source_id" }
         );
-        await moneyManager.reload();
+        await evenCapital.reload();
       }
     } finally {
       setSaving(false);
@@ -2727,16 +2727,16 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
                 onChange={setMmAccountId}
                 onBlur={() => touch("mmAccountId")}
                 placeholder="Elegí una cuenta"
-                groups={moneyManager.groups
+                groups={evenCapital.groups
                   .filter((g) => !g.deleted && g.system_key !== "split_ledger")
                   .map((g) => ({
                     label: g.name,
-                    items: moneyManager.accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
+                    items: evenCapital.accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
                   }))
                   .filter((g) => g.items.length > 0)}
               />
-              <span style={{ position: "absolute", right: 12, top: 22, transform: "translateY(-50%)", display: "flex", pointerEvents: "none" }} title="Viene de/va a Money Manager">
-                <SplitLedgerIcon size={26} />
+              <span style={{ position: "absolute", right: 12, top: 22, transform: "translateY(-50%)", display: "flex", pointerEvents: "none" }} title="Viene de/va a EvenCapital">
+                <EvenGroupIcon size={26} />
               </span>
             </div>
           </Field>
@@ -2749,11 +2749,11 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
               onChange={setMmLoanAccountId}
               onClear={() => setMmLoanAccountId("")}
               placeholder="Misma que 'Cuenta'"
-              groups={moneyManager.groups
+              groups={evenCapital.groups
                 .filter((g) => !g.deleted && g.system_key !== "split_ledger")
                 .map((g) => ({
                   label: g.name,
-                  items: moneyManager.accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
+                  items: evenCapital.accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
                 }))
                 .filter((g) => g.items.length > 0)}
             />

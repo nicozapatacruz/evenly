@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { creditCardCycleStart, creditCardNextPaymentDate, computeCreditCardBalance } from "../moneyManagerData.js";
+import { creditCardCycleStart, creditCardNextPaymentDate, computeCreditCardBalance } from "../evenCapitalData.js";
 
 // Fecha de referencia con hora ≠ medianoche a propósito — las funciones bajo
 // prueba construyen "hoy" a medianoche (new Date(y, m, day)), así que si

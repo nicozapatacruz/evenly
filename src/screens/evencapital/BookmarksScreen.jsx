@@ -7,13 +7,13 @@ import { styles } from "../../lib/styles.js";
 import { TopBar, ConfirmInline, EmptyState } from "../../components/Shared.jsx";
 import { money, useScrollToTopOnChange } from "../../lib/helpers.jsx";
 import { useBookmarks, createBookmark, deleteBookmark, reorderBookmarks } from "../../lib/bookmarksData.js";
-import { searchTransactions } from "../../lib/moneyManagerData.js";
+import { searchTransactions } from "../../lib/evenCapitalData.js";
 
 const TYPE_LABEL = { income: "Ingreso", expense: "Gasto", transfer: "Transferencia" };
 const TYPE_COLOR = { income: "#3B6E62", expense: "#B0473A", transfer: "#4A6FA5" };
 
 /* =========================================================================
-   MARCADORES — plantillas de transacción reutilizables (Money Manager).
+   MARCADORES — plantillas de transacción reutilizables (EvenCapital).
    Pantalla raíz: lista agrupada por tipo (Ingreso/Gasto/Transferencia), con
    un modo "gestionar" (lápiz) para reordenar/borrar, y un "+" que abre un
    selector de transacciones ya guardadas para convertir una en marcador.

@@ -3,7 +3,7 @@ import { Plus, Repeat, ChevronRight } from "lucide-react";
 import { styles } from "../../lib/styles.js";
 import { EmptyState } from "../../components/Shared.jsx";
 import { money, fmtDate } from "../../lib/helpers.jsx";
-import { RECURRING_FREQUENCIES } from "../../lib/moneyManagerData.js";
+import { RECURRING_FREQUENCIES } from "../../lib/evenCapitalData.js";
 
 const TYPE_LABEL = { income: "Ingreso", expense: "Gasto", transfer: "Transferencia" };
 const TYPE_COLOR = { income: "#3B6E62", expense: "#C75D3B", transfer: "#4A6FA5" };
@@ -15,7 +15,7 @@ function freqLabel(r) {
 }
 
 /* =========================================================================
-   TRANSACCIONES RECURRENTES — vive dentro de Configuración → Money Manager.
+   TRANSACCIONES RECURRENTES — vive dentro de Configuración → EvenCapital.
    Sin RootHeader propio (esa sección ya vive bajo el header de Config). El
    "+" no abre nada acá adentro — pide a ConfigScreen que muestre el
    TransactionForm a pantalla completa (mismo patrón que ChangePasswordScreen

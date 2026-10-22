@@ -1,7 +1,7 @@
 import { parseAmountInput } from "./helpers.jsx";
 
 // Forma compartida de los filtros — usada tanto por el Buscador (filtros
-// server-side, ver searchTransactions en moneyManagerData.js) como por el
+// server-side, ver searchTransactions en evenCapitalData.js) como por el
 // filtro persistente de Transacciones/Estadísticas (filtra en el cliente
 // sobre datos ya traídos, ver matchesFilters acá abajo). Mismo shape en los
 // dos casos para no mantener dos definiciones de "qué es un filtro".

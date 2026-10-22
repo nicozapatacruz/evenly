@@ -70,10 +70,10 @@ export const globalCss = `
   /* Feedback visual al cambiar de mes (flechas o swipe) en Transacciones y
      Estadísticas — sin esto, un swipe rápido no se distingue de que "no pasó
      nada" hasta que cambian los números. */
-  @keyframes mm-slide-next { from { transform: translateX(18px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-  @keyframes mm-slide-prev { from { transform: translateX(-18px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-  .mm-slide-next { animation: mm-slide-next 0.22s ease-out; }
-  .mm-slide-prev { animation: mm-slide-prev 0.22s ease-out; }
+  @keyframes ec-slide-next { from { transform: translateX(18px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  @keyframes ec-slide-prev { from { transform: translateX(-18px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  .ec-slide-next { animation: ec-slide-next 0.22s ease-out; }
+  .ec-slide-prev { animation: ec-slide-prev 0.22s ease-out; }
 `;
 
 // Base compartida por todos los headers — quedan pegados arriba al hacer
@@ -186,7 +186,7 @@ export const styles = {
   // flotando aparte. El caller le pone su propio radio via el prop `radius`
   // de ConfirmInline, y debe achatar las esquinas de ABAJO de su propia fila
   // mientras el confirm está abierto (ver ejemplo ya armado: quitar miembro
-  // de un grupo, en SplitLedgerTab.jsx).
+  // de un grupo, en EvenGroupTab.jsx).
   confirmBox: { padding: "10px 12px", background: "#FBEDE7", border: "1px solid #EBC9BA", borderTop: "none", fontFamily: "system-ui, sans-serif" },
   avatarRow: { display: "flex", gap: 8, overflowX: "auto", padding: "10px 20px 4px" },
   memberChip: { display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minWidth: 52 },

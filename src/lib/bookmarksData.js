@@ -3,16 +3,16 @@ import { db } from "./localDb.js";
 import { offlineSupabase as supabase } from "./offlineSupabase.js";
 
 /* =========================================================================
-   MARCADORES — plantillas de transacción reutilizables (Money Manager, no
-   Split Ledger). A propósito NO guardan fecha: siempre se usan con "hoy" al
+   MARCADORES — plantillas de transacción reutilizables (EvenCapital, no
+   EvenGroup). A propósito NO guardan fecha: siempre se usan con "hoy" al
    crear la transacción real a partir de uno. `sort_order` es un valor
    global en la tabla, pero cada pantalla lo usa agrupado por `type` — no
    hace falta que sea contiguo entre tipos distintos, cada grupo se reordena
    mirando solo sus propias filas.
    ========================================================================= */
 
-// Lectura local-first, igual que el resto de Money Manager (ver
-// moneyManagerData.js) — la copia local la trae syncEngine.js.
+// Lectura local-first, igual que el resto de EvenCapital (ver
+// evenCapitalData.js) — la copia local la trae syncEngine.js.
 export function useBookmarks(userId) {
   const rows = useLiveQuery(
     () => (userId ? db.mm_bookmarks.where("user_id").equals(userId).sortBy("sort_order") : []),

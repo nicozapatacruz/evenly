@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { TopBar, Footer, Field, PickerField, CalculatorAmountInput, EmptyState, Modal, SegmentedControl } from "../../components/Shared.jsx";
 import { styles } from "../../lib/styles.js";
 import { money, parseAmountInput, dateInputValue, useScrollToTopOnChange, normalizeForSearch } from "../../lib/helpers.jsx";
-import { computeAmountMain, useRecentNoteTitles } from "../../lib/moneyManagerData.js";
+import { computeAmountMain, useRecentNoteTitles } from "../../lib/evenCapitalData.js";
 import { useDescriptionRules, findDescriptionRule, upsertDescriptionRule, normalizeDescription } from "../../lib/descriptionRulesData.js";
 import { Check, Inbox, RefreshCw, X } from "lucide-react";
 

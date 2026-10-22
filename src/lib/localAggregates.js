@@ -5,7 +5,7 @@ import { dateInputValueInZone } from "./helpers.jsx";
 // es local-first (ver localDb.js), estos agregados se recalculan acá en vez
 // de pedírselos al servidor. Mismo criterio de siempre: sumar `amount_main`
 // (nunca `amount`), filtrar `deleted`, y el mismo patrón de "contribución
-// por fila" que ya usaba `computeCreditCardBalance` (moneyManagerData.js).
+// por fila" que ya usaba `computeCreditCardBalance` (evenCapitalData.js).
 // Con a lo sumo unos miles de transacciones por usuario, un filter/reduce
 // directo alcanza de sobra — no hace falta ninguna optimización.
 
@@ -16,7 +16,7 @@ function monthKeyOf(t) {
 
 // Una fila por cuenta — toda transacción de una cuenta queda en SU moneda,
 // así que este total ya está en la moneda de esa cuenta (ver comentario de
-// accountBalance en moneyManagerData.js), no hace falta agrupar por moneda.
+// accountBalance en evenCapitalData.js), no hace falta agrupar por moneda.
 export function computeAccountTotals(transactions) {
   const map = new Map();
   const add = (accountId, amount) => map.set(accountId, (map.get(accountId) || 0) + amount);

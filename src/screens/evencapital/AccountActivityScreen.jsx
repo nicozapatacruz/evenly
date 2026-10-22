@@ -3,7 +3,7 @@ import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { styles } from "../../lib/styles.js";
 import { TopBar, MonthNav, EmptyState, SegmentedControl, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
 import { money, measureTextWidth } from "../../lib/helpers.jsx";
-import { useAccountMonthTransactions, useAccountMonthTotals } from "../../lib/moneyManagerData.js";
+import { useAccountMonthTransactions, useAccountMonthTotals } from "../../lib/evenCapitalData.js";
 import { TransactionDayGroups } from "./TransactionDayGroups.jsx";
 
 const MONTH_ABBR = (year, month) => new Date(year, month - 1, 1).toLocaleDateString("es-ES", { month: "short" }).replace(".", "");

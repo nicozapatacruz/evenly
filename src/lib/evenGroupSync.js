@@ -1,16 +1,16 @@
 import { supabase } from "./supabaseClient.js";
-import { fetchAllRows } from "./moneyManagerData.js";
+import { fetchAllRows } from "./evenCapitalData.js";
 import { CUSTOM_USER_CONFIG } from "./customUserConfig.js";
 
 /* =========================================================================
-   SINCRONIZACIÓN SPLIT LEDGER → MONEY MANAGER — reconciliación completa del
+   SINCRONIZACIÓN EVENGROUP → EVENCAPITAL — reconciliación completa del
    lado del cliente (no hay triggers de base en este proyecto). Se corre
-   dentro de useMoneyManager.load(), antes del auto-pago de tarjetas (puede
+   dentro de useEvenCapital.load(), antes del auto-pago de tarjetas (puede
    haber transferencias de préstamo que afecten el saldo de una tarjeta), y
    de nuevo justo después de guardar algo en un grupo vinculado — ver
    SPLIT_MONEY_LINK_PLAN.md para el diseño completo.
 
-   Por qué es un diff completo cada vez (no "solo lo nuevo"): Split Ledger no
+   Por qué es un diff completo cada vez (no "solo lo nuevo"): EvenGroup no
    tiene `updated_at` en expenses, y algunos borrados son físicos (DELETE, no
    un simple `deleted: true`) — no queda rastro de que algo cambió o
    desapareció. La única forma confiable de detectarlo es recalcular todo lo
@@ -66,7 +66,7 @@ async function loadLinkContext(link, userId) {
   // fetchAllRows (no un .select liso): un grupo vinculado desde hace mucho,
   // con actividad muy alta, podría superar el límite de 1000 filas que
   // PostgREST aplica por defecto a cualquier consulta sin paginar (ver el
-  // comentario de fetchAllRows en moneyManagerData.js) — acá el orden no
+  // comentario de fetchAllRows en evenCapitalData.js) — acá el orden no
   // afecta la reconciliación (es un diff por id, no algo secuencial), así
   // que paginar por id no cambia el resultado, solo lo hace seguro.
   const [expenses, payments] = await Promise.all([
@@ -185,7 +185,7 @@ function computeDesiredTransactions(link, ctx, choicesBySourceKey) {
 // Hecho a medida para un usuario puntual (ver customUserConfig.js) -- no es
 // parte de la sincronización genérica, vive aparte a propósito para no
 // contaminar la lógica de todos con un hábito personal de uno solo. Cuando
-// ese usuario crea un gasto en el grupo de Split Ledger indicado, pagado con
+// ese usuario crea un gasto en el grupo de EvenGroup indicado, pagado con
 // la cuenta indicada, y presta una parte, esa parte se suma a la
 // transacción manual "Pendiente TC" que ya maneja él mismo mes a mes (en vez
 // de que tenga que sumarla a mano cada vez).
@@ -350,7 +350,7 @@ async function reconcileLink(link, userId, userEmail, mainCurrency) {
   // un valor crudo sin convertir.
   //
   // EXCEPCIÓN: si la moneda del gasto cambió desde la última vez (alguien
-  // la editó en Split Ledger, ej. de USD a COP), la tasa guardada era para
+  // la editó en EvenGroup, ej. de USD a COP), la tasa guardada era para
   // la moneda VIEJA — aplicarla a la moneda nueva daría un total
   // completamente inventado. En ese caso se ignora (como si no hubiera
   // ninguna) y vuelve a quedar pendiente, para que carguen la tasa correcta.
@@ -379,7 +379,7 @@ async function reconcileLink(link, userId, userEmail, mainCurrency) {
     // Monto/cuenta/fecha/tipo son lo único que la reconciliación controla
     // para siempre — categoría, título y nota se setean solo al crearla acá
     // abajo (toInsert) y después quedan libres: un cambio de categoría hecho
-    // a mano en Money Manager nunca se pisa solo en la próxima vuelta.
+    // a mano en EvenCapital nunca se pisa solo en la próxima vuelta.
     // EXCEPCIÓN: si todavía no tiene ninguna (null, nunca se eligió una al
     // crearla) y ahora sí hay una elegida en "Categoría personal", se rellena
     // -- si no, elegirla ahí después de guardar el gasto no hacía nada.
@@ -420,21 +420,21 @@ async function reconcileLink(link, userId, userEmail, mainCurrency) {
     // simplemente no haga nada, en vez de fallar con un error de conflicto.
     const { error } = await supabase.from("mm_transactions")
       .upsert(toInsert, { onConflict: "sl_link_id,sl_source_kind,sl_source_id,sl_role", ignoreDuplicates: true });
-    if (error) console.error("reconcileSplitLedger: no se pudo insertar", error);
+    if (error) console.error("reconcileEvenGroup: no se pudo insertar", error);
   }
   for (const { id, patch } of toUpdate) {
     const { error } = await supabase.from("mm_transactions").update(patch).eq("id", id);
-    if (error) console.error("reconcileSplitLedger: no se pudo actualizar", id, error);
+    if (error) console.error("reconcileEvenGroup: no se pudo actualizar", id, error);
   }
   if (toDelete.length) {
     const { error } = await supabase.from("mm_transactions").update({ deleted: true }).in("id", toDelete);
-    if (error) console.error("reconcileSplitLedger: no se pudo borrar", error);
+    if (error) console.error("reconcileEvenGroup: no se pudo borrar", error);
   }
 
   await applyPendienteTcAutoSum(link, userId, userEmail, ctx, choicesBySourceKey);
 }
 
-export async function reconcileSplitLedger(userId, userEmail) {
+export async function reconcileEvenGroup(userId, userEmail) {
   if (!userId) return;
   const { data: links } = await supabase.from("sl_mm_links").select("*").eq("user_id", userId).eq("active", true);
   if (!links?.length) return;
@@ -444,12 +444,12 @@ export async function reconcileSplitLedger(userId, userEmail) {
 
   for (const link of links) {
     try { await reconcileLink(link, userId, userEmail, mainCurrency); }
-    catch (e) { console.error("reconcileSplitLedger: falló el vínculo", link.id, e); }
+    catch (e) { console.error("reconcileEvenGroup: falló el vínculo", link.id, e); }
   }
 }
 
 // Aportes a "Pendiente TC" (ver applyPendienteTcAutoSum) cuyo gasto de
-// origen ya fue borrado en Split Ledger -- como esa suma nunca se revierte
+// origen ya fue borrado en EvenGroup -- como esa suma nunca se revierte
 // sola, esto es lo que alimenta el aviso para que el usuario la corrija a
 // mano. `acknowledged` los saca de la lista sin borrar el historial.
 export async function getPendienteTcReviewItems(userId, userEmail) {

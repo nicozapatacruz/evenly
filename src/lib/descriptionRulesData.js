@@ -31,8 +31,8 @@ export function normalizeDescription(text) {
   return text.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-// Lectura local-first, igual que el resto de Money Manager (ver
-// moneyManagerData.js) — la copia local la trae syncEngine.js.
+// Lectura local-first, igual que el resto de EvenCapital (ver
+// evenCapitalData.js) — la copia local la trae syncEngine.js.
 export function useDescriptionRules(userId) {
   const rules = useLiveQuery(
     () => (userId ? db.mm_description_rules.where("user_id").equals(userId).toArray() : []),

@@ -7,7 +7,7 @@
 // función Postgres `sync_split_category_to_other_members` (SECURITY
 // DEFINER) -- cuando Nico o Paulina elige "Categoría personal" en un gasto
 // compartido, esa función le rellena (si está vacía) la categoría
-// equivalente al OTRO miembro vinculado, en SU propio Money Manager. Tiene
+// equivalente al OTRO miembro vinculado, en SU propio EvenCapital. Tiene
 // que vivir en la base porque cada uno, desde su propia sesión, no tiene
 // permiso (RLS) para escribir en las tablas del otro -- no se puede hacer
 // desde acá.
@@ -16,8 +16,8 @@ export const CUSTOM_USER_CONFIG = {
     // "Saldo Real" (CuentasTab.jsx): balance real = Saldo + la tarjeta
     // (deuda) + lo pendiente de cobro por tarjeta (ver pendienteTcAutoSum).
     realBalance: { group: "Santander", saldoName: "Saldo", tcName: "TC Santander", pendienteName: "Pendiente" },
-    // Auto-suma a "Pendiente TC" (splitLedgerSync.js): cuando creás un gasto
-    // en el grupo de Split Ledger indicado, pagado con la cuenta indicada,
+    // Auto-suma a "Pendiente TC" (evenGroupSync.js): cuando creás un gasto
+    // en el grupo de EvenGroup indicado, pagado con la cuenta indicada,
     // y prestás una parte, esa parte se suma sola a la transacción manual
     // "Pendiente TC" (transferencia de esa cuenta a la cuenta de "lo
     // prestado" de ESE gasto puntual) que ya manejás vos mismo mes a mes, en

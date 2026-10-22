@@ -4,7 +4,7 @@ import { offlineSupabase as supabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, Footer, ConfirmInline, IconInput, PickerField, ToggleField, Field } from "../../components/Shared.jsx";
 import { money, CURRENCIES, CURRENCY_LIST } from "../../lib/helpers.jsx";
-import { accountBalance, computeCreditCardBalance, creditCardNextPaymentDate, disableAutoPayForDeletedAccounts, useCreditCardActivity } from "../../lib/moneyManagerData.js";
+import { accountBalance, computeCreditCardBalance, creditCardNextPaymentDate, disableAutoPayForDeletedAccounts, useCreditCardActivity } from "../../lib/evenCapitalData.js";
 
 const DAY_OPTIONS = Array.from({ length: 31 }, (_, i) => i + 1);
 
@@ -19,7 +19,7 @@ const balanceColor = (n) => (n > 0.004 ? "#3B6E62" : n < -0.004 ? "#B0473A" : "#
    ========================================================================= */
 
 export default function AccountDetailScreen({ session, account = null, groups, accounts, accountTotals, settings, defaultGroupId, groupLocked = false, reload, showError, showInfo, onBack, onDeleted }) {
-  // El grupo "Split Ledger" nunca es elegible a mano (ver el <select> de
+  // El grupo "EvenGroup" nunca es elegible a mano (ver el <select> de
   // abajo) — si fuera el primero de `groups` (ej. por orden de arrastre en
   // "Grupos de cuentas"), el valor por defecto de una cuenta nueva tiene que
   // saltearlo igual, si no quedaría un groupId que ni aparece en las
@@ -86,7 +86,7 @@ export default function AccountDetailScreen({ session, account = null, groups, a
     ? accounts.filter((a) => a.payment_account_id === account.id && a.is_credit_card && !a.deleted)
     : [];
   const becomingCardConflict = isCreditCard && dependentPaymentCards.length > 0;
-  // Cuenta pseudo de un grupo vinculado de Split Ledger — se desvincula
+  // Cuenta pseudo de un grupo vinculado de EvenGroup — se desvincula
   // desde ahí, no se edita/borra acá (rompería la referencia del vínculo).
   const isSystemAccount = !!account && groups.find((g) => g.id === account.group_id)?.system_key === "split_ledger";
   const canSave = isDirty && !nameRequired && !!groupId && !paymentAccountRequired && !paymentAccountCurrencyMismatch && !becomingCardConflict && !isSystemAccount;
@@ -98,7 +98,7 @@ export default function AccountDetailScreen({ session, account = null, groups, a
   // cuentas de otra moneda a la de esta tarjeta — salvo la ya elegida, para
   // que el conflicto de arriba se pueda ver y resolver, no desaparezca solo.
   const paymentAccountGroups = groups
-    // El grupo "Split Ledger" (auto-creado al vincular un grupo compartido)
+    // El grupo "EvenGroup" (auto-creado al vincular un grupo compartido)
     // es puramente informativo — esas cuentas nunca se eligen a mano en
     // ningún lado (ver TransactionForm), tampoco acá como cuenta de pago.
     .filter((g) => !g.deleted && g.system_key !== "split_ledger")
@@ -202,7 +202,7 @@ export default function AccountDetailScreen({ session, account = null, groups, a
       )}
       <div style={styles.form}>
         <Field label="Grupo">
-          {/* El grupo "Split Ledger" es informativo (lo crea/mantiene el
+          {/* El grupo "EvenGroup" es informativo (lo crea/mantiene el
               programa solo, ver isSystemAccount) — nunca se elige a mano acá,
               mismo criterio que paymentAccountGroups más abajo. */}
           <select style={{ ...styles.input, opacity: groupLocked ? 0.6 : 1 }} value={groupId} onChange={(e) => setGroupId(e.target.value)} disabled={groupLocked}>
@@ -218,7 +218,7 @@ export default function AccountDetailScreen({ session, account = null, groups, a
         </Field>
         {isSystemAccount && (
           <p style={{ ...styles.muted, padding: 0, marginTop: -8 }}>
-            Representa un grupo vinculado de Split Ledger. Se desvincula desde ahí, no se edita acá.
+            Representa un grupo vinculado de EvenGroup. Se desvincula desde ahí, no se edita acá.
           </p>
         )}
 

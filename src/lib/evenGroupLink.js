@@ -1,9 +1,9 @@
 import { supabase } from "./supabaseClient.js";
 
 /* =========================================================================
-   VINCULAR SPLIT LEDGER CON MONEY MANAGER — capa de datos. Puente entre los
+   VINCULAR EVENGROUP CON EVENCAPITAL — capa de datos. Puente entre los
    dos sistemas (hoy separados a propósito), así que vive en su propio
-   archivo en vez de en moneyManagerData.js o en el lado de Split Ledger.
+   archivo en vez de en evenCapitalData.js o en el lado de EvenGroup.
 
    El vínculo es por (usuario, grupo) — varios miembros del mismo grupo
    compartido pueden vincularlo cada uno a su propia cuenta, de forma
@@ -12,14 +12,14 @@ import { supabase } from "./supabaseClient.js";
    "mi parte" + los préstamos) es una pieza aparte, todavía no construida.
    ========================================================================= */
 
-// Grupo de cuentas "Split Ledger" — uno por usuario, se crea la primera vez
+// Grupo de cuentas "EvenGroup" — uno por usuario, se crea la primera vez
 // que se vincula algo. upsert+ignoreDuplicates en vez de insert+catch: si dos
 // pestañas lo crean al mismo tiempo, el índice único (user_id, system_key)
 // descarta la segunda sin tirar error, y después las dos vuelven a
 // seleccionar la misma fila.
-async function ensureSplitLedgerAccountGroup(userId) {
+async function ensureEvenGroupAccountGroup(userId) {
   const { error: upsertError } = await supabase.from("mm_account_groups").upsert(
-    { user_id: userId, name: "Split Ledger", type: "other", system_key: "split_ledger", sort_order: 999 },
+    { user_id: userId, name: "EvenGroup", type: "other", system_key: "split_ledger", sort_order: 999 },
     { onConflict: "user_id,system_key", ignoreDuplicates: true }
   );
   if (upsertError) throw upsertError;
@@ -33,11 +33,11 @@ async function ensureSplitLedgerAccountGroup(userId) {
   return data;
 }
 
-// Vincular un grupo de Split Ledger a Money Manager — 2 cuentas default:
+// Vincular un grupo de EvenGroup a EvenCapital — 2 cuentas default:
 // "propios" (mi parte, cuando pago yo) y "ajenos" (cuando paga otro
 // miembro), más una 3ra opcional ("lo que prestás"/loanAccountId) que
 // reemplaza cuál cuenta REAL es la contraparte de la transferencia de
-// préstamo (ver splitLedgerSync.js) -- si no se pasa, esa transferencia
+// préstamo (ver evenGroupSync.js) -- si no se pasa, esa transferencia
 // sigue usando "propios"/"ajenos" como hasta ahora, sin ningún cambio.
 //
 // La cuenta pseudo (adónde va a parar/de dónde sale ese préstamo del lado
@@ -72,7 +72,7 @@ export async function linkGroupToAccount({ userId, groupId, memberId, groupName,
   }
 
   if (!pseudoAccountId) {
-    const sysGroup = await ensureSplitLedgerAccountGroup(userId);
+    const sysGroup = await ensureEvenGroupAccountGroup(userId);
     const { data: pseudo, error } = await supabase
       .from("mm_accounts")
       .insert({ user_id: userId, group_id: sysGroup.id, name: groupName, icon: "➗", currency, sort_order: 999, hidden: false })

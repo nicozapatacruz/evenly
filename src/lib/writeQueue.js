@@ -1,7 +1,7 @@
 import { db } from "./localDb.js";
 import { supabase } from "./supabaseClient.js";
 
-// Toda escritura de Money Manager pasa por acá (ver offlineSupabase.js) y
+// Toda escritura de EvenCapital pasa por acá (ver offlineSupabase.js) y
 // queda encolada, haya o no señal — online, un drenador la vacía casi
 // enseguida; offline, se acumula hasta reconectar (ver syncEngine.js).
 

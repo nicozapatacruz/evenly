@@ -3,7 +3,7 @@ import { Search, SlidersHorizontal, GitCompare, Minus, Plus } from "lucide-react
 import { styles } from "../../lib/styles.js";
 import { RootHeader, MonthNav, TodayButton, FiltersActiveBanner, CompareActiveBanner, HeaderMenu, EmptyState, Modal, SegmentedControl, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
 import { money, monthProgressPct } from "../../lib/helpers.jsx";
-import { useStatsCategoryTotals, currenciesInUse } from "../../lib/moneyManagerData.js";
+import { useStatsCategoryTotals, currenciesInUse } from "../../lib/evenCapitalData.js";
 import { hasActiveFilters } from "../../lib/filterHelpers.js";
 
 const COMPARE_KEY = "evenly_statsCompare";

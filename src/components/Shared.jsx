@@ -159,12 +159,15 @@ export function Field({ label, info, infoBlocked, required, error, style, childr
   );
   return (
     <Wrapper style={{ ...styles.label, ...style }}>
-      {info ? (
+      {/* Sin label (ej. PickerField en modo "row", que ya dibuja su propia
+          etiqueta a la izquierda de la fila) — Field se usa solo por el
+          error de abajo, no hay nada que mostrar arriba de children. */}
+      {label ? (info ? (
         <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
           {labelContent}
           <InfoTooltip text={info} blocked={infoBlocked} />
         </span>
-      ) : labelContent}
+      ) : labelContent) : null}
       {children}
       {error && <span style={{ fontSize: 12, fontWeight: 400, color: "#B0473A" }}>{error}</span>}
     </Wrapper>
@@ -573,18 +576,23 @@ export function Footer({ children }) {
   return <div style={styles.footer}>{children}</div>;
 }
 
-// Selector en grilla (categoría/cuenta en EvenCapital) — en vez de abrir el
-// picker nativo del navegador, toca el campo y despliega una grilla de
-// ícono+nombre justo debajo, como en la app original. `groups` es
-// [{ label, items: [{ value, label, icon }] }] — pasar `label: null` para
-// una lista plana sin encabezados (ej. categorías, que no se agrupan).
+// Selector en grilla (categoría/cuenta en EvenCapital) — toca el campo y
+// sube una hoja desde abajo con una grilla de ícono+nombre (antes se
+// desplegaba pegada al campo, empujando el resto del formulario — ver
+// PENDIENTES.md). `groups` es [{ label, items: [{ value, label, icon }] }]
+// — pasar `label: null` para una lista plana sin encabezados (ej.
+// categorías, que no se agrupan). `title` es el título de la hoja (por
+// defecto el mismo `placeholder`, que ya suele estar redactado para
+// funcionar en los dos lugares, ej. "Elegí una cuenta").
 let pickerInstanceCounter = 0;
+// Canvas reusado para medir el ancho real del importe en CalculatorAmountInput
+// (ver más abajo) — uno solo para toda la app, no uno por instancia del input.
+let amountMeasureCtx = null;
 
-export function PickerField({ value, onChange, groups, placeholder = "Elegir", onClear, onBlur, disabled = false, emptyMessage = "No hay opciones para elegir.", openSignal }) {
+export function PickerField({ value, onChange, groups, placeholder = "Elegir", title, note, onClear, onBlur, disabled = false, emptyMessage = "No hay opciones para elegir.", openSignal, compact = false, rowLabel, required = false, listStyle = false }) {
   const [open, setOpen] = useState(false);
   const idRef = useRef(null);
   if (idRef.current === null) idRef.current = ++pickerInstanceCounter;
-  const containerRef = useRef(null);
   const selected = groups.flatMap((g) => g.items).find((it) => it.value === value);
 
   // Apertura "a control remoto": un padre que cambia `openSignal` (ej. un
@@ -598,8 +606,8 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", o
   }, [openSignal]);
 
   // No hay blur nativo (esto no es un <input>) — se dispara "onBlur" cuando
-  // el desplegable se cierra, sea por elegir algo, click afuera, o que se
-  // abrió otro picker. Mismo momento en que un <select> real dispararía blur.
+  // la hoja se cierra, sea por elegir algo, "Cerrar", o que se abrió otro
+  // picker. Mismo momento en que un <select> real dispararía blur.
   const wasOpenRef = useRef(false);
   useEffect(() => {
     if (wasOpenRef.current && !open) onBlur?.();
@@ -618,118 +626,179 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", o
     return () => window.removeEventListener("ec-picker-open", onOtherOpen);
   }, []);
 
-  // Click afuera de este picker (mientras está abierto) lo cierra. A
-  // propósito con "click", no "mousedown": si cierra en mousedown, la
-  // página se reacomoda ANTES de que termine el click (mousedown → mouseup
-  // → click), y el click termina cayendo en otro elemento que se corrió a
-  // ese lugar — justo el bug de "toco Cuenta, cierra Categoría pero no
-  // abre Cuenta". Con "click" todo se resuelve en el mismo evento.
-  useEffect(() => {
-    if (!open) return;
-    const onClickOutside = (e) => {
-      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener("click", onClickOutside);
-    return () => document.removeEventListener("click", onClickOutside);
-  }, [open]);
-
   const clearable = !!(onClear && selected);
 
-  return (
-    <div ref={containerRef}>
-      {/* Wrapper propio solo para el botón+X — si el "relative" viviera en
-          containerRef (que también envuelve la grilla abierta), el 50% de
-          top se calculaba sobre esa altura total y la X terminaba flotando
-          a mitad de la grilla en vez de centrada en el input. */}
-      <div style={{ position: "relative" }}>
+  // Variante "row": label a la izquierda, valor a la derecha, en la misma
+  // fila, con un simple borde inferior en vez de la caja de un campo normal
+  // (Cuenta/Categoría del formulario de transacción — ver PENDIENTES.md).
+  // Toda la fila es el botón (sin chevron aparte): tocar en cualquier parte
+  // abre la hoja. La "X" de limpiar, si aplica, vive inline junto al valor.
+  const trigger = rowLabel ? (
+    <button
+      type="button"
+      onClick={() => !disabled && setOpen(true)}
+      disabled={disabled}
+      style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 40, padding: "0 2px", border: "none", borderBottom: "1px solid #ECE3D3", background: "transparent", textAlign: "left", fontFamily: "system-ui, sans-serif", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.6 : 1 }}
+    >
+      <span style={{ display: "flex", alignItems: "center", gap: 4, width: 100, flexShrink: 0, fontSize: 13, color: "#6B6355" }}>
+        {rowLabel}
+        {required && <span style={{ color: "#B0473A" }}>*</span>}
+      </span>
+      <span style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, flex: 1, fontSize: 13.5, color: selected ? "#2B2620" : "#A3968B", minWidth: 0 }}>
+        {selected ? (
+          <>
+            {selected.icon && <span style={{ display: "inline-flex", alignItems: "center" }}>{selected.icon}</span>}
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", ...(selected.deleted ? { textDecoration: "line-through", color: "#B0473A" } : null) }}>{selected.label}</span>
+            {selected.deleted && (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 1, color: "#B0473A", flexShrink: 0 }}>
+                (<Trash2 size={12} />)
+              </span>
+            )}
+          </>
+        ) : placeholder}
+        {clearable && !disabled && (
+          <span
+            role="button"
+            aria-label="Quitar selección"
+            onClick={(e) => { e.stopPropagation(); setOpen(false); onClear(); }}
+            style={{ display: "inline-flex", color: "#A89A87", flexShrink: 0 }}
+          >
+            <X size={14} />
+          </span>
+        )}
+      </span>
+    </button>
+  ) : (
+    // Wrapper propio solo para el botón+X — ya no envuelve nada más (la
+    // hoja abierta vive aparte, fixed), así que esto podría ser directo el
+    // botón, pero se deja el div relativo para la X.
+    <div style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => !disabled && setOpen(true)}
+        disabled={disabled}
+        style={compact
+          ? { fontFamily: "system-ui, sans-serif", color: "#2B2420", border: "none", borderRadius: 14, minWidth: 54, height: 56, background: open ? "#F6E6DE" : "#F3ECE0", boxShadow: open ? "inset 0 0 0 2px #C75D3B" : "inset 0 0 0 1px #E7DFD2", padding: "0 10px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 0, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.6 : 1, transition: "background-color .15s, box-shadow .15s" }
+          : { ...styles.input, width: "100%", height: 44, boxSizing: "border-box", textAlign: "left", display: "flex", alignItems: "center", gap: 8, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.6 : 1, paddingRight: clearable ? 34 : undefined }}
+      >
+        {compact ? (
+          // Chip apilado (símbolo grande arriba, código chico abajo) — igual
+          // que el selector de moneda del mockup, no el chip inline ancho de
+          // un picker normal.
+          <>
+            <span style={{ fontSize: 25, fontFamily: "'Iowan Old Style', 'Georgia', 'Source Serif Pro', serif", lineHeight: 1 }}>{selected?.icon || selected?.label || placeholder}</span>
+            {selected?.icon && <span style={{ marginTop: 4, fontSize: 10.5, fontWeight: 600, letterSpacing: "0.04em", color: "#6E625A" }}>{selected.label}</span>}
+          </>
+        ) : selected ? (
+          <>
+            {selected.icon && <span style={{ display: "inline-flex", alignItems: "center" }}>{selected.icon}</span>}
+            <span style={selected.deleted ? { textDecoration: "line-through", color: "#B0473A" } : undefined}>{selected.label}</span>
+            {selected.deleted && (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 1, color: "#B0473A" }}>
+                (<Trash2 size={12} />)
+              </span>
+            )}
+          </>
+        ) : (
+          <span style={{ color: "#A89A87", fontSize: 13 }}>{placeholder}</span>
+        )}
+      </button>
+      {clearable && !disabled && (
         <button
           type="button"
-          onClick={() => !disabled && setOpen((o) => !o)}
-          disabled={disabled}
-          style={{ ...styles.input, width: "100%", height: 44, boxSizing: "border-box", textAlign: "left", display: "flex", alignItems: "center", gap: 8, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.6 : 1, borderRadius: open ? "10px 10px 0 0" : 10, paddingRight: clearable ? 34 : undefined }}
+          onClick={(e) => { e.stopPropagation(); setOpen(false); onClear(); }}
+          style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", padding: 6, display: "flex", color: "#A89A87" }}
+          aria-label="Quitar selección"
         >
-          {selected ? (
-            <>
-              {selected.icon && <span style={{ display: "inline-flex", alignItems: "center" }}>{selected.icon}</span>}
-              <span style={selected.deleted ? { textDecoration: "line-through", color: "#B0473A" } : undefined}>{selected.label}</span>
-              {selected.deleted && (
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 1, color: "#B0473A" }}>
-                  (<Trash2 size={12} />)
-                </span>
-              )}
-            </>
-          ) : (
-            <span style={{ color: "#A89A87", fontSize: 13 }}>{placeholder}</span>
-          )}
+          <X size={15} />
         </button>
-        {clearable && !disabled && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); setOpen(false); onClear(); }}
-            style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", padding: 6, display: "flex", color: "#A89A87" }}
-            aria-label="Quitar selección"
-          >
-            <X size={15} />
-          </button>
-        )}
-      </div>
-      {open && (
-        <div style={{ border: "1px solid #DDD2BE", borderTop: "none", borderRadius: "0 0 10px 10px", background: "#fff", overflow: "hidden" }}>
-          {groups.length === 0 && (
-            <p style={{ margin: 0, padding: "14px 10px", fontSize: 13, color: "#A89A87", fontFamily: "system-ui, sans-serif", textAlign: "center", background: "#F5F1E8" }}>
-              {emptyMessage}
-            </p>
-          )}
-          {groups.map((g) => (
-            <div key={g.label || "flat"}>
-              {g.label && (
-                // pointer-events: none (no solo stopPropagation, que no alcanzó
-                // en Safari/iOS) — es un encabezado de grupo, no una opción
-                // elegible, no debería poder recibir ningún toque.
-                <p
-                  style={{ margin: 0, padding: "6px 10px", fontSize: 11, fontWeight: 700, color: "#A8754A", textTransform: "uppercase", letterSpacing: "0.04em", background: "#FAF7F2", borderBottom: "1px solid #F0EBE2", pointerEvents: "none" }}
-                >
-                  {g.label}
-                </p>
-              )}
-              {/* gap+background en vez de borderRight/borderBottom por celda:
-                  así no queda un borde doble justo en el borde de afuera de
-                  la grilla (se veía como un efecto raro ahí). */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1, background: "#F0EBE2" }}>
-                {g.items.map((it) => (
-                  <button
-                    type="button"
-                    key={it.value}
-                    onClick={(e) => { e.stopPropagation(); onChange(it.value); setOpen(false); }}
-                    onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); onChange(it.value); setOpen(false); }}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 6, padding: "10px 8px", fontSize: 12.5, fontFamily: "system-ui, sans-serif",
-                      border: "none", background: it.value === value ? "#FBEDE7" : "#fff", color: "#2B2620", textAlign: "left", cursor: "pointer", minWidth: 0,
-                    }}
-                  >
-                    {it.icon && <span style={{ flexShrink: 0, display: "inline-flex", alignItems: "center" }}>{it.icon}</span>}
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", ...(it.deleted ? { textDecoration: "line-through", color: "#B0473A" } : null) }}>
-                      {it.label}
-                    </span>
-                    {it.deleted && (
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 1, flexShrink: 0, color: "#B0473A" }}>
-                        (<Trash2 size={12} />)
-                      </span>
-                    )}
-                  </button>
-                ))}
-                {/* Celdas vacías al final de la última fila — mismo gris que
-                    usa la app original en vez de dejarlas en blanco. Sin
-                    pointer-events: son relleno, no una opción elegible. */}
-                {Array.from({ length: (3 - (g.items.length % 3)) % 3 }).map((_, i) => (
-                  <div key={`empty-${i}`} style={{ background: "#F5F1E8", pointerEvents: "none" }} />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
       )}
     </div>
+  );
+
+  return (
+    <>
+      {trigger}
+      {open && (
+        <div style={styles.sheetBackdrop} onClick={() => setOpen(false)}>
+          <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.sheetHandle} />
+            <div style={styles.sheetHeader}>
+              <span />
+              <p style={styles.sheetTitle}>{title || placeholder}</p>
+              <button type="button" style={styles.sheetClose} onClick={() => setOpen(false)}>Cerrar</button>
+            </div>
+            <div style={styles.sheetBody}>
+              {note && (
+                <p style={{ margin: "14px 4px 0", fontSize: 13.5, lineHeight: 1.5, color: "#6E625A", fontFamily: "system-ui, sans-serif" }}>
+                  {note}
+                </p>
+              )}
+              {groups.length === 0 && (
+                <p style={{ margin: "16px 4px 0", fontSize: 13, color: "#A89A87", fontFamily: "system-ui, sans-serif", textAlign: "center" }}>
+                  {emptyMessage}
+                </p>
+              )}
+              {groups.map((g) => (
+                <div key={g.label || "flat"}>
+                  {g.label && (
+                    <div style={styles.sheetGroupTitle}>
+                      <span>{g.label}</span>
+                      <span style={styles.sheetGroupRule} />
+                    </div>
+                  )}
+                  {listStyle ? (
+                    // Lista simple (sin ícono) — para opciones que son más
+                    // "elegí una de esta lista" que "elegí este ícono" (ej.
+                    // Frecuencia de una recurrencia). Check a la derecha en
+                    // vez de grilla de cajitas.
+                    <div>
+                      {g.items.map((it) => {
+                        const on = it.value === value;
+                        return (
+                          <button
+                            type="button"
+                            key={it.value}
+                            onClick={() => { onChange(it.value); setOpen(false); }}
+                            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", minHeight: 48, padding: "0 4px", border: "none", borderBottom: "1px solid #F0EBE2", background: "transparent", textAlign: "left", fontFamily: "system-ui, sans-serif", fontSize: 14.5, color: on ? "#C75D3B" : "#2B2420", fontWeight: on ? 600 : 400, cursor: "pointer" }}
+                          >
+                            {it.label}
+                            {on && <Check size={16} color="#C75D3B" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div style={styles.sheetGrid}>
+                      {g.items.map((it) => {
+                        const on = it.value === value;
+                        return (
+                          <button type="button" key={it.value} style={styles.sheetTile} onClick={() => { onChange(it.value); setOpen(false); }}>
+                            {/* Siempre la cajita, aunque no haya ícono (ej. una
+                                categoría/cuenta vieja sin emoji asignado) — si
+                                se omite del todo acá, la grilla pierde una
+                                celda entera y todo lo que sigue se desalinea
+                                (quedó así en nuestro propio "Otros"). Con texto
+                                (1ra letra del nombre) en vez de vacía. */}
+                            <span style={{ ...styles.sheetTileIcon, ...(it.action ? { background: "#E8F1EB" } : null), ...(on ? styles.sheetTileIconOn : null), ...(it.icon ? null : { color: "#A89A87", fontWeight: 600 }) }}>
+                              {it.icon || it.label?.trim()?.[0]?.toUpperCase() || "?"}
+                            </span>
+                            <span style={{ ...styles.sheetTileName, ...(on ? styles.sheetTileNameOn : null), ...(it.deleted ? { textDecoration: "line-through", color: "#B0473A" } : null) }}>
+                              {it.label}{it.deleted ? " (borrada)" : ""}
+                              {it.sublabel && <><br /><span style={{ fontSize: 11.5, fontWeight: 400, color: on ? "#C7A68E" : "#A89A87" }}>{it.sublabel}</span></>}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -784,21 +853,41 @@ function evaluateCalculatorTokens(tokens) {
 // "33.330000000000005" en el campo.
 const roundMoney = (n) => Math.round(n * 100) / 100;
 
-function CalculatorKeyButton({ label, onClick, accent, primary, wide }) {
+// Importe ya cerrado (no mientras se edita): siempre 2 decimales, coma
+// como separador — "12" se ve "12,00", "5.5" se ve "5,50". Mismo criterio
+// que money() (que no se puede reusar directo acá: ya antepone el símbolo
+// de moneda, y acá la moneda va aparte, en su propio chip).
+function formatClosedAmount(value) {
+  if (!value) return "";
+  const n = Number(value);
+  if (isNaN(n)) return value;
+  return new Intl.NumberFormat("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+}
+
+// `variant`: "digit" (serif, grande, default) | "op" (÷×−+=, sans, terracota)
+// | "fn" (C/⌫, sans, chico, muted) | "primary" (Ok, caja sólida).
+function CalculatorKeyButton({ label, onClick, variant = "digit", wide }) {
+  const primary = variant === "primary";
+  const op = variant === "op";
+  const fn = variant === "fn";
   return (
     <button
       type="button"
       onClick={onClick}
+      // Sin caja de fondo propia (a diferencia de los botones normales de la
+      // app) — es un teclado, no una lista de opciones — el feedback de toque
+      // vive en ".calc-key:active" (ver styles.js) en vez de un color fijo acá.
+      className={primary ? undefined : "calc-key"}
       style={{
         gridColumn: wide ? "span 2" : undefined,
         padding: "14px 0",
         borderRadius: 10,
         border: "none",
-        background: primary ? "#C75D3B" : accent ? "#F0E6D6" : "#FBF8F2",
-        color: primary ? "#fff" : accent ? "#A8754A" : "#2B2620",
-        fontSize: 17,
-        fontWeight: 600,
-        fontFamily: "system-ui, sans-serif",
+        background: primary ? "#C75D3B" : "transparent",
+        color: primary ? "#fff" : op ? "#C75D3B" : fn ? "#6E625A" : "#2B2620",
+        fontSize: primary ? 18 : op ? 24 : fn ? 19 : 28,
+        fontWeight: primary ? 600 : fn ? 500 : 400,
+        fontFamily: primary || op || fn ? "system-ui, sans-serif" : "'Iowan Old Style', 'Georgia', 'Source Serif Pro', serif",
         cursor: "pointer",
       }}
     >
@@ -859,7 +948,7 @@ function useKeypadScrollIntoView(open, anchorRef, sheetRef) {
 // lo pendiente. `value`/`onChange` siguen siendo el string plano de siempre
 // (compatible con parseAmountInput), el estado de "qué se está tecleando"
 // es interno y nunca llega al padre a medias.
-export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, placeholder = "0.00", disabled = false, style, currency }) {
+export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, placeholder = "0.00", disabled = false, style, focusStyle, currency, placeholderColor = "#A89A87" }) {
   const [open, setOpen] = useState(false);
   const [tokens, setTokens] = useState([]);
   const idRef = useRef(null);
@@ -873,9 +962,18 @@ export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, 
   // Cada vez que los tokens forman una expresión completa (termina en
   // número, no en operador colgado), se resuelve y se sube al padre: así
   // el resto del formulario (ej. "equivale a" de la tasa de cambio) siempre
-  // tiene un número válido, aunque el teclado siga abierto.
+  // tiene un número válido, aunque el teclado siga abierto. Vaciar todo
+  // (borrar hasta el último dígito) también se sube como "" — si no, el
+  // padre se quedaba pegado en el último valor completo que sí llegó a
+  // subirse (ej. escribir "123", borrar los 3, cerrar: quedaba en "1").
+  // `if (!open) return` primero: `tokens` arranca en [] en CADA montaje
+  // (no solo cuando el usuario vacía el campo a mano editando), así que
+  // sin este guard esto borraba a "" cualquier `value` precargado al
+  // editar una transacción ya existente, apenas montaba el componente.
   useEffect(() => {
-    if (tokens.length === 0 || tokens.length % 2 === 0) return;
+    if (!open) return;
+    if (tokens.length === 0) { onChange(""); return; }
+    if (tokens.length % 2 === 0) return;
     const result = evaluateCalculatorTokens(tokens);
     if (!isNaN(result) && isFinite(result)) onChange(String(roundMoney(result)));
   }, [tokens]);
@@ -953,15 +1051,54 @@ export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, 
     onConfirmNext?.();
   };
 
-  const displayValue = open ? tokens.join(" ") : (value || "");
+  // Cerrado, siempre 2 decimales ("12" → "12,00", "5,5" → "5,50") — mientras
+  // se edita se deja la expresión tal cual se tecleó (acá SÍ importa poder
+  // ver "12" sin decimales de más mientras escribís, o "12×3" mientras
+  // armás una cuenta). `value` siempre es un string estilo JS (punto, sin
+  // ceros de más, ver roundMoney) — nunca lo que el usuario tipeó a mano.
+  const displayValue = open ? tokens.join(" ") : formatClosedAmount(value);
+
+  // Letra que se achica para que el importe quepa siempre, midiendo el
+  // ANCHO REAL en píxeles (Canvas) en vez de adivinar por cantidad de
+  // caracteres — una cantidad de caracteres igual puede pesar muy distinto
+  // en píxeles según qué dígitos sean (ver PENDIENTES.md), y esto además
+  // cubre la expresión completa mientras se escribe (ej. "2×3×3×3÷2"), no
+  // solo el resultado ya calculado. Si ni al tamaño mínimo entra, el botón
+  // scrollea horizontal en vez de desbordar visualmente (ver más abajo).
+  const baseFontSize = style?.fontSize || 15;
+  const [fitFontSize, setFitFontSize] = useState(baseFontSize);
+  useLayoutEffect(() => {
+    const btn = inputElRef.current;
+    const text = displayValue || placeholder;
+    if (!btn || !text) { setFitFontSize(baseFontSize); return; }
+    const measure = () => {
+      const available = btn.clientWidth - 16;
+      if (available <= 0) { setFitFontSize(baseFontSize); return; }
+      if (!amountMeasureCtx) amountMeasureCtx = document.createElement("canvas").getContext("2d");
+      amountMeasureCtx.font = `${baseFontSize}px ${style?.fontFamily || "system-ui, sans-serif"}`;
+      const textWidth = amountMeasureCtx.measureText(text).width;
+      if (textWidth <= available) { setFitFontSize(baseFontSize); return; }
+      const minSize = Math.max(16, baseFontSize * 0.35);
+      setFitFontSize(Math.max(minSize, baseFontSize * (available / textWidth)));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [displayValue, placeholder, baseFontSize, style?.fontFamily]);
 
   return (
     // stopPropagation acá (no en cada botón del teclado): si este input
     // vive adentro de otro elemento clickeable (ej. la fila de "Varias
     // personas" en EvenGroup, que es un <button> entero), ningún toque
     // acá adentro debería llegarle a ese padre.
-    <div ref={containerRef} onClick={(e) => e.stopPropagation()}>
-      <div style={{ position: "relative" }}>
+    // minWidth:0 acá (no solo en el botón de adentro): si este componente
+    // vive dentro de un flex row que se supone que lo encoge cuando no
+    // entra (ej. el importe "hero"), el flex-item de VERDAD es este div de
+    // afuera — sin esto, el min-width:auto default de cualquier flex item
+    // igual lo mantenía del ancho de su contenido, por más que el botón de
+    // adentro tuviera su propio minWidth:0.
+    <div ref={containerRef} onClick={(e) => e.stopPropagation()} style={{ minWidth: 0 }}>
+      <div style={{ position: "relative", minWidth: 0 }}>
         {/* <button>, no <input> — a propósito: un <input> real, aunque sea
             readOnly con inputMode="none", igual le pide foco a iOS, que a
             veces reserva espacio para un teclado que nunca llega a mostrar
@@ -974,13 +1111,29 @@ export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, 
           type="button"
           onClick={openEdit}
           disabled={disabled}
-          style={{ ...styles.input, width: "100%", height: 44, boxSizing: "border-box", textAlign: "left", display: "flex", alignItems: "center", opacity: disabled ? 0.6 : 1, cursor: disabled ? "not-allowed" : "pointer", ...(open ? { boxShadow: "0 0 0 2px #C75D3B" } : null), ...(currency ? { paddingRight: 46 } : null), ...style }}
+          // `...style` antes del estado "open": así un estilo custom (ej. el
+          // importe "hero" sin caja, en TransactionForm) puede igual recibir
+          // su propio feedback de foco vía `focusStyle`, en vez de quedar
+          // pisado por el anillo default pensado para el campo con caja.
+          style={{ ...styles.input, width: "100%", height: 44, boxSizing: "border-box", textAlign: "left", display: "flex", alignItems: "center", opacity: disabled ? 0.6 : 1, cursor: disabled ? "not-allowed" : "pointer", ...(currency ? { paddingRight: 46 } : null), ...style, fontSize: fitFontSize, overflow: "hidden", ...(open ? (focusStyle || { boxShadow: "0 0 0 2px #C75D3B" }) : null) }}
         >
-          {displayValue ? displayValue : <span style={{ color: "#A89A87", fontSize: 13 }}>{placeholder}</span>}
+          {/* Si ni el tamaño mínimo alcanza (ej. una expresión larguísima
+              mientras se escribe), esto recorta en vez de desbordar fuera de
+              la caja — red de seguridad, no debería verse en el uso normal.
+              Un overflow-x:auto acá (lo que había antes) metía un scrollbar
+              real que rompía el ancho medido y cortaba el último dígito a
+              la mitad en el celular — esto es solo recorte visual, sin
+              scroll de verdad. */}
+          <span style={{ whiteSpace: "nowrap" }}>
+            {displayValue ? displayValue : <span style={{ color: placeholderColor }}>{placeholder}</span>}
+          </span>
           {/* Este <button> no tiene foco/caret nativo (ver nota arriba) — sin
               esto, no había ninguna señal visual de que el teclado propio
-              está activo para este campo (igual online que offline). */}
-          {open && <span className="blink-cursor" style={{ marginLeft: 2, width: 1.5, height: 18, background: "#C75D3B" }} />}
+              está activo para este campo (igual online que offline). Altura
+              proporcional al tamaño de letra que se está mostrando (no 18px
+              fijo) — en el importe "hero" (54px) un cursor de 18px se veía
+              como un palito perdido al lado del número. */}
+          {open && <span className="blink-cursor" style={{ marginLeft: 2, flexShrink: 0, width: 1.5, height: fitFontSize, background: "#C75D3B" }} />}
         </button>
         {currency && (
           <span style={{ position: "absolute", right: 13, top: "50%", transform: "translateY(-50%)", color: "#A89A87", fontSize: 13, pointerEvents: "none" }}>
@@ -999,22 +1152,22 @@ export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, 
             <CalculatorKeyButton label="7" onClick={() => pressDigit("7")} />
             <CalculatorKeyButton label="8" onClick={() => pressDigit("8")} />
             <CalculatorKeyButton label="9" onClick={() => pressDigit("9")} />
-            <CalculatorKeyButton label="÷" accent onClick={() => pressOperator("÷")} />
+            <CalculatorKeyButton label="÷" variant="op" onClick={() => pressOperator("÷")} />
             <CalculatorKeyButton label="4" onClick={() => pressDigit("4")} />
             <CalculatorKeyButton label="5" onClick={() => pressDigit("5")} />
             <CalculatorKeyButton label="6" onClick={() => pressDigit("6")} />
-            <CalculatorKeyButton label="×" accent onClick={() => pressOperator("×")} />
+            <CalculatorKeyButton label="×" variant="op" onClick={() => pressOperator("×")} />
             <CalculatorKeyButton label="1" onClick={() => pressDigit("1")} />
             <CalculatorKeyButton label="2" onClick={() => pressDigit("2")} />
             <CalculatorKeyButton label="3" onClick={() => pressDigit("3")} />
-            <CalculatorKeyButton label="-" accent onClick={() => pressOperator("-")} />
+            <CalculatorKeyButton label="-" variant="op" onClick={() => pressOperator("-")} />
             <CalculatorKeyButton label="0" onClick={() => pressDigit("0")} />
             <CalculatorKeyButton label="." onClick={() => pressDigit(".")} />
-            <CalculatorKeyButton label="⌫" onClick={pressBackspace} />
-            <CalculatorKeyButton label="+" accent onClick={() => pressOperator("+")} />
-            <CalculatorKeyButton label="C" onClick={() => setTokens([])} />
-            <CalculatorKeyButton label="=" onClick={pressEquals} />
-            <CalculatorKeyButton label="Ok" primary wide onClick={pressConfirmNext} />
+            <CalculatorKeyButton label="⌫" variant="fn" onClick={pressBackspace} />
+            <CalculatorKeyButton label="+" variant="op" onClick={() => pressOperator("+")} />
+            <CalculatorKeyButton label="C" variant="fn" onClick={() => setTokens([])} />
+            <CalculatorKeyButton label="=" variant="op" onClick={pressEquals} />
+            <CalculatorKeyButton label="Ok" variant="primary" wide onClick={pressConfirmNext} />
           </div>
         </div>
       )}
@@ -1049,7 +1202,7 @@ function completeCalculatorValue(tokens) {
 // CalculatorAmountInput), así que cerrar nunca "pierde" nada a medio
 // terminar. "Ok" además salta al siguiente campo (igual que en Importe
 // simple); click afuera no.
-export function CurrencyConversionField({ amount, onChangeAmount, currency, accountCurrency, rate, onChangeRate, onBlur, onConfirmNext, openSignal, amountDisabled = false }) {
+export function CurrencyConversionField({ amount, onChangeAmount, currency, accountCurrency, rate, onChangeRate, onBlur, onConfirmNext, openSignal, amountDisabled = false, required = false }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("rate"); // "rate" | "montos"
   const [activeRow, setActiveRow] = useState("valor"); // "valor" | "second"
@@ -1113,15 +1266,32 @@ export function CurrencyConversionField({ amount, onChangeAmount, currency, acco
   // Cada vez que "Valor" (y, según el modo, "Tasa" o "Montos") tiene algo
   // completo, se sube al padre: así cerrar la hoja (sea como sea) nunca
   // pierde lo último válido tecleado.
+  // Vaciar del todo (Valor, Tasa, o Montos convertido) sube "" al padre —
+  // mismo bug/arreglo que CalculatorAmountInput: antes, borrar hasta el
+  // último dígito simplemente no subía nada, y el padre se quedaba pegado
+  // en el último valor completo que sí había llegado a subirse. `if
+  // (!open) return` primero por la misma razón que ahí: estos 3 estados
+  // arrancan vacíos en CADA montaje, no solo cuando el usuario los vacía
+  // a mano editando — sin el guard, esto borraba a "" el monto/tasa ya
+  // cargados de una transacción existente apenas montaba el componente.
   useEffect(() => {
+    if (!open) return;
     const valorValue = completeCalculatorValue(valorTokens);
-    if (valorValue != null) onChangeAmount(String(valorValue));
+    if (valorTokens.length === 0) onChangeAmount("");
+    else if (valorValue != null) onChangeAmount(String(valorValue));
+
     if (mode === "rate") {
-      const n = parseAmountInput(rateDraft);
-      if (rateDraft && !isNaN(n) && n > 0) onChangeRate(rateDraft);
+      if (rateDraft === "") {
+        onChangeRate("");
+      } else {
+        const n = parseAmountInput(rateDraft);
+        if (!isNaN(n) && n > 0) onChangeRate(rateDraft);
+      }
     } else {
       const secondValue = completeCalculatorValue(secondTokens);
-      if (valorValue != null && secondValue != null && secondValue > 0) {
+      if (secondTokens.length === 0) {
+        onChangeRate("");
+      } else if (valorValue != null && secondValue != null && secondValue > 0) {
         onChangeRate(String(Number((valorValue / secondValue).toPrecision(10))));
       }
     }
@@ -1199,17 +1369,26 @@ export function CurrencyConversionField({ amount, onChangeAmount, currency, acco
 
   const valorDisplay = valorTokens.length ? valorTokens.join(" ") : "0";
   const secondDisplay = mode === "montos" ? (secondTokens.length ? secondTokens.join(" ") : "0") : (rateDraft || "0");
+  // Mismo lenguaje que el resto de filas/hojas (ver TransactionForm/
+  // PickerField): sin caja, fondo arena solo en la fila activa (en vez de
+  // un borde que cambia de color) — antes esto era 100% ajeno, con
+  // <input>s de caja blanca con borde que no se parecían a nada más.
   const rowStyle = (row) => ({
-    ...styles.input,
-    width: "100%",
-    boxSizing: "border-box",
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
+    width: "100%",
+    minHeight: 40,
+    padding: "0 12px",
+    borderRadius: 12,
+    border: "none",
+    background: activeRow === row ? "#F3ECE0" : "transparent",
+    fontFamily: "system-ui, sans-serif",
     cursor: row === "valor" && amountDisabled ? "not-allowed" : "pointer",
     opacity: row === "valor" && amountDisabled ? 0.6 : 1,
-    borderColor: activeRow === row ? "#C75D3B" : "#DDD2BE",
   });
+  const rowValueStyle = { fontSize: 20, fontFamily: "'Iowan Old Style', 'Georgia', 'Source Serif Pro', serif", color: "#2B2420" };
+  const rowCodeStyle = { fontSize: 13, color: "#A3968B", fontFamily: "system-ui, sans-serif" };
 
   return (
     <div ref={containerRef} onClick={(e) => e.stopPropagation()}>
@@ -1217,65 +1396,79 @@ export function CurrencyConversionField({ amount, onChangeAmount, currency, acco
         ref={boxRef}
         type="button"
         onClick={openEdit}
-        style={{ ...styles.input, width: "100%", height: 44, boxSizing: "border-box", textAlign: "left", display: "flex", alignItems: "center" }}
+        style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 40, padding: 0, border: "none", borderBottom: "1px solid #ECE3D3", background: "transparent", textAlign: "left", fontFamily: "system-ui, sans-serif", cursor: "pointer" }}
       >
-        {amount ? `${amount} ${currency}` : <span style={{ color: "#A89A87", fontSize: 13 }}>0.00</span>}
+        <span style={{ width: 100, flexShrink: 0, fontSize: 13, color: "#6B6355" }}>
+          Importe{required && <span style={{ color: "#B0473A" }}> *</span>}
+        </span>
+        <span style={{ flex: 1, textAlign: "right", fontSize: 13.5, color: amount ? "#2B2420" : "#A3968B" }}>
+          {amount ? `${formatClosedAmount(amount)} ${currency}` : "0,00"}
+        </span>
       </button>
       {open && (
-        <div ref={sheetRef} style={{ position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: 0, width: "100%", maxWidth: 480, boxSizing: "border-box", background: "#FBF8F2", borderTop: "1px solid #DDD2BE", borderRadius: "16px 16px 0 0", boxShadow: "0 -4px 20px rgba(0,0,0,0.15)", padding: "10px 10px calc(10px + env(safe-area-inset-bottom))", zIndex: 15 }}>
-          <SegmentedControl
-            style={{ marginBottom: 10 }}
-            options={[{ value: "rate", label: "Tasa" }, { value: "montos", label: "Montos" }]}
-            value={mode}
-            onChange={switchMode}
-          />
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 10 }}>
-            <div>
-              <p style={{ ...styles.label, marginBottom: 6 }}>Valor</p>
-              <button
-                type="button"
-                onClick={() => !amountDisabled && setActiveRow("valor")}
-                disabled={amountDisabled}
-                style={rowStyle("valor")}
-              >
-                <span>{valorDisplay}</span>
-                <span style={{ color: "#A89A87", fontSize: 13 }}>{currency}</span>
-              </button>
+        <div style={styles.sheetBackdrop} onClick={() => setOpen(false)}>
+          <div ref={sheetRef} style={styles.sheet} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.sheetHandle} />
+            <div style={styles.sheetHeader}>
+              <span />
+              <p style={styles.sheetTitle}>Importe</p>
+              <button type="button" style={styles.sheetClose} onClick={() => setOpen(false)}>Cerrar</button>
             </div>
-            <div>
-              <p style={{ ...styles.label, marginBottom: 6 }}>
-                {mode === "rate" ? "Tasa de conversión" : "Valor convertido"}
-              </p>
-              <button type="button" onClick={() => setActiveRow("second")} style={rowStyle("second")}>
-                <span>{secondDisplay}</span>
-                {mode === "montos" && <span style={{ color: "#A89A87", fontSize: 13 }}>{accountCurrency}</span>}
-              </button>
-            </div>
-          </div>
+            <div style={{ ...styles.sheetBody, display: "flex", flexDirection: "column" }}>
+              <SegmentedControl
+                style={{ marginBottom: 16 }}
+                options={[{ value: "rate", label: "Tasa" }, { value: "montos", label: "Montos" }]}
+                value={mode}
+                onChange={switchMode}
+              />
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 16 }}>
+                <span style={{ fontSize: 13, color: "#6B6355", fontFamily: "system-ui, sans-serif", padding: "0 12px" }}>Valor</span>
+                <button
+                  type="button"
+                  onClick={() => !amountDisabled && setActiveRow("valor")}
+                  disabled={amountDisabled}
+                  style={rowStyle("valor")}
+                >
+                  <span style={rowValueStyle}>{valorDisplay}</span>
+                  <span style={rowCodeStyle}>{currency}</span>
+                </button>
+                <span style={{ fontSize: 13, color: "#6B6355", fontFamily: "system-ui, sans-serif", padding: "8px 12px 0" }}>
+                  {mode === "rate" ? "Tasa de conversión" : "Valor convertido"}
+                </span>
+                <button type="button" onClick={() => setActiveRow("second")} style={rowStyle("second")}>
+                  <span style={rowValueStyle}>{secondDisplay}</span>
+                  {mode === "montos" && <span style={rowCodeStyle}>{accountCurrency}</span>}
+                </button>
+              </div>
+          {/* gridAutoRows fijo (no "auto") — sin esto, la grilla de 3
+              columnas (Tasa, sin operadores) terminaba un poco más baja
+              que la de 4 (Valor, con operadores): misma cantidad de filas,
+              pero el alto de cada fila dependía del contenido de ESA
+              grilla nada más, no se mantenía igual entre las dos. */}
           {activeUsesCalculator ? (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gridAutoRows: 58, gap: 6 }}>
               <CalculatorKeyButton label="7" onClick={() => pressDigit("7")} />
               <CalculatorKeyButton label="8" onClick={() => pressDigit("8")} />
               <CalculatorKeyButton label="9" onClick={() => pressDigit("9")} />
-              <CalculatorKeyButton label="÷" accent onClick={() => pressOperator("÷")} />
+              <CalculatorKeyButton label="÷" variant="op" onClick={() => pressOperator("÷")} />
               <CalculatorKeyButton label="4" onClick={() => pressDigit("4")} />
               <CalculatorKeyButton label="5" onClick={() => pressDigit("5")} />
               <CalculatorKeyButton label="6" onClick={() => pressDigit("6")} />
-              <CalculatorKeyButton label="×" accent onClick={() => pressOperator("×")} />
+              <CalculatorKeyButton label="×" variant="op" onClick={() => pressOperator("×")} />
               <CalculatorKeyButton label="1" onClick={() => pressDigit("1")} />
               <CalculatorKeyButton label="2" onClick={() => pressDigit("2")} />
               <CalculatorKeyButton label="3" onClick={() => pressDigit("3")} />
-              <CalculatorKeyButton label="-" accent onClick={() => pressOperator("-")} />
+              <CalculatorKeyButton label="-" variant="op" onClick={() => pressOperator("-")} />
               <CalculatorKeyButton label="0" onClick={() => pressDigit("0")} />
               <CalculatorKeyButton label="." onClick={() => pressDigit(".")} />
-              <CalculatorKeyButton label="⌫" onClick={pressBackspace} />
-              <CalculatorKeyButton label="+" accent onClick={() => pressOperator("+")} />
-              <CalculatorKeyButton label="C" onClick={pressClear} />
-              <CalculatorKeyButton label="=" onClick={pressEquals} />
-              <CalculatorKeyButton label="Ok" primary wide onClick={pressOk} />
+              <CalculatorKeyButton label="⌫" variant="fn" onClick={pressBackspace} />
+              <CalculatorKeyButton label="+" variant="op" onClick={() => pressOperator("+")} />
+              <CalculatorKeyButton label="C" variant="fn" onClick={pressClear} />
+              <CalculatorKeyButton label="=" variant="op" onClick={pressEquals} />
+              <CalculatorKeyButton label="Ok" variant="primary" wide onClick={pressOk} />
             </div>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gridAutoRows: 58, gap: 6 }}>
               <CalculatorKeyButton label="7" onClick={() => pressDigit("7")} />
               <CalculatorKeyButton label="8" onClick={() => pressDigit("8")} />
               <CalculatorKeyButton label="9" onClick={() => pressDigit("9")} />
@@ -1285,13 +1478,15 @@ export function CurrencyConversionField({ amount, onChangeAmount, currency, acco
               <CalculatorKeyButton label="1" onClick={() => pressDigit("1")} />
               <CalculatorKeyButton label="2" onClick={() => pressDigit("2")} />
               <CalculatorKeyButton label="3" onClick={() => pressDigit("3")} />
-              <CalculatorKeyButton label="." onClick={() => pressDigit(".")} />
               <CalculatorKeyButton label="0" onClick={() => pressDigit("0")} />
-              <CalculatorKeyButton label="⌫" onClick={pressBackspace} />
-              <CalculatorKeyButton label="C" onClick={pressClear} />
-              <CalculatorKeyButton label="Ok" primary wide onClick={pressOk} />
+              <CalculatorKeyButton label="." onClick={() => pressDigit(".")} />
+              <CalculatorKeyButton label="⌫" variant="fn" onClick={pressBackspace} />
+              <CalculatorKeyButton label="C" variant="fn" onClick={pressClear} />
+              <CalculatorKeyButton label="Ok" variant="primary" wide onClick={pressOk} />
             </div>
           )}
+            </div>
+          </div>
         </div>
       )}
     </div>

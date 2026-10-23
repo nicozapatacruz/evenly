@@ -16,15 +16,15 @@ import {
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
 export const CURRENCIES = {
-  EUR: { symbol: "€", label: "EUR" },
-  USD: { symbol: "$", label: "USD" },
-  COP: { symbol: "COL$", label: "COP" },
-  GBP: { symbol: "£", label: "GBP" },
-  MXN: { symbol: "MX$", label: "MXN" },
-  ARS: { symbol: "AR$", label: "ARS" },
-  CLP: { symbol: "CLP$", label: "CLP" },
-  PEN: { symbol: "S/", label: "PEN" },
-  BRL: { symbol: "R$", label: "BRL" },
+  EUR: { symbol: "€", label: "EUR", name: "Euro" },
+  USD: { symbol: "$", label: "USD", name: "Dólar estadounidense" },
+  COP: { symbol: "COL$", label: "COP", name: "Peso colombiano" },
+  GBP: { symbol: "£", label: "GBP", name: "Libra esterlina" },
+  MXN: { symbol: "MX$", label: "MXN", name: "Peso mexicano" },
+  ARS: { symbol: "AR$", label: "ARS", name: "Peso argentino" },
+  CLP: { symbol: "CLP$", label: "CLP", name: "Peso chileno" },
+  PEN: { symbol: "S/", label: "PEN", name: "Sol peruano" },
+  BRL: { symbol: "R$", label: "BRL", name: "Real brasileño" },
 };
 export const CURRENCY_LIST = Object.keys(CURRENCIES);
 

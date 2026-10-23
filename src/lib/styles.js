@@ -44,6 +44,11 @@ export const globalCss = `
   input[type="date"] { appearance: none; -webkit-appearance: none; }
   input[type="date"]::-webkit-date-and-time-value { text-align: left; }
   input::placeholder, textarea::placeholder { font-size: 13px; color: #A89A87; opacity: 1; }
+  /* Descripción/Nota del formulario de transacción (TextRow): mismo tamaño
+     que el resto de la fila (16px), no el 13px genérico de arriba — y sin
+     anillo de foco, porque acá no hay caja (ver PENDIENTES.md). */
+  .row-input::placeholder { font-size: 13.5px; color: #A3968B; }
+  .row-input:focus { box-shadow: none; outline: none; }
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; animation: none !important; }
   }
@@ -51,6 +56,10 @@ export const globalCss = `
   .spin { animation: spin 0.8s linear infinite; }
   @keyframes blink-cursor { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
   .blink-cursor { animation: blink-cursor 1s step-end infinite; }
+  /* Teclas del teclado numérico propio (CalculatorAmountInput) — sin caja de
+     fondo en reposo (a diferencia de un botón normal), así que el único
+     feedback de que el toque registró es este resalte momentáneo. */
+  .calc-key:active { background: #F0E6D6; }
   /* Scroll sin barra visible — el resto de la app scrollea de a página
      completa (iOS ya la esconde sola ahí), pero un overflow:auto anidado
      (ej. la grilla de íconos) sí la muestra en desktop/otros navegadores. */
@@ -253,6 +262,23 @@ export const styles = {
     boxShadow: "0 -4px 16px rgba(0,0,0,0.04)",
     zIndex: 5,
   },
+  // Hoja que sube desde abajo (PickerField) — mismo backdrop que Modal pero
+  // alineada abajo en vez de centrada, y la tarjeta solo redondeada arriba.
+  sheetBackdrop: { position: "fixed", inset: 0, background: "rgba(43,38,32,0.5)", zIndex: 20, display: "flex", alignItems: "flex-end" },
+  sheet: { width: "100%", maxWidth: 480, margin: "0 auto", maxHeight: "80dvh", background: "#FBF8F2", borderRadius: "20px 20px 0 0", display: "flex", flexDirection: "column", boxShadow: "0 -8px 30px rgba(0,0,0,0.15)" },
+  sheetHandle: { width: 36, height: 4, borderRadius: 2, background: "#E9DFCF", margin: "10px auto 2px", flexShrink: 0 },
+  sheetHeader: { display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", padding: "8px 16px 12px", borderBottom: "1px solid #ECE3D3", flexShrink: 0 },
+  sheetTitle: { margin: 0, fontFamily: "'Iowan Old Style', 'Georgia', 'Source Serif Pro', serif", fontSize: 18, fontWeight: 500, textAlign: "center", justifySelf: "center" },
+  sheetClose: { justifySelf: "end", color: "#C75D3B", fontSize: 14, fontWeight: 600, fontFamily: "system-ui, sans-serif", background: "none", border: "none", padding: "4px 0" },
+  sheetBody: { flex: 1, overflow: "auto", padding: "4px 16px 28px" },
+  sheetGroupTitle: { margin: "20px 4px 12px", display: "flex", alignItems: "baseline", gap: 10, fontFamily: "'Iowan Old Style', 'Georgia', 'Source Serif Pro', serif", fontSize: 15, color: "#2B2620" },
+  sheetGroupRule: { flex: 1, height: 1, background: "#E7DFD2", transform: "translateY(-3px)" },
+  sheetGrid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px 8px" },
+  sheetTile: { display: "flex", flexDirection: "column", alignItems: "center", gap: 7, padding: "4px 2px", textAlign: "center", border: "none", background: "none", cursor: "pointer", fontFamily: "system-ui, sans-serif" },
+  sheetTileIcon: { width: 60, height: 60, borderRadius: 18, background: "#F3ECE0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26 },
+  sheetTileIconOn: { background: "#F6E6DE", boxShadow: "inset 0 0 0 2px #C75D3B" },
+  sheetTileName: { fontSize: 13.5, lineHeight: 1.25, color: "#2B2620" },
+  sheetTileNameOn: { color: "#C75D3B", fontWeight: 600 },
   modalBackdrop: {
     position: "fixed",
     inset: 0,

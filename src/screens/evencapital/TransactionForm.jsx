@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { X, Menu, Plus, Trash2, Copy, Star, Divide } from "lucide-react";
 import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
@@ -6,7 +6,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { offlineSupabase as supabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, Footer, ConfirmInline, IconInput, PickerField, Field, Modal, CalculatorAmountInput, CurrencyConversionField, SegmentedControl } from "../../components/Shared.jsx";
-import { parseAmountInput, todayInputValue, dateInputValue, dateInputValueInZone, money, fmtDate, useScrollToTopOnChange, normalizeForSearch } from "../../lib/helpers.jsx";
+import { parseAmountInput, todayInputValue, dateInputValue, dateInputValueInZone, money, fmtDate, useScrollToTopOnChange, normalizeForSearch, CURRENCIES } from "../../lib/helpers.jsx";
 import { RECURRING_FREQUENCIES, nextOccurrence, computeAmountMain, useRecentNoteTitles } from "../../lib/evenCapitalData.js";
 
 const TYPE_INFO = {
@@ -15,6 +15,13 @@ const TYPE_INFO = {
   transfer: { label: "Transferencia", newLabel: "Nueva transferencia", color: "#4A6FA5" },
 };
 
+// Color del importe "hero" — distinto de TYPE_INFO[type].color (que sigue
+// siendo el acento terracota/verde/azul usado en otros lugares de la app,
+// como antes); acá es rojo/verde/tinta plana, igual que el resto de montos
+// con signo en Evenly. Sin signo −/+ antepuesto (a pedido: el color ya
+// comunica gasto/ingreso, el signo sobraba).
+const AMOUNT_COLOR = { expense: "#B0473A", income: "#3B6E62", transfer: "#2B2420" };
+
 // Deriva freqValue/freqInterval (estado de este formulario) a partir de una
 // fila de mm_recurring ya existente — mismo criterio de "match exacto, si no
 // cae en la variante -x" que ya usa freqLabel en RecurringScreen.jsx.
@@ -22,6 +29,159 @@ function recurringToFreqState(r) {
   const exact = RECURRING_FREQUENCIES.find((f) => f.unit === r.repeat_unit && f.interval === r.repeat_interval);
   if (exact) return { freqValue: exact.value, freqInterval: String(r.repeat_interval) };
   return { freqValue: r.repeat_unit === "week" ? "week-x" : "month-x", freqInterval: String(r.repeat_interval) };
+}
+
+// "Hoy, 22 oct" (o sin año si ya es el año en curso, con año si no) — la
+// fila de Fecha muestra esto en vez de la fecha cruda del <input type="date">.
+const capitalize = (s) => s.replace(/\.$/, "").replace(/^\p{L}/u, (c) => c.toUpperCase());
+function formatDateRow(dateStr) {
+  const d = new Date(dateStr + "T12:00:00");
+  const isToday = dateStr === todayInputValue();
+  const prefix = isToday ? "Hoy" : capitalize(d.toLocaleDateString("es-ES", { weekday: "short" }));
+  const month = capitalize(d.toLocaleDateString("es-ES", { month: "short" }));
+  return `${prefix}, ${d.getDate()} ${month} ${d.getFullYear()}`;
+}
+
+
+// Recorta un texto a un ancho en PÍXELES de verdad (no una cantidad de
+// caracteres adivinada) — el ancho disponible de una fila varía con el
+// dispositivo/tamaño de letra, así que un límite fijo de caracteres (lo que
+// probé primero) se pasa con textos de letras anchas y sobra con letras
+// angostas. Búsqueda binaria + Canvas 2D (mismo truco que cualquier
+// "truncate with ellipsis" fuera del CSS, necesario acá porque
+// text-overflow:ellipsis no es confiable en <textarea>).
+let measureCtx = null;
+function truncateToWidth(text, maxWidth, font) {
+  if (!measureCtx) measureCtx = document.createElement("canvas").getContext("2d");
+  measureCtx.font = font;
+  if (measureCtx.measureText(text).width <= maxWidth) return text;
+  let lo = 0, hi = text.length;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (measureCtx.measureText(text.slice(0, mid) + "…").width <= maxWidth) lo = mid;
+    else hi = mid - 1;
+  }
+  return text.slice(0, lo).trimEnd() + "…";
+}
+
+// Fila "label izquierda (ancho fijo) / input derecha, sin caja" para
+// Descripción/Nota — texto libre normal, SIN hoja/modal (a diferencia de
+// Cuenta/Categoría, que sí son selección-de-opciones): se escribe directo
+// en la fila, igual que en el mockup. `suggestions`, si viene no vacío,
+// lista coincidencias debajo (autocompletar Descripción); onMouseDown (no
+// onClick) para que el input no pierda el foco antes de registrar el tap.
+// Fila de fecha (Fecha de la transacción, Fecha de fin de una recurrencia)
+// — mismo patrón que Cuenta/Categoría: label izquierda, valor formateado
+// ("Hoy, 23 oct") a la derecha, sin caja. El <input type="date"> real queda
+// encima, invisible, para seguir abriendo el selector nativo del
+// navegador/celular al tocar — no hay forma de "fingir" ese selector sin
+// perder su UX nativa (rueditas en iOS, calendario en Android/desktop).
+function DateRow({ label, value, onChange, disabled = false, placeholder = "Elegir fecha" }) {
+  return (
+    <div style={{ position: "relative" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 40, borderBottom: "1px solid #ECE3D3", fontFamily: "system-ui, sans-serif", opacity: disabled ? 0.6 : 1 }}>
+        <span style={{ width: 100, flexShrink: 0, fontSize: 13, color: "#6B6355" }}>{label}</span>
+        <span style={{ flex: 1, textAlign: "right", fontSize: 13.5, color: value ? "#2B2620" : "#A3968B" }}>{value ? formatDateRow(value) : placeholder}</span>
+      </div>
+      <input
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, border: "none", padding: 0, margin: 0, cursor: disabled ? "not-allowed" : "pointer" }}
+      />
+    </div>
+  );
+}
+
+function TextRow({ label, value, onChange, onFocus, onBlur, placeholder, suggestions, onPickSuggestion, multiline = false }) {
+  // `multiline`: se ve como una fila de una sola línea cerrada (igual que
+  // Descripción), pero al enfocar crece para poder escribir/leer texto
+  // largo sin perderlo — Nota siempre aceptó varias líneas en Evenly, el
+  // mockup de Claude solo mostraba el caso cerrado de una línea.
+  const [focused, setFocused] = useState(false);
+  const taRef = useRef(null);
+  useEffect(() => {
+    if (!multiline) return;
+    const el = taRef.current;
+    if (!el) return;
+    el.style.height = focused ? Math.min(el.scrollHeight, 160) + "px" : "";
+  }, [focused, value, multiline]);
+
+  // Colapsada (no enfocada): solo la 1ra línea, recortada al ancho REAL de
+  // la fila (truncateToWidth) si hace falta — nunca se pierde nada (el
+  // valor completo sigue en `value`, esto es solo lo que se VE cerrado).
+  // Antes del primer montaje (taRef.current aún null) no hay ancho que
+  // medir; ese primer render cae en el valor completo, se corrige solo en
+  // cuanto el efecto de abajo dispara un re-render.
+  const FONT = "16px system-ui, -apple-system, sans-serif";
+  const [, forceMeasure] = useState(0);
+  useLayoutEffect(() => { if (!focused) forceMeasure((n) => n + 1); }, [focused, value]);
+  const collapsed = !value ? value : (() => {
+    const firstLine = value.split("\n")[0];
+    const hasMore = value.includes("\n");
+    const width = taRef.current?.clientWidth;
+    if (!width) return hasMore ? firstLine + "…" : firstLine; // antes del 1er montaje, sin ancho que medir
+    if (!hasMore) return truncateToWidth(firstLine, width, FONT);
+    // Con más contenido abajo, el "…" es obligatorio aunque la 1ra línea
+    // sola entre entera (truncateToWidth no lo agregaría si ya entra).
+    if (!measureCtx) measureCtx = document.createElement("canvas").getContext("2d");
+    measureCtx.font = FONT;
+    if (measureCtx.measureText(firstLine + "…").width <= width) return firstLine + "…";
+    return truncateToWidth(firstLine, width, FONT); // ya agrega su propio "…" al recortar
+  })();
+
+  // `multiline` (Nota) apilado: label arriba, valor abajo a todo el ancho
+  // (como un textarea de verdad) — a diferencia de Descripción/Cuenta/
+  // Categoría, que van label-izquierda/valor-derecha en la misma línea. El
+  // borde de abajo sigue siendo el único límite visual, al final de los dos.
+  return (
+    <div style={{ position: "relative" }}>
+      <div style={multiline
+        ? { display: "flex", flexDirection: "column", gap: 6, minHeight: 40, borderBottom: "1px solid #ECE3D3", padding: "13px 0 15px" }
+        : { display: "flex", alignItems: "center", gap: 12, minHeight: 40, borderBottom: "1px solid #ECE3D3" }}
+      >
+        <span style={{ width: multiline ? "auto" : 100, flexShrink: 0, fontSize: 13, color: "#6B6355", fontFamily: "system-ui, sans-serif" }}>{label}</span>
+        {multiline ? (
+          <textarea
+            ref={taRef}
+            rows={1}
+            className="row-input"
+            value={focused ? value : collapsed}
+            onChange={(e) => onChange(e.target.value)}
+            onFocus={() => { setFocused(true); onFocus?.(); }}
+            onBlur={() => { setFocused(false); onBlur?.(); }}
+            placeholder={placeholder}
+            style={{ width: "100%", fontSize: 13.5, fontFamily: "system-ui, sans-serif", border: "none", background: "transparent", padding: 0, color: "#2B2420", resize: "none", overflow: "hidden", lineHeight: 1.4, ...(focused ? null : { whiteSpace: "nowrap", textOverflow: "ellipsis" }) }}
+          />
+        ) : (
+          <input
+            className="row-input"
+            style={{ flex: 1, minWidth: 0, textAlign: "right", fontSize: 13.5, fontFamily: "system-ui, sans-serif", border: "none", background: "transparent", padding: 0, color: "#2B2420", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onFocus={onFocus}
+            onBlur={onBlur}
+            placeholder={placeholder}
+          />
+        )}
+      </div>
+      {suggestions && suggestions.length > 0 && (
+        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, zIndex: 5, border: "1px solid #DDD2BE", borderRadius: 10, background: "#fff", overflow: "hidden", boxShadow: "0 4px 10px rgba(0,0,0,0.08)" }}>
+          {suggestions.map((s) => (
+            <button
+              type="button"
+              key={s}
+              onMouseDown={(e) => { e.preventDefault(); onPickSuggestion(s); }}
+              style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 12px", fontSize: 13, fontFamily: "system-ui, sans-serif", border: "none", background: "#fff", color: "#2B2620", cursor: "pointer" }}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* =========================================================================
@@ -171,6 +331,10 @@ export default function TransactionForm({
   // selector, aunque no esté en "Otras monedas" de Ajustes — es el caso
   // normal (sin tasa), no una excepción.
   if (!currencyOptions.includes(accountCurrency)) currencyOptions.push(accountCurrency);
+  const currencyItems = currencyOptions.map((c) => ({ value: c, label: c, icon: CURRENCIES[c]?.symbol, sublabel: CURRENCIES[c]?.name }));
+  const currencyNote = accountId && accounts.find((a) => a.id === accountId)
+    ? `Solo para este movimiento. ${accounts.find((a) => a.id === accountId).name} sigue en ${accountCurrency}; si elegís otra moneda te vamos a pedir la tasa de cambio.`
+    : null;
 
   const numericAmount = parseAmountInput(amount);
   const validAmount = !isNaN(numericAmount) && numericAmount > 0;
@@ -346,8 +510,6 @@ export default function TransactionForm({
     setShowCopyModal(false);
   };
 
-  const accent = TYPE_INFO[type].color;
-
   return (
     <div style={styles.screen}>
       <TopBar
@@ -426,7 +588,11 @@ export default function TransactionForm({
       {/* animationDuration inline (no tocar .ec-slide-next en sí) — esa clase
           es compartida con el cambio de mes, y acá se quiere un poco más
           lenta que ahí sin afectarlo. */}
-      <div key={isCopyMode ? "copy" : "orig"} className={isCopyMode ? "ec-slide-next" : undefined} style={{ ...styles.form, animationDuration: isCopyMode ? "0.32s" : undefined }}>
+      {/* gap:20 pisa el 14 default de styles.form (compartido con otras
+          pantallas que SÍ tienen campos con caja, donde 14 queda bien) —
+          acá separa el toggle del body de filas de abajo, que tiene su
+          PROPIO gap:8 más junto (filas finitas de una línea, no cajas). */}
+      <div key={isCopyMode ? "copy" : "orig"} className={isCopyMode ? "ec-slide-next" : undefined} style={{ ...styles.form, gap: 20, animationDuration: isCopyMode ? "0.32s" : undefined }}>
         {isSynced && (
           <p style={{ ...styles.muted, padding: 0 }}>
             {needsRate
@@ -441,26 +607,16 @@ export default function TransactionForm({
           disabled={isSynced}
         />
 
-        {/* Al editar una recurrente no hay "fecha de esta ocurrencia" que
-            mostrar -- el calendario (start_date/next_date) no se toca desde
-            acá, ver handleSave. `date` igual se mantiene en estado (con el
-            start_date original) para que RecurringFields siga mostrando
-            bien el mensaje de "se repite los días X". */}
-        {!editingRecurring && (
-          <Field label="Fecha">
-            <input style={{ ...styles.input, opacity: isSynced ? 0.6 : 1 }} type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={isSynced} />
-          </Field>
-        )}
-
-        <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-          <Field label="Importe" required style={{ flex: 1 }}>
-            {needsRate ? (
-              // A diferencia del resto del formulario cuando isSynced, la
-              // tasa/el monto convertido sí quedan editables acá: es el único
-              // dato que la reconciliación de EvenGroup NO puede completar
-              // sola (no hay nadie mirando un formulario en ese momento), así
-              // que queda "pendiente" hasta que lo cargues. El importe en sí
-              // sigue bloqueado cuando isSynced, igual que el resto del form.
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {needsRate ? (
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+            {/* A diferencia del resto del formulario cuando isSynced, la
+                tasa/el monto convertido sí quedan editables acá: es el único
+                dato que la reconciliación de EvenGroup NO puede completar
+                sola (no hay nadie mirando un formulario en ese momento), así
+                que queda "pendiente" hasta que lo cargues. El importe en sí
+                sigue bloqueado cuando isSynced, igual que el resto del form. */}
+            <div style={{ flex: 1, minWidth: 0 }}>
               <CurrencyConversionField
                 amount={amount}
                 onChangeAmount={setAmount}
@@ -472,35 +628,76 @@ export default function TransactionForm({
                 onConfirmNext={type !== "transfer" ? () => setOpenAccountSignal((n) => n + 1) : undefined}
                 openSignal={openConversionSignal}
                 amountDisabled={isSynced}
+                required
               />
-            ) : (
+            </div>
+            <PickerField
+              compact
+              value={currency}
+              onChange={(v) => { setCurrency(v); touch("currency"); }}
+              disabled={isSynced}
+              title="Elegí la moneda"
+              note={currencyNote}
+              groups={[{ label: null, items: currencyItems }]}
+            />
+          </div>
+        ) : (
+          // Importe "hero": número grande, sin el recuadro/etiqueta de un
+          // campo normal (ver PENDIENTES.md) — la moneda es una zona de
+          // toque aparte (el chip de al lado), no parte del mismo campo,
+          // para que quede claro que son 2 acciones distintas (editar el
+          // monto vs. elegir la moneda). Signo y color según el tipo. 54 es
+          // el tamaño BASE/máximo — CalculatorAmountInput lo achica solo si
+          // hace falta, midiendo el ancho real (ver Shared.jsx); para que
+          // ese cálculo sirva de algo, esta fila tiene que ser "flex de
+          // verdad" (no inline-flex envolvente): el botón usa flex:"0 1
+          // auto" + minWidth:0 para poder ENCOGERSE por debajo de su propio
+          // contenido cuando no entra, en vez de empujar todo más ancho que
+          // la pantalla — el chip de moneda nunca se achica (flexShrink:0).
+          <div style={{ textAlign: "center", padding: "4px 0 2px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, width: "100%" }}>
               <CalculatorAmountInput
                 value={amount}
                 onChange={setAmount}
                 onBlur={() => touch("amount")}
                 onConfirmNext={type !== "transfer" ? () => setOpenAccountSignal((n) => n + 1) : undefined}
-                placeholder="0.00"
+                placeholder="0,00"
                 disabled={isSynced}
+                style={{ flex: "0 1 auto", minWidth: 0, width: "100%", height: 56, border: "none", background: "transparent", padding: "0 10px", lineHeight: 1, fontSize: 40, fontWeight: 400, fontFamily: "'Iowan Old Style', 'Georgia', 'Source Serif Pro', serif", color: AMOUNT_COLOR[type], textAlign: "center", justifyContent: "center", borderRadius: 14 }}
+                focusStyle={{ background: "#F3ECE0", boxShadow: "none" }}
+                placeholderColor="#A3968B"
               />
-            )}
-          </Field>
-          <select
-            style={{ ...styles.input, width: 80, flexShrink: 0, padding: "11px 6px", textAlign: "center", fontWeight: 600, color: "#544A3C", opacity: isSynced ? 0.6 : 1 }}
-            value={currency}
-            onChange={(e) => { setCurrency(e.target.value); touch("currency"); }}
-            disabled={isSynced}
-          >
-            {currencyOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </div>
-        {/* El error vive FUERA del Field (que solo tiene Importe) para que no
-            le sume altura a esa columna sola: si no, el select de moneda
-            (hermano en el flex de arriba, "flex-end") quedaba alineado con
-            el error de abajo en vez de con el input. */}
-        {touched.amount && (!validAmount || !validRate) && (
-          <span style={{ fontSize: 12, fontWeight: 400, color: "#B0473A", marginTop: -8, fontFamily: "system-ui, sans-serif" }}>
-            {needsRate ? "Completá el importe y la tasa de conversión." : "Ingresá un importe válido."}
-          </span>
+              <div style={{ flexShrink: 0 }}>
+                <PickerField
+                  compact
+                  value={currency}
+                  onChange={(v) => { setCurrency(v); touch("currency"); }}
+                  disabled={isSynced}
+                  title="Elegí la moneda"
+                  note={currencyNote}
+                  groups={[{ label: null, items: currencyItems }]}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+        {/* El error vive FUERA del Field/hero para que no le sume altura a
+            esa columna sola (needsRate: el select de moneda, hermano en el
+            flex de arriba, quedaba alineado con el error en vez de con el
+            input). En el caso simple (hero), la misma línea hace de pista
+            ("Tocá el número...") cuando está vacío y de error al tocarlo. */}
+        {needsRate ? (
+          touched.amount && (!validAmount || !validRate) && (
+            <span style={{ fontSize: 12, fontWeight: 400, color: "#B0473A", marginTop: -8, fontFamily: "system-ui, sans-serif" }}>
+              Completá el importe y la tasa de conversión.
+            </span>
+          )
+        ) : (
+          (touched.amount && !validAmount) || !amount ? (
+            <p style={{ margin: "-6px 0 0", fontSize: 13, textAlign: "center", color: touched.amount && !validAmount ? "#B0473A" : "#8A7F72", fontFamily: "system-ui, sans-serif" }}>
+              {touched.amount && !validAmount ? "Ingresá un importe válido." : "Tocá el número para escribir el importe."}
+            </p>
+          ) : null
         )}
 
         {isSynced && needsRate && !validRate && (
@@ -515,8 +712,19 @@ export default function TransactionForm({
           </p>
         )}
 
-        <Field label={type === "transfer" ? "De" : "Cuenta"} required error={touched.accountId && !accountId ? "Este campo es obligatorio." : ""}>
+        {/* Al editar una recurrente no hay "fecha de esta ocurrencia" que
+            mostrar -- el calendario (start_date/next_date) no se toca desde
+            acá, ver handleSave. `date` igual se mantiene en estado (con el
+            start_date original) para que RecurringFields siga mostrando
+            bien el mensaje de "se repite los días X". */}
+        {!editingRecurring && (
+          <DateRow label="Fecha" value={date} onChange={setDate} disabled={isSynced} />
+        )}
+
+        <Field error={touched.accountId && !accountId ? "Este campo es obligatorio." : ""}>
           <PickerField
+            rowLabel={type === "transfer" ? "De" : "Cuenta"}
+            required
             value={accountId}
             onChange={setAccountId}
             onClear={() => setAccountId("")}
@@ -551,8 +759,6 @@ export default function TransactionForm({
 
         {type === "transfer" && (
           <Field
-            label="A"
-            required
             error={touched.toAccountId
               ? (!toAccountId
                   ? "Este campo es obligatorio."
@@ -562,6 +768,8 @@ export default function TransactionForm({
               : ""}
           >
             <PickerField
+              rowLabel="A"
+              required
               value={toAccountId}
               onChange={setToAccountId}
               onClear={() => setToAccountId("")}
@@ -589,8 +797,9 @@ export default function TransactionForm({
         )}
 
         {type !== "transfer" && (
-          <Field label="Categoría">
+          <Field>
             <PickerField
+              rowLabel="Categoría"
               value={categoryId}
               onChange={(v) => {
                 if (v === "__new__") { setManagingCategoryType(type === "income" ? "income" : "expense"); return; }
@@ -598,11 +807,12 @@ export default function TransactionForm({
               }}
               onClear={() => setCategoryId("")}
               placeholder="Sin categoría"
+              title="Elegí una categoría"
               groups={[{
                 label: null,
                 items: [
                   ...typeCategories.map((c) => ({ value: c.id, label: c.name, icon: c.icon, deleted: c.deleted })),
-                  { value: "__new__", label: "Nueva", icon: "➕" },
+                  { value: "__new__", label: "Nueva", icon: "➕", action: true },
                 ],
               }]}
             />
@@ -614,40 +824,24 @@ export default function TransactionForm({
           </p>
         )}
 
-        <Field label="Descripción">
-          <div style={{ position: "relative" }}>
-            <input
-              style={{ ...styles.input, width: "100%" }}
-              value={note}
-              onChange={(e) => { setNote(e.target.value); setNoteDismissed(false); }}
-              onFocus={() => setNoteFocused(true)}
-              onBlur={() => setNoteFocused(false)}
-              placeholder="Opcional"
-            />
-            {noteFocused && !noteDismissed && noteSuggestions.length > 0 && (
-              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, zIndex: 5, border: "1px solid #DDD2BE", borderRadius: 10, background: "#fff", overflow: "hidden", boxShadow: "0 4px 10px rgba(0,0,0,0.08)" }}>
-                {noteSuggestions.map((s) => (
-                  <button
-                    type="button"
-                    key={s}
-                    // onMouseDown con preventDefault (no onClick) para que el
-                    // input nunca llegue a perder el foco (onBlur) antes de
-                    // que se registre la selección — si no, el blur cierra el
-                    // desplegable justo antes de que el click llegue al botón.
-                    onMouseDown={(e) => { e.preventDefault(); setNote(s); setNoteDismissed(true); }}
-                    style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 12px", fontSize: 13, fontFamily: "system-ui, sans-serif", border: "none", background: "#fff", color: "#2B2620", cursor: "pointer" }}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </Field>
+        <TextRow
+          label="Descripción"
+          value={note}
+          onChange={(v) => { setNote(v); setNoteDismissed(false); }}
+          onFocus={() => setNoteFocused(true)}
+          onBlur={() => setNoteFocused(false)}
+          placeholder="Añadir descripción"
+          suggestions={noteFocused && !noteDismissed ? noteSuggestions : []}
+          onPickSuggestion={(s) => { setNote(s); setNoteDismissed(true); }}
+        />
 
-        <Field label="Nota">
-          <textarea rows={4} style={{ ...styles.input, resize: "none", fontFamily: "system-ui, sans-serif" }} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Opcional" />
-        </Field>
+        <TextRow
+          label="Nota"
+          value={description}
+          onChange={setDescription}
+          placeholder="Añadir nota"
+          multiline
+        />
 
         {!isSynced && !recurringOpen && !forceRecurringOpen && (
           <button style={styles.btnDashed} onClick={() => setRecurringOpen(true)}>
@@ -670,12 +864,13 @@ export default function TransactionForm({
             onRemove={(hideRemoveRecurring || editingRecurring) ? null : () => setRecurringOpen(false)}
           />
         )}
+        </div>
       </div>
 
       <Footer>
         <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
         <button
-          style={{ flex: 1, marginTop: 0, padding: "12px", borderRadius: 12, border: "none", background: accent, color: "#fff", fontSize: 14, fontWeight: 700, fontFamily: "system-ui, sans-serif", opacity: (saving || !canSave) ? 0.5 : 1 }}
+          style={{ flex: 2, marginTop: 0, padding: "12px", borderRadius: 12, border: "none", background: "#C75D3B", color: "#fff", fontSize: 14, fontWeight: 700, fontFamily: "system-ui, sans-serif", opacity: (saving || !canSave) ? 0.5 : 1 }}
           onClick={handleSave}
           disabled={saving}
         >
@@ -732,36 +927,53 @@ function RecurringFields({ type, date, freqValue, setFreqValue, freqInterval, se
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: 14, borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff" }}>
-      <Field label="Frecuencia">
-        <select style={styles.input} value={freqValue} onChange={(e) => setFreqValue(e.target.value)}>
-          {RECURRING_FREQUENCIES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
-        </select>
-      </Field>
+    // Mismas filas (label izquierda / valor derecha, sin caja) que el resto
+    // del formulario — antes esto era una tarjeta blanca con bordes propios
+    // y <select>/<input> con caja, un lenguaje visual totalmente distinto.
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <PickerField
+        rowLabel="Frecuencia"
+        value={freqValue}
+        onChange={setFreqValue}
+        listStyle
+        title="Frecuencia"
+        groups={[{ label: null, items: RECURRING_FREQUENCIES.map((f) => ({ value: f.value, label: f.label })) }]}
+      />
 
       {freq?.interval === null && (
-        <Field label={freq.unit === "week" ? "Cada cuántas semanas" : "Cada cuántos meses"} required error={intervalTouched && intervalInvalid ? "Debe ser al menos 2." : ""}>
-          <input style={styles.input} type="number" min={2} value={freqInterval} onChange={(e) => setFreqInterval(e.target.value)} onBlur={onIntervalBlur} />
-        </Field>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 40, borderBottom: "1px solid #ECE3D3" }}>
+            <span style={{ flexShrink: 0, fontSize: 13, color: "#6B6355", fontFamily: "system-ui, sans-serif" }}>
+              {freq.unit === "week" ? "Cada cuántas semanas" : "Cada cuántos meses"}
+              <span style={{ color: "#B0473A" }}> *</span>
+            </span>
+            <input
+              type="number"
+              min={2}
+              className="row-input"
+              value={freqInterval}
+              onChange={(e) => setFreqInterval(e.target.value)}
+              onBlur={onIntervalBlur}
+              style={{ flex: 1, minWidth: 0, textAlign: "right", fontSize: 13.5, fontFamily: "system-ui, sans-serif", border: "none", background: "transparent", padding: 0, color: "#2B2420" }}
+            />
+          </div>
+          {intervalTouched && intervalInvalid && (
+            <span style={{ fontSize: 12, fontWeight: 400, color: "#B0473A", fontFamily: "system-ui, sans-serif" }}>Debe ser al menos 2.</span>
+          )}
+        </div>
       )}
 
-      <Field label="Fecha de fin (opcional)">
-        {/* minHeight:44 — un <input type="date"> vacío (acá arranca "" por
-            defecto, a diferencia de los otros campos de fecha de la app que
-            siempre precargan hoy) renderiza más bajo que uno con valor;
-            mismo bug ya visto y arreglado en Filtros. */}
-        <input style={{ ...styles.input, minHeight: 44, boxSizing: "border-box" }} type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-      </Field>
+      <DateRow label="Fecha de fin" value={endDate} onChange={setEndDate} placeholder="Opcional" />
 
       {(explanation || warning) && (
-        <div>
+        <div style={{ padding: "12px 0 0" }}>
           {explanation && <p style={{ ...styles.muted, padding: 0, fontSize: 12.5, margin: 0 }}>{explanation}</p>}
           {warning && <p style={{ ...styles.muted, padding: 0, fontSize: 12.5, margin: 0, color: "#A8754A" }}>{warning}</p>}
         </div>
       )}
 
       {onRemove && (
-        <button style={{ background: "none", border: "none", color: "#B0473A", fontSize: 13.5, fontWeight: 600, fontFamily: "system-ui, sans-serif", padding: "4px 0", textAlign: "left", cursor: "pointer" }} onClick={onRemove}>
+        <button style={{ background: "none", border: "none", color: "#B0473A", fontSize: 13.5, fontWeight: 600, fontFamily: "system-ui, sans-serif", padding: "12px 0 4px", textAlign: "left", cursor: "pointer" }} onClick={onRemove}>
           Eliminar recurrencia
         </button>
       )}

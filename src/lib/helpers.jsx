@@ -304,6 +304,18 @@ export function monthsBefore(viewMonth, n) {
   return out;
 }
 
+// Para marcar un campo como "ya lo tocó" (mostrar su error recién cuando
+// corresponde, no desde el primer render) — mismo patrón de 2 líneas
+// repetido en cada formulario de la app. `setTouched` se expone aparte
+// (3er valor) para los casos menos comunes donde hace falta reemplazar
+// varios campos de una ("marcar todo como tocado" al intentar guardar un
+// formulario inválido), no solo marcar uno.
+export function useTouched() {
+  const [touched, setTouched] = useState({});
+  const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
+  return [touched, touch, setTouched];
+}
+
 // Esta app no navega con URLs/router: "cambiar de pantalla" es solo React
 // mostrando otro árbol de componentes, así que el navegador nunca resetea el
 // scroll solo (eso sí pasaría con una navegación real de página). Cualquier

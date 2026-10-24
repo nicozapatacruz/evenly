@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, Ban, Camera, Check, ChevronLeft, ChevronRight, Eye, EyeOff, Info, Trash2, User, X } from "lucide-react";
 import { styles } from "../lib/styles.js";
 import { ICON_OPTIONS } from "../lib/evenCapitalData.js";
-import { money, parseAmountInput } from "../lib/helpers.jsx";
+import { money, parseAmountInput, todayInputValue } from "../lib/helpers.jsx";
 
 const MONTH_LABEL = (d) => d.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
 
@@ -172,6 +172,17 @@ export function Field({ label, info, infoBlocked, required, error, style, childr
       {error && <span style={{ fontSize: 12, fontWeight: 400, color: "#B0473A" }}>{error}</span>}
     </Wrapper>
   );
+}
+
+// Texto explicativo chico debajo de una fila/campo (ej. "Se usa solo si el
+// asistente no logra leer la fecha...") — mismo estilo repetido en varios
+// formularios, antes copiado a mano cada vez.
+export function Hint({ children, color, style }) {
+  // `color` solo se mete al objeto si vino de verdad: spread de
+  // `color: undefined` (lo que pasaba antes acá, cuando no se pasaba la
+  // prop) pisa el gris apagado de styles.muted con "sin color", heredando
+  // el color de texto normal del padre en vez de quedarse apagado.
+  return <p style={{ ...styles.muted, padding: 0, fontSize: 12.5, margin: 0, ...(color ? { color } : null), ...style }}>{children}</p>;
 }
 
 // Input de contraseña con el "ojito" para mostrar/ocultar en texto plano —
@@ -576,6 +587,34 @@ export function Footer({ children }) {
   return <div style={styles.footer}>{children}</div>;
 }
 
+// Footer de Cancelar/acción con ratio 1/3 (Cancelar) - 2/3 (acción
+// principal) — le da más peso visual al botón que de verdad importa, sin
+// perder el de cancelar (ver PENDIENTES.md). Mismo patrón repetido en casi
+// todos los formularios de la app; se va migrando acá a medida que se
+// rediseña cada uno (no es un cambio retroactivo al Footer 50/50 viejo que
+// todavía usan los formularios no tocados).
+// `confirmDisabled` bloquea el click de verdad (ej. mientras se está
+// guardando, para no mandar 2 veces) — `confirmDim` solo lo apaga
+// visualmente (ej. formulario inválido) SIN bloquear el click, para que
+// igual dispare la validación inline (mostrar "Este campo es
+// obligatorio.", etc.) en vez de no hacer nada.
+export function FormFooter({ onCancel, cancelLabel = "Cancelar", cancelDisabled = false, onConfirm, confirmLabel, confirmDisabled = false, confirmDim = false, confirmColor = "#C75D3B" }) {
+  return (
+    <Footer>
+      <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel} disabled={cancelDisabled}>
+        {cancelLabel}
+      </button>
+      <button
+        style={{ flex: 2, marginTop: 0, padding: "12px", borderRadius: 12, border: "none", background: confirmColor, color: "#fff", fontSize: 14, fontWeight: 700, fontFamily: "system-ui, sans-serif", opacity: (confirmDisabled || confirmDim) ? 0.5 : 1 }}
+        onClick={onConfirm}
+        disabled={confirmDisabled}
+      >
+        {confirmLabel}
+      </button>
+    </Footer>
+  );
+}
+
 // Selector en grilla (categoría/cuenta en EvenCapital) — toca el campo y
 // sube una hoja desde abajo con una grilla de ícono+nombre (antes se
 // desplegaba pegada al campo, empujando el resto del formulario — ver
@@ -640,7 +679,7 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", t
       disabled={disabled}
       style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 40, padding: "0 2px", border: "none", borderBottom: "1px solid #ECE3D3", background: "transparent", textAlign: "left", fontFamily: "system-ui, sans-serif", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.6 : 1 }}
     >
-      <span style={{ display: "flex", alignItems: "center", gap: 4, width: 100, flexShrink: 0, fontSize: 13, color: "#6B6355" }}>
+      <span style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355" }}>
         {rowLabel}
         {required && <span style={{ color: "#B0473A" }}>*</span>}
       </span>
@@ -802,6 +841,172 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", t
   );
 }
 
+// "Hoy, 23 Oct 2026" (o "Jue, 22 Oct 2026" si no es hoy) — las filas de
+// fecha (Fecha de una transacción, Fecha de fin de una recurrencia, Fecha
+// por defecto de una importación, etc.) muestran esto en vez de la fecha
+// cruda del <input type="date">.
+const capitalize = (s) => s.replace(/\.$/, "").replace(/^\p{L}/u, (c) => c.toUpperCase());
+export function formatDateRow(dateStr) {
+  const d = new Date(dateStr + "T12:00:00");
+  const isToday = dateStr === todayInputValue();
+  const prefix = isToday ? "Hoy" : capitalize(d.toLocaleDateString("es-ES", { weekday: "short" }));
+  const month = capitalize(d.toLocaleDateString("es-ES", { month: "short" }));
+  return `${prefix}, ${d.getDate()} ${month} ${d.getFullYear()}`;
+}
+
+// Fila de fecha: label izquierda, valor formateado a la derecha, sin caja.
+// El <input type="date"> real queda encima, invisible, para seguir
+// abriendo el selector nativo del navegador/celular al tocar — no hay
+// forma de "fingir" ese selector sin perder su UX nativa (rueditas en
+// iOS, calendario en Android/desktop).
+export function DateRow({ label, value, onChange, disabled = false, placeholder = "Elegir fecha" }) {
+  return (
+    <div style={{ position: "relative" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 40, borderBottom: "1px solid #ECE3D3", fontFamily: "system-ui, sans-serif", opacity: disabled ? 0.6 : 1 }}>
+        <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355" }}>{label}</span>
+        <span style={{ flex: 1, textAlign: "right", fontSize: 13.5, color: value ? "#2B2620" : "#A3968B" }}>{value ? formatDateRow(value) : placeholder}</span>
+      </div>
+      <input
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, border: "none", padding: 0, margin: 0, cursor: disabled ? "not-allowed" : "pointer" }}
+      />
+    </div>
+  );
+}
+
+// Recorta un texto a un ancho en PÍXELES de verdad (no una cantidad de
+// caracteres adivinada) — el ancho disponible de una fila varía con el
+// dispositivo/tamaño de letra, así que un límite fijo de caracteres (lo que
+// se probó primero) se pasa con textos de letras anchas y sobra con letras
+// angostas. Búsqueda binaria + Canvas 2D (mismo truco que cualquier
+// "truncate with ellipsis" fuera del CSS, necesario acá porque
+// text-overflow:ellipsis no es confiable en <textarea>).
+let rowMeasureCtx = null;
+function truncateToWidth(text, maxWidth, font) {
+  if (!rowMeasureCtx) rowMeasureCtx = document.createElement("canvas").getContext("2d");
+  rowMeasureCtx.font = font;
+  if (rowMeasureCtx.measureText(text).width <= maxWidth) return text;
+  let lo = 0, hi = text.length;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (rowMeasureCtx.measureText(text.slice(0, mid) + "…").width <= maxWidth) lo = mid;
+    else hi = mid - 1;
+  }
+  return text.slice(0, lo).trimEnd() + "…";
+}
+
+// Mismo truco, pero al revés: recorta por el INICIO en vez del final (el
+// "…" queda adelante, se conserva la COLA del texto) — para la expresión
+// de la calculadora mientras se escribe, donde lo último tecleado (y el
+// cursor) siempre tiene que quedar visible, nunca lo de más atrás.
+function truncateFromStart(text, maxWidth, font) {
+  if (!rowMeasureCtx) rowMeasureCtx = document.createElement("canvas").getContext("2d");
+  rowMeasureCtx.font = font;
+  if (rowMeasureCtx.measureText(text).width <= maxWidth) return text;
+  let lo = 0, hi = text.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (rowMeasureCtx.measureText("…" + text.slice(mid)).width <= maxWidth) hi = mid;
+    else lo = mid + 1;
+  }
+  return "…" + text.slice(lo).trimStart();
+}
+
+// Fila "label izquierda (ancho fijo) / input derecha, sin caja" para texto
+// libre (Descripción/Nota de una transacción, y cualquier otro campo de
+// texto corto de un formulario) — SIN hoja/modal (a diferencia de
+// Cuenta/Categoría, que sí son selección-de-opciones): se escribe directo
+// en la fila. `suggestions`, si viene no vacío, lista coincidencias debajo
+// (autocompletar); onMouseDown (no onClick) para que el input no pierda el
+// foco antes de registrar el tap. `multiline`: se ve como una fila de una
+// sola línea cerrada, pero al enfocar crece para poder escribir/leer texto
+// largo sin perderlo (label arriba, valor abajo, en vez de label-izquierda/
+// valor-derecha en la misma línea).
+export function TextRow({ label, value, onChange, onFocus, onBlur, placeholder, suggestions, onPickSuggestion, multiline = false }) {
+  const [focused, setFocused] = useState(false);
+  const taRef = useRef(null);
+  useEffect(() => {
+    if (!multiline) return;
+    const el = taRef.current;
+    if (!el) return;
+    el.style.height = focused ? Math.min(el.scrollHeight, 160) + "px" : "";
+  }, [focused, value, multiline]);
+
+  // Colapsada (no enfocada): solo la 1ra línea, recortada al ancho REAL de
+  // la fila (truncateToWidth) si hace falta — nunca se pierde nada (el
+  // valor completo sigue en `value`, esto es solo lo que se VE cerrado).
+  // Antes del primer montaje (taRef.current aún null) no hay ancho que
+  // medir; ese primer render cae en el valor completo, se corrige solo en
+  // cuanto el efecto de abajo dispara un re-render.
+  const FONT = "16px system-ui, -apple-system, sans-serif";
+  const [, forceMeasure] = useState(0);
+  useLayoutEffect(() => { if (!focused) forceMeasure((n) => n + 1); }, [focused, value]);
+  const collapsed = !value ? value : (() => {
+    const firstLine = value.split("\n")[0];
+    const hasMore = value.includes("\n");
+    const width = taRef.current?.clientWidth;
+    if (!width) return hasMore ? firstLine + "…" : firstLine; // antes del 1er montaje, sin ancho que medir
+    if (!hasMore) return truncateToWidth(firstLine, width, FONT);
+    // Con más contenido abajo, el "…" es obligatorio aunque la 1ra línea
+    // sola entre entera (truncateToWidth no lo agregaría si ya entra).
+    if (!rowMeasureCtx) rowMeasureCtx = document.createElement("canvas").getContext("2d");
+    rowMeasureCtx.font = FONT;
+    if (rowMeasureCtx.measureText(firstLine + "…").width <= width) return firstLine + "…";
+    return truncateToWidth(firstLine, width, FONT); // ya agrega su propio "…" al recortar
+  })();
+
+  return (
+    <div style={{ position: "relative" }}>
+      <div style={multiline
+        ? { display: "flex", flexDirection: "column", gap: 6, minHeight: 40, borderBottom: "1px solid #ECE3D3", padding: "13px 0 15px" }
+        : { display: "flex", alignItems: "center", gap: 12, minHeight: 40, borderBottom: "1px solid #ECE3D3" }}
+      >
+        <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355", fontFamily: "system-ui, sans-serif" }}>{label}</span>
+        {multiline ? (
+          <textarea
+            ref={taRef}
+            rows={1}
+            className="row-input"
+            value={focused ? value : collapsed}
+            onChange={(e) => onChange(e.target.value)}
+            onFocus={() => { setFocused(true); onFocus?.(); }}
+            onBlur={() => { setFocused(false); onBlur?.(); }}
+            placeholder={placeholder}
+            style={{ width: "100%", fontSize: 13.5, fontFamily: "system-ui, sans-serif", border: "none", background: "transparent", padding: 0, color: "#2B2420", resize: "none", overflow: "hidden", lineHeight: 1.4, ...(focused ? null : { whiteSpace: "nowrap", textOverflow: "ellipsis" }) }}
+          />
+        ) : (
+          <input
+            className="row-input"
+            style={{ flex: 1, minWidth: 0, textAlign: "right", fontSize: 13.5, fontFamily: "system-ui, sans-serif", border: "none", background: "transparent", padding: 0, color: "#2B2420", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onFocus={onFocus}
+            onBlur={onBlur}
+            placeholder={placeholder}
+          />
+        )}
+      </div>
+      {suggestions && suggestions.length > 0 && (
+        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, zIndex: 5, border: "1px solid #DDD2BE", borderRadius: 10, background: "#fff", overflow: "hidden", boxShadow: "0 4px 10px rgba(0,0,0,0.08)" }}>
+          {suggestions.map((s) => (
+            <button
+              type="button"
+              key={s}
+              onMouseDown={(e) => { e.preventDefault(); onPickSuggestion(s); }}
+              style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 12px", fontSize: 13, fontFamily: "system-ui, sans-serif", border: "none", background: "#fff", color: "#2B2620", cursor: "pointer" }}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Agrupa acciones del header (Filtros/Favoritos/etc.) + el selector de
 // moneda (Fase 2 de multi-moneda, ver MULTI_CURRENCY_PLAN.md) en un solo
 // ícono con popover, en vez de un ícono por acción — un header mobile no
@@ -852,6 +1057,20 @@ function evaluateCalculatorTokens(tokens) {
 // imprecisión de punto flotante de una división dejé algo como
 // "33.330000000000005" en el campo.
 const roundMoney = (n) => Math.round(n * 100) / 100;
+
+// Tope de dígitos para cualquier número escrito a mano en la calculadora
+// propia (importe, tasa de conversión, montos): 9 enteros + 2 decimales
+// (hasta 999.999.999,99) — de sobra para cualquier caso real. Sin esto, un
+// número absurdamente largo dejaba de caber incluso al tamaño mínimo de
+// letra (texto recortado por los 2 lados a la vez, por estar centrado —
+// ver PENDIENTES.md/sesión 2026-10-24). Mismo criterio que ya tenía la
+// app Money Manager original.
+function canAppendDigit(current, d) {
+  if (d === ".") return true; // el límite de un solo "." se chequea aparte
+  const [intPart, decPart] = current.split(".");
+  if (decPart !== undefined) return decPart.length < 2;
+  return intPart.replace("-", "").length < 9;
+}
 
 // Importe ya cerrado (no mientras se edita): siempre 2 decimales, coma
 // como separador — "12" se ve "12,00", "5.5" se ve "5,50". Mismo criterio
@@ -1025,6 +1244,7 @@ export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, 
       if (lastIsOperator) return [...prev, d === "." ? "0." : d];
       const last = prev[prev.length - 1];
       if (d === "." && last.includes(".")) return prev;
+      if (!canAppendDigit(last, d)) return prev;
       return [...prev.slice(0, -1), last + d];
     });
   };
@@ -1071,23 +1291,53 @@ export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, 
   // caracteres — una cantidad de caracteres igual puede pesar muy distinto
   // en píxeles según qué dígitos sean (ver PENDIENTES.md), y esto además
   // cubre la expresión completa mientras se escribe (ej. "2×3×3×3÷2"), no
-  // solo el resultado ya calculado. Si ni al tamaño mínimo entra, el botón
-  // scrollea horizontal en vez de desbordar visualmente (ver más abajo).
+  // solo el resultado ya calculado. Si ni al tamaño mínimo entra (una
+  // expresión larguísima, varios números encadenados), se recorta por el
+  // INICIO con "…" — el final (y el cursor) nunca se esconden, a
+  // diferencia de dejar que el navegador recorte parejo de los 2 lados.
   const baseFontSize = style?.fontSize || 15;
   const [fitFontSize, setFitFontSize] = useState(baseFontSize);
+  const [visibleText, setVisibleText] = useState(displayValue || placeholder);
   useLayoutEffect(() => {
-    const btn = inputElRef.current;
+    const box = containerRef.current;
     const text = displayValue || placeholder;
-    if (!btn || !text) { setFitFontSize(baseFontSize); return; }
+    if (!box || !text) { setFitFontSize(baseFontSize); setVisibleText(text); return; }
     const measure = () => {
-      const available = btn.clientWidth - 16;
-      if (available <= 0) { setFitFontSize(baseFontSize); return; }
+      // Medir el ancho del PADRE (y restarle los hermanos) en vez del
+      // propio botón: dentro de una fila flex que lo encoge (ej. el
+      // importe "hero", al lado del chip de moneda), el ancho del botón
+      // depende circularmente de su propio contenido (hug-content), así
+      // que usarlo como "disponible" daba medidas inestables/erráticas
+      // según qué se hubiera tecleado justo antes (ver PENDIENTES.md,
+      // sesión 2026-10-24). El padre (la fila completa) SÍ tiene un ancho
+      // estable, independiente de cuánto mida este campo en particular.
+      const parent = box.parentElement;
+      if (!parent) { setFitFontSize(baseFontSize); setVisibleText(text); return; }
+      // Los hermanos solo "compiten" por ancho si el padre es una fila
+      // horizontal (ej. el chip de moneda al lado, en el importe "hero")
+      // — si es una columna (ej. el <Field> normal, label arriba/error
+      // abajo), esos hermanos están en otro renglón, no hay que restarlos.
+      const parentStyle = getComputedStyle(parent);
+      const isRow = parentStyle.display.includes("flex") && !parentStyle.flexDirection.startsWith("column");
+      const siblingsWidth = isRow
+        ? [...parent.children].filter((c) => c !== box).reduce((sum, c) => sum + c.getBoundingClientRect().width, 0)
+        : 0;
+      const gapPx = isRow ? (parseFloat(getComputedStyle(parent).columnGap || getComputedStyle(parent).gap) || 0) : 0;
+      const gapCount = isRow && parent.children.length > 1 ? parent.children.length - 1 : 0;
+      const available = parent.clientWidth - siblingsWidth - gapPx * gapCount - 16;
+      if (available <= 0) { setFitFontSize(baseFontSize); setVisibleText(text); return; }
       if (!amountMeasureCtx) amountMeasureCtx = document.createElement("canvas").getContext("2d");
-      amountMeasureCtx.font = `${baseFontSize}px ${style?.fontFamily || "system-ui, sans-serif"}`;
+      const fontFamily = style?.fontFamily || "system-ui, sans-serif";
+      amountMeasureCtx.font = `${baseFontSize}px ${fontFamily}`;
       const textWidth = amountMeasureCtx.measureText(text).width;
-      if (textWidth <= available) { setFitFontSize(baseFontSize); return; }
+      if (textWidth <= available) { setFitFontSize(baseFontSize); setVisibleText(text); return; }
       const minSize = Math.max(16, baseFontSize * 0.35);
-      setFitFontSize(Math.max(minSize, baseFontSize * (available / textWidth)));
+      const scaledSize = baseFontSize * (available / textWidth);
+      if (scaledSize >= minSize) { setFitFontSize(scaledSize); setVisibleText(text); return; }
+      // Ni al tamaño mínimo entra entero: se queda en el mínimo y se
+      // recorta el TEXTO (no la letra) para que siga entrando.
+      setFitFontSize(minSize);
+      setVisibleText(truncateFromStart(text, available, `${minSize}px ${fontFamily}`));
     };
     measure();
     window.addEventListener("resize", measure);
@@ -1125,15 +1375,12 @@ export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, 
           // pisado por el anillo default pensado para el campo con caja.
           style={{ ...styles.input, width: "100%", height: 44, boxSizing: "border-box", textAlign: "left", display: "flex", alignItems: "center", opacity: disabled ? 0.6 : 1, cursor: disabled ? "not-allowed" : "pointer", ...(currency ? { paddingRight: 46 } : null), ...style, fontSize: fitFontSize, overflow: "hidden", ...(open ? (focusStyle || { boxShadow: "0 0 0 2px #C75D3B" }) : null) }}
         >
-          {/* Si ni el tamaño mínimo alcanza (ej. una expresión larguísima
-              mientras se escribe), esto recorta en vez de desbordar fuera de
-              la caja — red de seguridad, no debería verse en el uso normal.
-              Un overflow-x:auto acá (lo que había antes) metía un scrollbar
-              real que rompía el ancho medido y cortaba el último dígito a
-              la mitad en el celular — esto es solo recorte visual, sin
-              scroll de verdad. */}
+          {/* Si ni el tamaño mínimo alcanza (ej. varios números encadenados
+              mientras se escribe), `visibleText` ya viene recortado por el
+              INICIO con "…" (ver el efecto de arriba) — el final y el
+              cursor siempre quedan visibles, nunca se esconden. */}
           <span style={{ whiteSpace: "nowrap" }}>
-            {displayValue ? displayValue : <span style={{ color: placeholderColor }}>{placeholder}</span>}
+            {displayValue ? visibleText : <span style={{ color: placeholderColor }}>{visibleText}</span>}
           </span>
           {/* Este <button> no tiene foco/caret nativo (ver nota arriba) — sin
               esto, no había ninguna señal visual de que el teclado propio
@@ -1330,6 +1577,7 @@ export function CurrencyConversionField({ amount, onChangeAmount, currency, acco
       setRateDraft((prev) => {
         if (!prev) return d === "." ? "0." : d;
         if (d === "." && prev.includes(".")) return prev;
+        if (!canAppendDigit(prev, d)) return prev;
         return prev + d;
       });
       return;
@@ -1340,6 +1588,7 @@ export function CurrencyConversionField({ amount, onChangeAmount, currency, acco
       if (lastIsOperator) return [...prev, d === "." ? "0." : d];
       const last = prev[prev.length - 1];
       if (d === "." && last.includes(".")) return prev;
+      if (!canAppendDigit(last, d)) return prev;
       return [...prev.slice(0, -1), last + d];
     });
   };
@@ -1406,7 +1655,7 @@ export function CurrencyConversionField({ amount, onChangeAmount, currency, acco
         onClick={openEdit}
         style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 40, padding: 0, border: "none", borderBottom: "1px solid #ECE3D3", background: "transparent", textAlign: "left", fontFamily: "system-ui, sans-serif", cursor: "pointer" }}
       >
-        <span style={{ width: 100, flexShrink: 0, fontSize: 13, color: "#6B6355" }}>
+        <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355" }}>
           Importe{required && <span style={{ color: "#B0473A" }}> *</span>}
         </span>
         <span style={{ flex: 1, textAlign: "right", fontSize: 13.5, color: amount ? "#2B2420" : "#A3968B" }}>
@@ -1697,6 +1946,30 @@ export function PhotoPicker({ previewUrl, onChange, onClear, shape = "square", d
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+// Ver una foto a pantalla completa (tocar una miniatura la abre, tocar
+// afuera o la "X" la cierra) — mismo overlay negro + botón de cerrar
+// repetido en varios lugares (gasto/pago de EvenGroup con foto adjunta,
+// importar desde foto), antes duplicado en cada pantalla.
+export function PhotoLightbox({ open, src, onClose }) {
+  if (!open || !src) return null;
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 30 }}
+      onClick={onClose}
+    >
+      <img src={src} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Cerrar"
+        style={{ position: "absolute", top: 16, right: 16, width: 40, height: 40, borderRadius: "50%", border: "none", background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+      >
+        <X size={22} color="#fff" />
+      </button>
     </div>
   );
 }

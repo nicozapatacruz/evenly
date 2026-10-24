@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { X, Menu, Plus, Trash2, Copy, Star, Divide } from "lucide-react";
 import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { offlineSupabase as supabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, Footer, ConfirmInline, IconInput, PickerField, Field, Modal, CalculatorAmountInput, CurrencyConversionField, SegmentedControl } from "../../components/Shared.jsx";
-import { parseAmountInput, todayInputValue, dateInputValue, dateInputValueInZone, money, fmtDate, useScrollToTopOnChange, normalizeForSearch, CURRENCIES } from "../../lib/helpers.jsx";
+import { TopBar, Footer, FormFooter, ConfirmInline, IconInput, PickerField, Field, Modal, CalculatorAmountInput, CurrencyConversionField, SegmentedControl, DateRow, TextRow, formatDateRow, Hint } from "../../components/Shared.jsx";
+import { parseAmountInput, todayInputValue, dateInputValue, dateInputValueInZone, money, fmtDate, useScrollToTopOnChange, normalizeForSearch, CURRENCIES, useTouched } from "../../lib/helpers.jsx";
 import { RECURRING_FREQUENCIES, nextOccurrence, computeAmountMain, useRecentNoteTitles } from "../../lib/evenCapitalData.js";
 
 const TYPE_INFO = {
@@ -29,159 +29,6 @@ function recurringToFreqState(r) {
   const exact = RECURRING_FREQUENCIES.find((f) => f.unit === r.repeat_unit && f.interval === r.repeat_interval);
   if (exact) return { freqValue: exact.value, freqInterval: String(r.repeat_interval) };
   return { freqValue: r.repeat_unit === "week" ? "week-x" : "month-x", freqInterval: String(r.repeat_interval) };
-}
-
-// "Hoy, 22 oct" (o sin año si ya es el año en curso, con año si no) — la
-// fila de Fecha muestra esto en vez de la fecha cruda del <input type="date">.
-const capitalize = (s) => s.replace(/\.$/, "").replace(/^\p{L}/u, (c) => c.toUpperCase());
-function formatDateRow(dateStr) {
-  const d = new Date(dateStr + "T12:00:00");
-  const isToday = dateStr === todayInputValue();
-  const prefix = isToday ? "Hoy" : capitalize(d.toLocaleDateString("es-ES", { weekday: "short" }));
-  const month = capitalize(d.toLocaleDateString("es-ES", { month: "short" }));
-  return `${prefix}, ${d.getDate()} ${month} ${d.getFullYear()}`;
-}
-
-
-// Recorta un texto a un ancho en PÍXELES de verdad (no una cantidad de
-// caracteres adivinada) — el ancho disponible de una fila varía con el
-// dispositivo/tamaño de letra, así que un límite fijo de caracteres (lo que
-// probé primero) se pasa con textos de letras anchas y sobra con letras
-// angostas. Búsqueda binaria + Canvas 2D (mismo truco que cualquier
-// "truncate with ellipsis" fuera del CSS, necesario acá porque
-// text-overflow:ellipsis no es confiable en <textarea>).
-let measureCtx = null;
-function truncateToWidth(text, maxWidth, font) {
-  if (!measureCtx) measureCtx = document.createElement("canvas").getContext("2d");
-  measureCtx.font = font;
-  if (measureCtx.measureText(text).width <= maxWidth) return text;
-  let lo = 0, hi = text.length;
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >> 1;
-    if (measureCtx.measureText(text.slice(0, mid) + "…").width <= maxWidth) lo = mid;
-    else hi = mid - 1;
-  }
-  return text.slice(0, lo).trimEnd() + "…";
-}
-
-// Fila "label izquierda (ancho fijo) / input derecha, sin caja" para
-// Descripción/Nota — texto libre normal, SIN hoja/modal (a diferencia de
-// Cuenta/Categoría, que sí son selección-de-opciones): se escribe directo
-// en la fila, igual que en el mockup. `suggestions`, si viene no vacío,
-// lista coincidencias debajo (autocompletar Descripción); onMouseDown (no
-// onClick) para que el input no pierda el foco antes de registrar el tap.
-// Fila de fecha (Fecha de la transacción, Fecha de fin de una recurrencia)
-// — mismo patrón que Cuenta/Categoría: label izquierda, valor formateado
-// ("Hoy, 23 oct") a la derecha, sin caja. El <input type="date"> real queda
-// encima, invisible, para seguir abriendo el selector nativo del
-// navegador/celular al tocar — no hay forma de "fingir" ese selector sin
-// perder su UX nativa (rueditas en iOS, calendario en Android/desktop).
-function DateRow({ label, value, onChange, disabled = false, placeholder = "Elegir fecha" }) {
-  return (
-    <div style={{ position: "relative" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 40, borderBottom: "1px solid #ECE3D3", fontFamily: "system-ui, sans-serif", opacity: disabled ? 0.6 : 1 }}>
-        <span style={{ width: 100, flexShrink: 0, fontSize: 13, color: "#6B6355" }}>{label}</span>
-        <span style={{ flex: 1, textAlign: "right", fontSize: 13.5, color: value ? "#2B2620" : "#A3968B" }}>{value ? formatDateRow(value) : placeholder}</span>
-      </div>
-      <input
-        type="date"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, border: "none", padding: 0, margin: 0, cursor: disabled ? "not-allowed" : "pointer" }}
-      />
-    </div>
-  );
-}
-
-function TextRow({ label, value, onChange, onFocus, onBlur, placeholder, suggestions, onPickSuggestion, multiline = false }) {
-  // `multiline`: se ve como una fila de una sola línea cerrada (igual que
-  // Descripción), pero al enfocar crece para poder escribir/leer texto
-  // largo sin perderlo — Nota siempre aceptó varias líneas en Evenly, el
-  // mockup de Claude solo mostraba el caso cerrado de una línea.
-  const [focused, setFocused] = useState(false);
-  const taRef = useRef(null);
-  useEffect(() => {
-    if (!multiline) return;
-    const el = taRef.current;
-    if (!el) return;
-    el.style.height = focused ? Math.min(el.scrollHeight, 160) + "px" : "";
-  }, [focused, value, multiline]);
-
-  // Colapsada (no enfocada): solo la 1ra línea, recortada al ancho REAL de
-  // la fila (truncateToWidth) si hace falta — nunca se pierde nada (el
-  // valor completo sigue en `value`, esto es solo lo que se VE cerrado).
-  // Antes del primer montaje (taRef.current aún null) no hay ancho que
-  // medir; ese primer render cae en el valor completo, se corrige solo en
-  // cuanto el efecto de abajo dispara un re-render.
-  const FONT = "16px system-ui, -apple-system, sans-serif";
-  const [, forceMeasure] = useState(0);
-  useLayoutEffect(() => { if (!focused) forceMeasure((n) => n + 1); }, [focused, value]);
-  const collapsed = !value ? value : (() => {
-    const firstLine = value.split("\n")[0];
-    const hasMore = value.includes("\n");
-    const width = taRef.current?.clientWidth;
-    if (!width) return hasMore ? firstLine + "…" : firstLine; // antes del 1er montaje, sin ancho que medir
-    if (!hasMore) return truncateToWidth(firstLine, width, FONT);
-    // Con más contenido abajo, el "…" es obligatorio aunque la 1ra línea
-    // sola entre entera (truncateToWidth no lo agregaría si ya entra).
-    if (!measureCtx) measureCtx = document.createElement("canvas").getContext("2d");
-    measureCtx.font = FONT;
-    if (measureCtx.measureText(firstLine + "…").width <= width) return firstLine + "…";
-    return truncateToWidth(firstLine, width, FONT); // ya agrega su propio "…" al recortar
-  })();
-
-  // `multiline` (Nota) apilado: label arriba, valor abajo a todo el ancho
-  // (como un textarea de verdad) — a diferencia de Descripción/Cuenta/
-  // Categoría, que van label-izquierda/valor-derecha en la misma línea. El
-  // borde de abajo sigue siendo el único límite visual, al final de los dos.
-  return (
-    <div style={{ position: "relative" }}>
-      <div style={multiline
-        ? { display: "flex", flexDirection: "column", gap: 6, minHeight: 40, borderBottom: "1px solid #ECE3D3", padding: "13px 0 15px" }
-        : { display: "flex", alignItems: "center", gap: 12, minHeight: 40, borderBottom: "1px solid #ECE3D3" }}
-      >
-        <span style={{ width: multiline ? "auto" : 100, flexShrink: 0, fontSize: 13, color: "#6B6355", fontFamily: "system-ui, sans-serif" }}>{label}</span>
-        {multiline ? (
-          <textarea
-            ref={taRef}
-            rows={1}
-            className="row-input"
-            value={focused ? value : collapsed}
-            onChange={(e) => onChange(e.target.value)}
-            onFocus={() => { setFocused(true); onFocus?.(); }}
-            onBlur={() => { setFocused(false); onBlur?.(); }}
-            placeholder={placeholder}
-            style={{ width: "100%", fontSize: 13.5, fontFamily: "system-ui, sans-serif", border: "none", background: "transparent", padding: 0, color: "#2B2420", resize: "none", overflow: "hidden", lineHeight: 1.4, ...(focused ? null : { whiteSpace: "nowrap", textOverflow: "ellipsis" }) }}
-          />
-        ) : (
-          <input
-            className="row-input"
-            style={{ flex: 1, minWidth: 0, textAlign: "right", fontSize: 13.5, fontFamily: "system-ui, sans-serif", border: "none", background: "transparent", padding: 0, color: "#2B2420", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            onFocus={onFocus}
-            onBlur={onBlur}
-            placeholder={placeholder}
-          />
-        )}
-      </div>
-      {suggestions && suggestions.length > 0 && (
-        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, zIndex: 5, border: "1px solid #DDD2BE", borderRadius: 10, background: "#fff", overflow: "hidden", boxShadow: "0 4px 10px rgba(0,0,0,0.08)" }}>
-          {suggestions.map((s) => (
-            <button
-              type="button"
-              key={s}
-              onMouseDown={(e) => { e.preventDefault(); onPickSuggestion(s); }}
-              style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 12px", fontSize: 13, fontFamily: "system-ui, sans-serif", border: "none", background: "#fff", color: "#2B2620", cursor: "pointer" }}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }
 
 /* =========================================================================
@@ -269,8 +116,7 @@ export default function TransactionForm({
     : [];
   const [description, setDescription] = useState(editingTransaction?.memo || editingRecurring?.memo || prefillBookmark?.memo || "");
   const [saving, setSaving] = useState(false);
-  const [touched, setTouched] = useState({});
-  const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
+  const [touched, touch, setTouched] = useTouched();
 
   // Moneda de la cuenta elegida — es una restricción dura (ver PENDIENTES.md
   // sección B): toda transacción queda en la moneda de SU cuenta, no en una
@@ -663,7 +509,7 @@ export default function TransactionForm({
                 onConfirmNext={type !== "transfer" ? () => setOpenAccountSignal((n) => n + 1) : undefined}
                 placeholder="0,00"
                 disabled={isSynced}
-                style={{ flex: "0 1 auto", minWidth: 0, width: "100%", height: 56, border: "none", background: "transparent", padding: "0 10px", lineHeight: 1, fontSize: 40, fontWeight: 400, fontFamily: "'Iowan Old Style', 'Georgia', 'Source Serif Pro', serif", color: AMOUNT_COLOR[type], textAlign: "center", justifyContent: "center", borderRadius: 14 }}
+                style={{ flex: "0 1 auto", minWidth: 0, width: "auto", height: 56, border: "none", background: "transparent", padding: "0 10px", lineHeight: 1, fontSize: 40, fontWeight: 400, fontFamily: "'Iowan Old Style', 'Georgia', 'Source Serif Pro', serif", color: AMOUNT_COLOR[type], textAlign: "center", justifyContent: "center", borderRadius: 14 }}
                 focusStyle={{ background: "#F3ECE0", boxShadow: "none" }}
                 placeholderColor="#A3968B"
               />
@@ -707,9 +553,9 @@ export default function TransactionForm({
         )}
 
         {needsRate && validAmount && validRate && (
-          <p style={{ ...styles.muted, padding: 0, fontSize: 12.5, margin: 0, marginTop: -8 }}>
+          <Hint style={{ marginTop: -8 }}>
             {money(numericAmount, currency)} equivalen a {money(numericAmount / canonicalRate, accountCurrency)}.
-          </p>
+          </Hint>
         )}
 
         {/* Al editar una recurrente no hay "fecha de esta ocurrencia" que
@@ -867,16 +713,13 @@ export default function TransactionForm({
         </div>
       </div>
 
-      <Footer>
-        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
-        <button
-          style={{ flex: 2, marginTop: 0, padding: "12px", borderRadius: 12, border: "none", background: "#C75D3B", color: "#fff", fontSize: 14, fontWeight: 700, fontFamily: "system-ui, sans-serif", opacity: (saving || !canSave) ? 0.5 : 1 }}
-          onClick={handleSave}
-          disabled={saving}
-        >
-          {saving ? "Guardando…" : "Guardar"}
-        </button>
-      </Footer>
+      <FormFooter
+        onCancel={onCancel}
+        onConfirm={handleSave}
+        confirmLabel={saving ? "Guardando…" : "Guardar"}
+        confirmDisabled={saving}
+        confirmDim={!canSave}
+      />
     </div>
   );
 }
@@ -967,8 +810,8 @@ function RecurringFields({ type, date, freqValue, setFreqValue, freqInterval, se
 
       {(explanation || warning) && (
         <div style={{ padding: "12px 0 0" }}>
-          {explanation && <p style={{ ...styles.muted, padding: 0, fontSize: 12.5, margin: 0 }}>{explanation}</p>}
-          {warning && <p style={{ ...styles.muted, padding: 0, fontSize: 12.5, margin: 0, color: "#A8754A" }}>{warning}</p>}
+          {explanation && <Hint>{explanation}</Hint>}
+          {warning && <Hint color="#A8754A">{warning}</Hint>}
         </div>
       )}
 

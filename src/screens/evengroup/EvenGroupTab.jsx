@@ -9,7 +9,7 @@ import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCen
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { styles } from "../../lib/styles.js";
-import { TopBar, RootHeader, ConfirmInline, Modal, Footer, PhotoPicker, ImageWithFallback, Field, ToggleField, PickerField, EvenGroupIcon, EmptyState, CalculatorAmountInput, SegmentedControl } from "../../components/Shared.jsx";
+import { TopBar, RootHeader, ConfirmInline, Modal, Footer, PhotoPicker, PhotoLightbox, ImageWithFallback, Field, ToggleField, PickerField, EvenGroupIcon, EmptyState, CalculatorAmountInput, SegmentedControl } from "../../components/Shared.jsx";
 import { linkGroupToAccount, updateLinkDefaults, unlinkGroup } from "../../lib/evenGroupLink.js";
 import { useRecentNoteTitles } from "../../lib/evenCapitalData.js";
 import {
@@ -1659,22 +1659,7 @@ function ExpenseDetail({ group, expenseId, onBack, onEdit, isOnline = true, show
           </button>
         )}
 
-        {showFullPhoto && e.imageUrl && (
-          <div
-            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 30 }}
-            onClick={() => setShowFullPhoto(false)}
-          >
-            <img src={e.imageUrl} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
-            <button
-              type="button"
-              onClick={() => setShowFullPhoto(false)}
-              aria-label="Cerrar"
-              style={{ position: "absolute", top: 16, right: 16, width: 40, height: 40, borderRadius: "50%", border: "none", background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
-            >
-              <X size={22} color="#fff" />
-            </button>
-          </div>
-        )}
+        <PhotoLightbox open={showFullPhoto} src={e.imageUrl} onClose={() => setShowFullPhoto(false)} />
 
         {e.notes && (
           <div>
@@ -2354,22 +2339,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
           </div>
         )}
 
-        {showFullPhoto && imageUrl && (
-          <div
-            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 30 }}
-            onClick={() => setShowFullPhoto(false)}
-          >
-            <img src={imageUrl} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
-            <button
-              type="button"
-              onClick={() => setShowFullPhoto(false)}
-              aria-label="Cerrar"
-              style={{ position: "absolute", top: 16, right: 16, width: 40, height: 40, borderRadius: "50%", border: "none", background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
-            >
-              <X size={22} color="#fff" />
-            </button>
-          </div>
-        )}
+        <PhotoLightbox open={showFullPhoto} src={imageUrl} onClose={() => setShowFullPhoto(false)} />
 
         {(notesOpen || notes) && (
           <textarea style={{ ...styles.input, minHeight: 60, resize: "vertical", fontFamily: "system-ui, sans-serif" }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas adicionales…" />

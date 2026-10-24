@@ -1,10 +1,10 @@
 import React, { useState } from "react";
-import { TopBar, Footer, Field, PickerField } from "../../components/Shared.jsx";
+import { TopBar, FormFooter, Field, PickerField, DateRow, PhotoLightbox, Hint } from "../../components/Shared.jsx";
 import { styles } from "../../lib/styles.js";
-import { useImageUpload, todayInputValue } from "../../lib/helpers.jsx";
+import { useImageUpload, todayInputValue, useTouched } from "../../lib/helpers.jsx";
 import { recognizeReceiptText } from "../../lib/ocrImport.js";
 import { parseTransactionCandidates } from "../../lib/ocrLineParser.js";
-import { Camera, Trash2, X } from "lucide-react";
+import { Camera, Trash2 } from "lucide-react";
 
 /* =========================================================================
    IMPORTAR DESDE FOTO — paso 1: elegís la foto, la cuenta (y con ella la
@@ -18,16 +18,16 @@ export default function PhotoImportEntryScreen({ groups, accounts, onBack, onExt
   const { previewUrl, pendingFile, handleImageChange, clear } = useImageUpload(null, showError);
   const [accountId, setAccountId] = useState("");
   const [date, setDate] = useState(todayInputValue());
-  const [touched, setTouched] = useState({});
+  const [touched, touch] = useTouched();
   const [processing, setProcessing] = useState(false);
   const [progress, setProgress] = useState(null);
   const [showFullPhoto, setShowFullPhoto] = useState(false);
 
-  const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
   const canProcess = !!pendingFile && !!accountId;
 
   const handleProcess = async () => {
-    setTouched({ photo: true, accountId: true });
+    touch("photo");
+    touch("accountId");
     if (!canProcess || processing) return;
     setProcessing(true);
     setProgress(null);
@@ -86,31 +86,29 @@ export default function PhotoImportEntryScreen({ groups, accounts, onBack, onExt
           </div>
         </Field>
 
-        <Field label="Cuenta" required error={touched.accountId && !accountId ? "Este campo es obligatorio." : ""}>
-          <PickerField
-            value={accountId}
-            onChange={setAccountId}
-            onBlur={() => touch("accountId")}
-            placeholder="Elegí una cuenta"
-            groups={groups
-              .filter((g) => !g.deleted && g.system_key !== "split_ledger")
-              .map((g) => ({
-                label: g.name,
-                items: accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
-              }))
-              .filter((g) => g.items.length > 0)}
-          />
-        </Field>
-        <p style={{ ...styles.muted, padding: 0, marginTop: -8 }}>
-          Todas las transacciones de esta foto se van a cargar en esta cuenta, en su moneda.
-        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <Field error={touched.accountId && !accountId ? "Este campo es obligatorio." : ""}>
+            <PickerField
+              rowLabel="Cuenta"
+              required
+              value={accountId}
+              onChange={setAccountId}
+              onBlur={() => touch("accountId")}
+              placeholder="Elegí una cuenta"
+              groups={groups
+                .filter((g) => !g.deleted && g.system_key !== "split_ledger")
+                .map((g) => ({
+                  label: g.name,
+                  items: accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
+                }))
+                .filter((g) => g.items.length > 0)}
+            />
+          </Field>
+          <Hint>Todas las transacciones de esta foto se van a cargar en esta cuenta, en su moneda.</Hint>
 
-        <Field label="Fecha por defecto">
-          <input style={styles.input} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        </Field>
-        <p style={{ ...styles.muted, padding: 0, marginTop: -8 }}>
-          Se usa solo si el asistente no logra leer la fecha de alguna transacción en la foto: cada una trae la suya propia, editable.
-        </p>
+          <DateRow label="Fecha por defecto" value={date} onChange={setDate} />
+          <Hint>Se usa solo si el asistente no logra leer la fecha de alguna transacción en la foto: cada una trae la suya propia, editable.</Hint>
+        </div>
 
         {processing && (
           <p style={{ ...styles.muted, padding: 0, fontWeight: 600 }}>
@@ -118,29 +116,16 @@ export default function PhotoImportEntryScreen({ groups, accounts, onBack, onExt
           </p>
         )}
       </div>
-      <Footer>
-        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onBack} disabled={processing}>Cancelar</button>
-        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: canProcess && !processing ? 1 : 0.5 }} onClick={handleProcess} disabled={processing}>
-          {processing ? "Procesando…" : "Procesar foto"}
-        </button>
-      </Footer>
+      <FormFooter
+        onCancel={onBack}
+        cancelDisabled={processing}
+        onConfirm={handleProcess}
+        confirmLabel={processing ? "Procesando…" : "Procesar foto"}
+        confirmDisabled={processing}
+        confirmDim={!canProcess}
+      />
 
-      {showFullPhoto && previewUrl && (
-        <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 30 }}
-          onClick={() => setShowFullPhoto(false)}
-        >
-          <img src={previewUrl} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
-          <button
-            type="button"
-            onClick={() => setShowFullPhoto(false)}
-            aria-label="Cerrar"
-            style={{ position: "absolute", top: 16, right: 16, width: 40, height: 40, borderRadius: "50%", border: "none", background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
-          >
-            <X size={22} color="#fff" />
-          </button>
-        </div>
-      )}
+      <PhotoLightbox open={showFullPhoto} src={previewUrl} onClose={() => setShowFullPhoto(false)} />
     </div>
   );
 }

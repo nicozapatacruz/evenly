@@ -870,25 +870,33 @@ function CalculatorKeyButton({ label, onClick, variant = "digit", wide }) {
   const primary = variant === "primary";
   const op = variant === "op";
   const fn = variant === "fn";
+  // Estado de presionado por JS (onPointerDown/Up/Leave/Cancel), no CSS
+  // `:active` — el `-webkit-tap-highlight-color: transparent` global (ver
+  // styles.js) apaga el flash nativo en toda la app, y `:active` por sí
+  // solo no es confiable en Safari/iOS con un toque real (solo anda bien
+  // con mouse) — por eso esto no se veía en el celular aunque sí al
+  // probarlo con clicks de mouse/Playwright.
+  const [pressed, setPressed] = useState(false);
   return (
     <button
       type="button"
       onClick={onClick}
-      // Sin caja de fondo propia (a diferencia de los botones normales de la
-      // app) — es un teclado, no una lista de opciones — el feedback de toque
-      // vive en ".calc-key:active" (ver styles.js) en vez de un color fijo acá.
-      className={primary ? undefined : "calc-key"}
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerLeave={() => setPressed(false)}
+      onPointerCancel={() => setPressed(false)}
       style={{
         gridColumn: wide ? "span 2" : undefined,
         padding: "14px 0",
         borderRadius: 10,
         border: "none",
-        background: primary ? "#C75D3B" : "transparent",
+        background: primary ? "#C75D3B" : pressed ? "#F0E6D6" : "transparent",
         color: primary ? "#fff" : op ? "#C75D3B" : fn ? "#6E625A" : "#2B2620",
         fontSize: primary ? 18 : op ? 24 : fn ? 19 : 28,
         fontWeight: primary ? 600 : fn ? 500 : 400,
         fontFamily: primary || op || fn ? "system-ui, sans-serif" : "'Iowan Old Style', 'Georgia', 'Source Serif Pro', serif",
         cursor: "pointer",
+        filter: primary && pressed ? "brightness(0.92)" : undefined,
       }}
     >
       {label}

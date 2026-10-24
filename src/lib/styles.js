@@ -56,10 +56,6 @@ export const globalCss = `
   .spin { animation: spin 0.8s linear infinite; }
   @keyframes blink-cursor { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
   .blink-cursor { animation: blink-cursor 1s step-end infinite; }
-  /* Teclas del teclado numérico propio (CalculatorAmountInput) — sin caja de
-     fondo en reposo (a diferencia de un botón normal), así que el único
-     feedback de que el toque registró es este resalte momentáneo. */
-  .calc-key:active { background: #F0E6D6; }
   /* Scroll sin barra visible — el resto de la app scrollea de a página
      completa (iOS ya la esconde sola ahí), pero un overflow:auto anidado
      (ej. la grilla de íconos) sí la muestra en desktop/otros navegadores. */

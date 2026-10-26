@@ -323,7 +323,15 @@ async function updatePendienteTcNote(link, pendienteTcTxId) {
     : { data: [] };
   const expenseById = new Map((expenses || []).map((e) => [e.id, e]));
 
-  const active = recent.filter((c) => !expenseById.get(c.source_id)?.deleted).slice(0, 5);
+  // Un gasto borrado FÍSICAMENTE (DELETE directo, no `deleted:true`) no
+  // aparece acá -- expenseById.get(...) da undefined, y "¿no está borrado?"
+  // sobre undefined da true por error, dejando pasar un aporte que ya no
+  // corresponde a nada real. Hace falta que el gasto EXISTA y no esté
+  // borrado, no alcanza con "no está marcado como borrado".
+  const active = recent.filter((c) => {
+    const e = expenseById.get(c.source_id);
+    return e && !e.deleted;
+  }).slice(0, 5);
   if (!active.length) return;
 
   const lines = active.map((c) => {

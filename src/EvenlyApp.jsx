@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import { supabase } from "./lib/supabaseClient.js";
 import { offlineSupabase } from "./lib/offlineSupabase.js";
 import { db } from "./lib/localDb.js";
@@ -707,6 +708,19 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
   const [accountsView, setAccountsView] = useState({ screen: "list" });
   const [ledgerView, setLedgerView] = useState({ screen: "list" });
   const [statsView, setStatsView] = useState({ screen: "list" });
+  // Releídas en vivo de Dexie por id (no la que quedó congelada en
+  // ledgerView.transaction/statsView.transaction al momento del click en la
+  // lista) -- si viene de EvenGroup, la reconciliación puede actualizarla
+  // mientras esta pantalla sigue montada (ej. volviste de "Original" después
+  // de cambiar algo ahí), ver mismo fix en CuentasTab.jsx.
+  const liveLedgerTransaction = useLiveQuery(
+    () => (ledgerView.transaction?.id ? db.mm_transactions.get(ledgerView.transaction.id) : undefined),
+    [ledgerView.transaction?.id]
+  );
+  const liveStatsTransaction = useLiveQuery(
+    () => (statsView.transaction?.id ? db.mm_transactions.get(statsView.transaction.id) : undefined),
+    [statsView.transaction?.id]
+  );
   const [ledgerMonth, setLedgerMonth] = useState(() => new Date());
   // Viven acá (no dentro de SearchScreen) para sobrevivir el viaje de ida y
   // vuelta a "editar transacción" — ese screen desmonta SearchScreen.
@@ -1173,7 +1187,7 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
           showError={showError}
           showInfo={showInfo}
           isOnline={isOnline}
-          editingTransaction={statsView.transaction}
+          editingTransaction={liveStatsTransaction || statsView.transaction}
           defaultDate={statsView.date}
           onCancel={() => setStatsView({ screen: "drilldown", categoryId: statsView.categoryId, categoryName: statsView.categoryName, categoryIcon: statsView.categoryIcon, type: statsView.type })}
           onSave={async (tx) => {
@@ -1292,7 +1306,7 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
           showError={showError}
           showInfo={showInfo}
           isOnline={isOnline}
-          editingTransaction={ledgerView.transaction}
+          editingTransaction={liveLedgerTransaction || ledgerView.transaction}
           defaultDate={ledgerView.date}
           prefillBookmark={ledgerView.prefillBookmark}
           onCancel={() => setLedgerView({ screen: ledgerView.returnTo })}

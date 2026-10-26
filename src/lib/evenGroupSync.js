@@ -107,12 +107,25 @@ function paymentInvolvesMe(p, memberId) {
 // vínculo más tarde no mueve nada ya sincronizado. loan_account_id sigue el
 // mismo principio: se siembra con el default del vínculo en ese momento,
 // y de ahí en más es editable aparte, por transacción.
-async function ensureExpenseChoices(link, involvedKeys, choicesBySourceKey) {
+async function ensureExpenseChoices(link, ctx, involvedKeys, choicesBySourceKey) {
   const missing = involvedKeys.filter((k) => !choicesBySourceKey.has(k));
   if (!missing.length) return;
+  const expenseById = new Map(ctx.expenses.map((e) => [e.id, e]));
+  const paymentById = new Map(ctx.payments.map((p) => [p.id, p]));
+  // "Propia" vs "ajena" según si YO pagué mi parte -- mismo criterio que ya
+  // usa la pantalla (iPay en EvenGroupTab.jsx) para precargar el campo
+  // "Cuenta". Antes acá siempre caía en "ajena", sin importar quién pagó.
   const rows = missing.map((key) => {
     const [source_kind, source_id] = key.split(":");
-    return { link_id: link.id, source_kind, source_id, account_id: link.default_other_account_id, category_id: null, loan_account_id: link.loan_account_id || null };
+    let accountId = link.default_other_account_id;
+    if (source_kind === "expense") {
+      const e = expenseById.get(source_id);
+      if (Number(e?.payers?.[ctx.memberId] || 0) > EPSILON) accountId = link.default_own_account_id;
+    } else if (source_kind === "payment") {
+      const p = paymentById.get(source_id);
+      if (p?.from_member_id === ctx.memberId) accountId = link.default_own_account_id;
+    }
+    return { link_id: link.id, source_kind, source_id, account_id: accountId, category_id: null, loan_account_id: link.loan_account_id || null };
   });
   const { data: inserted } = await supabase
     .from("sl_mm_expense_choices")
@@ -334,7 +347,7 @@ async function reconcileLink(link, userId, userEmail, mainCurrency) {
     ...ctx.expenses.filter((e) => expenseInvolvesMe(e, ctx.memberId)).map((e) => `expense:${e.id}`),
     ...ctx.payments.filter((p) => paymentInvolvesMe(p, ctx.memberId)).map((p) => `payment:${p.id}`),
   ];
-  await ensureExpenseChoices(link, involvedKeys, choicesBySourceKey);
+  await ensureExpenseChoices(link, ctx, involvedKeys, choicesBySourceKey);
 
   const desired = computeDesiredTransactions(link, ctx, choicesBySourceKey);
   const desiredByKey = new Map(desired.map((d) => [d.key, d]));

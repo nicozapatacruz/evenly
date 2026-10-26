@@ -118,6 +118,26 @@ export default function TransactionForm({
   const [saving, setSaving] = useState(false);
   const [touched, touch, setTouched] = useTouched();
 
+  // Si esta transacción viene de EvenGroup y la reconciliación le actualiza
+  // monto/cuenta/fecha/tipo/moneda mientras esta pantalla sigue montada (ej.
+  // volviste de "Original" después de cambiar algo ahí), los useState de
+  // arriba no se enteran solos — su valor inicial ya quedó fijado la primera
+  // vez que se montó este formulario, React no los vuelve a mirar. Este
+  // efecto los sincroniza de nuevo cuando cambian esos campos puntuales —
+  // son los únicos que la reconciliación controla, y los únicos que ya
+  // quedan bloqueados en pantalla cuando isSynced, así que nunca pisa una
+  // edición del usuario (no se puede estar editando algo deshabilitado).
+  useEffect(() => {
+    if (!isSynced || !editingTransaction) return;
+    setType(editingTransaction.type);
+    setDate(dateInputValueInZone(new Date(editingTransaction.date).getTime(), editingTransaction.timezone));
+    setAmount(String(editingTransaction.amount));
+    setCurrency(editingTransaction.currency);
+    setAccountId(editingTransaction.account_id || "");
+    setToAccountId(editingTransaction.to_account_id || "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSynced, editingTransaction?.type, editingTransaction?.date, editingTransaction?.amount, editingTransaction?.currency, editingTransaction?.account_id, editingTransaction?.to_account_id, editingTransaction?.timezone]);
+
   // Moneda de la cuenta elegida — es una restricción dura (ver PENDIENTES.md
   // sección B): toda transacción queda en la moneda de SU cuenta, no en una
   // principal global. El fallback a main_currency es solo para cuando

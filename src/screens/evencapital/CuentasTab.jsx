@@ -60,6 +60,18 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
   }, [realBalanceTcId, realBalancePendienteId], null);
   const pendienteTcLoaded = pendienteTcSum !== null;
 
+  // Transacción que se está editando, releída en vivo de Dexie por id (no la
+  // que quedó congelada en view.transaction al momento del click en la
+  // lista) -- si viene de EvenGroup, la reconciliación puede actualizarla
+  // mientras esta pantalla sigue montada (ej. volviste de "Original"
+  // después de cambiar algo ahí), y sin esto se seguía mostrando el dato
+  // viejo hasta desmontar y volver a entrar. Cae a view.transaction mientras
+  // la consulta en vivo todavía no resolvió (primer render).
+  const liveEditingTransaction = useLiveQuery(
+    () => (view.transaction?.id ? db.mm_transactions.get(view.transaction.id) : undefined),
+    [view.transaction?.id]
+  );
+
   if (view.screen === "manageAllAccounts") {
     return (
       <ManageAllAccounts
@@ -126,7 +138,7 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
         showError={showError}
         showInfo={showInfo}
         isOnline={isOnline}
-        editingTransaction={view.transaction}
+        editingTransaction={liveEditingTransaction || view.transaction}
         defaultDate={view.date}
         defaultAccountId={view.accountId}
         onCancel={() => setView({ screen: "activity", accountId: view.accountId, tab: view.tab, viewMonth: view.viewMonth })}

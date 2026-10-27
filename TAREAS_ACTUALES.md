@@ -155,16 +155,33 @@ Ver la entrada completa en `PENDIENTES.md`, sección A ("Rediseño de
 formularios"). Progreso: `TransactionForm.jsx` y `PhotoImportEntryScreen.jsx`
 ya rediseñados. **Siguiente: `PhotoImportWizardScreen.jsx`.**
 
-## 4. Revisar la vista de una transacción que viene de EvenGroup
+## 4. Revisar la vista de una transacción que viene de EvenGroup (RESUELTO)
 
-Hoy no queda claro, al abrir una transacción sincronizada desde EvenGroup
-(`isSynced` en `TransactionForm.jsx`), qué campos son editables y cuáles no
-— monto/cuenta/fecha/tipo quedan deshabilitados (los controla la
-reconciliación) pero no hay ninguna señal visual clara de eso, y para
-cambiarlos hay que saber que existe un botón "Original" que te lleva al
-gasto real en EvenGroup. Repensar el diseño de esta pantalla para que sea
-obvio de entrada qué se puede tocar ahí mismo y qué hay que ir a editar al
-"Original".
+No quedaba claro, al abrir una transacción sincronizada desde EvenGroup,
+qué campos eran editables y cuáles no — quedaban apenas más tenues
+(opacity), sin ninguna otra señal, y el botón "Original" (arriba a la
+derecha) no tenía ninguna conexión visual con ellos.
+
+**Arreglado** (`TransactionForm.jsx` + `Shared.jsx`), probado con capturas
+reales via un harness aislado (`src/test-harness.jsx` + `test-harness.html`,
+sin login — útil para seguir probando pantallas sueltas sin levantar toda
+la app):
+- El cartel de arriba dice el nombre real del grupo + su ícono (➗), ya no
+  "Viene de EvenGroup" genérico — el nombre sale de la cuenta pseudo del
+  vínculo (`slLinks.pseudo_account_id`), no de `memo` (ese es editable como
+  "Nota" después de sincronizar, no es confiable).
+- Ese mismo cartel es tocable, con "Ver original →" adentro — reemplaza al
+  botón "Original" que antes vivía aparte arriba a la derecha (ya no hace
+  falta, era redundante).
+- Candado chico junto a cada VALOR bloqueado (Fecha, Cuenta/"A"), no junto
+  a la etiqueta. `PickerField`/`DateRow` ganaron un prop `lockedValue`
+  para esto (no se reusó `disabled`, que ya se usa en otros lados por
+  otras razones). Sin candado en el toggle de Tipo — ese ya se nota
+  bloqueado solo (atenuado, sin poder tocarlo).
+- Se descartó agrupar Tipo/Fecha/Cuenta en una caja aparte (nivel 3 de las
+  opciones evaluadas) — más riesgo de romper el layout ya afinado esta
+  sesión (calculadora, conversión de moneda), sin aportar mucho más que
+  los candados.
 
 ## 5. Gastos futuros, todavía no cobrados en la cuenta
 

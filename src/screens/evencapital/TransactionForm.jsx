@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { X, Menu, Plus, Trash2, Copy, Star, Divide } from "lucide-react";
+import { X, Menu, Plus, Trash2, Copy, Star, Divide, Lock } from "lucide-react";
 import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -14,6 +14,10 @@ const TYPE_INFO = {
   expense: { label: "Gasto", newLabel: "Nuevo gasto", color: "#C75D3B" },
   transfer: { label: "Transferencia", newLabel: "Nueva transferencia", color: "#4A6FA5" },
 };
+
+// "Este gasto"/"Este ingreso"/"Esta transferencia" -- para el cartel de
+// isSynced, único lugar donde hace falta la frase completa con género.
+const TYPE_DEMONYM = { income: "Este ingreso", expense: "Este gasto", transfer: "Esta transferencia" };
 
 // Color del importe "hero" — distinto de TYPE_INFO[type].color (que sigue
 // siendo el acento terracota/verde/azul usado en otros lugares de la app,
@@ -64,7 +68,13 @@ export default function TransactionForm({
   const isSynced = !isCopyMode && !!editingTransaction?.sl_link_id;
   // De dónde volver en EvenGroup — `sl_link_id` es el vínculo, no el
   // grupo directamente.
-  const splitGroupId = isSynced ? slLinks?.find((l) => l.id === editingTransaction.sl_link_id)?.group_id : null;
+  const splitLink = isSynced ? slLinks?.find((l) => l.id === editingTransaction.sl_link_id) : null;
+  const splitGroupId = splitLink?.group_id;
+  // El nombre del grupo para el cartel de abajo -- NO se lee de `memo`
+  // (ahí se siembra el nombre del grupo al sincronizar, pero es editable
+  // como "Nota" después, así que puede no serlo más). La cuenta pseudo del
+  // vínculo sí se llama como el grupo, y esa nunca la toca el usuario.
+  const splitGroupName = splitLink ? accounts.find((a) => a.id === splitLink.pseudo_account_id)?.name : null;
 
   // prefillBookmark solo aplica cuando no hay editingTransaction (un
   // marcador arranca "Nueva transacción", nunca "Editar") — y nunca trae
@@ -383,19 +393,6 @@ export default function TransactionForm({
         onBack={onCancel}
         right={(effectiveEditing || editingRecurring) && (
           <div style={{ display: "flex", gap: 4 }}>
-            {isSynced && splitGroupId && onOpenEvenGroupExpense && (
-              // Ya no hace falta bloquear esto offline: lleva al detalle
-              // (solo lectura) del gasto/pago, no directo a editarlo — ese
-              // detalle ya sabe mostrarse con el último estado en caché, y
-              // "Editar" desde ahí tiene su propio guard offline.
-              <button
-                style={{ ...styles.btnToday, display: "flex", alignItems: "center", gap: 4 }}
-                onClick={() => onOpenEvenGroupExpense(splitGroupId, editingTransaction.sl_source_kind, editingTransaction.sl_source_id)}
-              >
-                <Divide size={13} color="#A8754A" />
-                Original
-              </button>
-            )}
             {onBookmark && !isSynced && !editingRecurring && (
               <button style={styles.iconBtnGhost} onClick={handleBookmark} aria-label="Guardar como marcador">
                 <Star size={17} />
@@ -460,13 +457,37 @@ export default function TransactionForm({
           PROPIO gap:8 más junto (filas finitas de una línea, no cajas). */}
       <div key={isCopyMode ? "copy" : "orig"} className={isCopyMode ? "ec-slide-next" : undefined} style={{ ...styles.form, gap: 20, animationDuration: isCopyMode ? "0.32s" : undefined }}>
         {isSynced && (
-          <p style={{ ...styles.muted, padding: 0 }}>
-            {needsRate
-              ? "Viene de EvenGroup, en una moneda distinta a tu principal. El monto, la cuenta, la fecha y el tipo se actualizan solos. Ingresá la tasa de cambio para que se calcule bien en tus totales."
-              : "Viene de EvenGroup. El monto, la cuenta, la fecha y el tipo se actualizan solos. Podés cambiarle la categoría o la nota."}
-          </p>
+          // Nombre real del grupo (no "EvenGroup" genérico) + su ícono.
+          // Todo el cartel es tocable y reemplaza al botón "Original" que
+          // antes vivía aparte, arriba a la derecha -- un solo lugar que
+          // conecta "esto está bloqueado" con "acá lo cambiás".
+          splitGroupId && onOpenEvenGroupExpense ? (
+            <button
+              type="button"
+              onClick={() => onOpenEvenGroupExpense(splitGroupId, editingTransaction.sl_source_kind, editingTransaction.sl_source_id)}
+              style={{ ...styles.muted, padding: 0, border: "none", background: "transparent", textAlign: "left", cursor: "pointer", display: "block", width: "100%" }}
+            >
+              {TYPE_DEMONYM[type]} viene de{" "}
+              <Divide size={12} color="#A8754A" style={{ display: "inline", verticalAlign: "middle", marginBottom: 2 }} />{" "}
+              {splitGroupName || "EvenGroup"}.{" "}
+              El monto, la cuenta, la fecha y el tipo solo se pueden editar en{" "}
+              <span style={{ color: "#A8754A", fontWeight: 600, whiteSpace: "nowrap" }}>Original →</span>
+              {needsRate && " Es en una moneda distinta a tu principal -- ingresá la tasa de cambio para que se calcule bien en tus totales."}
+            </button>
+          ) : (
+            <p style={{ ...styles.muted, padding: 0 }}>
+              {TYPE_DEMONYM[type]} viene de{" "}
+              <Divide size={12} color="#A8754A" style={{ display: "inline", verticalAlign: "middle", marginBottom: 2 }} />{" "}
+              {splitGroupName || "EvenGroup"}.{" "}
+              El monto, la cuenta, la fecha y el tipo solo se pueden editar en el original. Podés cambiarle la categoría o la nota.
+              {needsRate && " Es en una moneda distinta a tu principal -- ingresá la tasa de cambio para que se calcule bien en tus totales."}
+            </p>
+          )
         )}
         <SegmentedControl
+          // Sin candado acá -- a diferencia de Fecha/Cuenta (que se ven
+          // igual estén bloqueados o no), este control YA se ve claramente
+          // distinto cuando está disabled (atenuado, sin poder tocarlo).
           options={Object.keys(TYPE_INFO).map((t) => ({ value: t, label: TYPE_INFO[t].label, color: TYPE_INFO[t].color }))}
           value={type}
           onChange={setType}
@@ -584,12 +605,13 @@ export default function TransactionForm({
             start_date original) para que RecurringFields siga mostrando
             bien el mensaje de "se repite los días X". */}
         {!editingRecurring && (
-          <DateRow label="Fecha" value={date} onChange={setDate} disabled={isSynced} />
+          <DateRow label="Fecha" value={date} onChange={setDate} disabled={isSynced} lockedValue={isSynced} />
         )}
 
         <Field error={touched.accountId && !accountId ? "Este campo es obligatorio." : ""}>
           <PickerField
             rowLabel={type === "transfer" ? "De" : "Cuenta"}
+            lockedValue={isSynced}
             required
             value={accountId}
             onChange={setAccountId}
@@ -635,6 +657,7 @@ export default function TransactionForm({
           >
             <PickerField
               rowLabel="A"
+              lockedValue={isSynced}
               required
               value={toAccountId}
               onChange={setToAccountId}

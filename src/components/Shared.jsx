@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ArrowLeft, Ban, Camera, Check, ChevronLeft, ChevronRight, Eye, EyeOff, Info, Trash2, User, X } from "lucide-react";
+import { ArrowLeft, Ban, Camera, Check, ChevronLeft, ChevronRight, Eye, EyeOff, Info, Lock, Trash2, User, X } from "lucide-react";
 import { styles } from "../lib/styles.js";
 import { ICON_OPTIONS } from "../lib/evenCapitalData.js";
 import { money, parseAmountInput, todayInputValue } from "../lib/helpers.jsx";
@@ -628,7 +628,7 @@ let pickerInstanceCounter = 0;
 // (ver más abajo) — uno solo para toda la app, no uno por instancia del input.
 let amountMeasureCtx = null;
 
-export function PickerField({ value, onChange, groups, placeholder = "Elegir", title, note, onClear, onBlur, disabled = false, emptyMessage = "No hay opciones para elegir.", openSignal, compact = false, rowLabel, required = false, listStyle = false }) {
+export function PickerField({ value, onChange, groups, placeholder = "Elegir", title, note, onClear, onBlur, disabled = false, emptyMessage = "No hay opciones para elegir.", openSignal, compact = false, rowLabel, required = false, listStyle = false, lockedValue = false }) {
   const [open, setOpen] = useState(false);
   const idRef = useRef(null);
   if (idRef.current === null) idRef.current = ++pickerInstanceCounter;
@@ -695,6 +695,11 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", t
             )}
           </>
         ) : placeholder}
+        {/* `lockedValue` (no `disabled` a secas: eso se usa en muchos otros
+            lados por otras razones, ej. mientras se guarda) -- candado junto
+            al VALOR, no a la etiqueta, para que se note mirando qué dice el
+            campo, no solo su nombre. */}
+        {lockedValue && <Lock size={11} color="#8A7F72" style={{ flexShrink: 0 }} />}
         {clearable && !disabled && (
           <span
             role="button"
@@ -859,12 +864,15 @@ export function formatDateRow(dateStr) {
 // abriendo el selector nativo del navegador/celular al tocar — no hay
 // forma de "fingir" ese selector sin perder su UX nativa (rueditas en
 // iOS, calendario en Android/desktop).
-export function DateRow({ label, value, onChange, disabled = false, placeholder = "Elegir fecha" }) {
+export function DateRow({ label, value, onChange, disabled = false, placeholder = "Elegir fecha", lockedValue = false }) {
   return (
     <div style={{ position: "relative" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 40, borderBottom: "1px solid #ECE3D3", fontFamily: "system-ui, sans-serif", opacity: disabled ? 0.6 : 1 }}>
         <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355" }}>{label}</span>
-        <span style={{ flex: 1, textAlign: "right", fontSize: 13.5, color: value ? "#2B2620" : "#A3968B" }}>{value ? formatDateRow(value) : placeholder}</span>
+        <span style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, textAlign: "right", fontSize: 13.5, color: value ? "#2B2620" : "#A3968B" }}>
+          {value ? formatDateRow(value) : placeholder}
+          {lockedValue && <Lock size={11} color="#8A7F72" style={{ flexShrink: 0 }} />}
+        </span>
       </div>
       <input
         type="date"

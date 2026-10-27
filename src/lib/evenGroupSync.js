@@ -188,7 +188,19 @@ function computeDesiredTransactions(link, ctx, choicesBySourceKey) {
     const categoryId = choice?.category_id || null;
     const common = { source_kind: "expense", source_id: e.id, currency: e.currency, title: e.description || null, memo: ctx.groupName, date: e.date };
 
-    if (shareAmt > EPSILON) {
+    // Tu parte se reparte en 2 gastos (misma categoría, distinta cuenta)
+    // SOLO cuando de verdad hay algo de cada lado: pagaste una parte, pero
+    // menos que tu parte completa. Antes esto caía entero en "propia" como
+    // si lo hubieras pagado todo -- ver TAREAS_ACTUALES.md. Los otros 2
+    // casos (no pagaste nada, o pagaste tu parte completa o de más) quedan
+    // EXACTAMENTE igual que siempre (mismo key/role "share"), para no tocar
+    // ni un gasto ya sincronizado que no sea de este caso nuevo.
+    const paidPortion = roundCents(Math.min(paidAmt, shareAmt));
+    const owedPortion = roundCents(shareAmt - paidPortion);
+    if (paidPortion > EPSILON && owedPortion > EPSILON) {
+      desired.push({ ...common, key: `expense:${e.id}:share`, role: "share", type: "expense", account_id: accountId, to_account_id: null, amount: paidPortion, category_id: categoryId });
+      desired.push({ ...common, key: `expense:${e.id}:share_owed`, role: "share_owed", type: "expense", account_id: link.default_other_account_id, to_account_id: null, amount: owedPortion, category_id: categoryId });
+    } else if (shareAmt > EPSILON) {
       desired.push({ ...common, key: `expense:${e.id}:share`, role: "share", type: "expense", account_id: accountId, to_account_id: null, amount: shareAmt, category_id: categoryId });
     }
     const diff = roundCents(paidAmt - shareAmt);

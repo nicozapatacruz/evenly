@@ -123,57 +123,31 @@ tocarse. Al borrarlo, ambas transacciones se autocorrigieron solas. El
 paso 4 (compensación por ciclo) todavía no se probó con un ciclo real
 completo — hace falta esperar a que cierre uno para confirmarlo.
 
-## 2. Edge case: pagás una parte de tu gasto pero igual debés
+## 2. Edge case: pagás una parte de tu gasto pero igual debés (RESUELTO)
 
-Análisis de qué pasa cuando tu parte de un gasto compartido es mayor a lo
-que pagaste (ej. tu parte = 10€, pagaste 6€, debés 4€) — viene de la
-corrección de cuentas EvenGroup↔EvenCapital de hoy (`ensureExpenseChoices`
-en `evenGroupSync.js`, decide "propia" vs "ajena" según si pagaste algo,
-`paidAmt > 0`).
+Qué pasaba cuando tu parte de un gasto compartido era mayor a lo que
+pagaste (ej. tu parte = 10€, pagaste 6€, debés 4€): el gasto completo
+(10€) caía siempre en "propia" apenas pagabas algo (`paidAmt > 0`), aunque
+fuera menos que tu parte — con "cuenta de lo que te prestan" configurada
+(ej. Pendiente), eso dejaba "propia" mostrando −10 en vez de los −6 que de
+verdad saliste de ahí. Era un bug, no una decisión de diseño (el chequeo
+binario `paidAmt > 0 ? propia : ajena` solo daba bien en los 2 extremos:
+no pagaste nada, o pagaste todo y de más).
 
-### Escenario 1 — sin "cuenta de lo prestado" configurada
+**Arreglado en `computeDesiredTransactions` (`evenGroupSync.js`):** tu
+parte ahora se reparte en 2 gastos (misma categoría, distinta cuenta) SOLO
+cuando de verdad pagaste algo pero menos que tu parte completa — el resto
+sigue exactamente igual que siempre (un solo gasto, mismo key/role
+"share", para no tocar nada de lo ya sincronizado que no sea este caso).
 
-- **Gasto (share):** se registra el gasto completo, 10€, en tu cuenta
-  "propia" (porque pagaste algo, 6 > 0).
-- **Préstamo:** como no configuraste una cuenta aparte, cae en la misma
-  "propia". Es una transferencia de 4€ entrando desde el grupo hacia esa
-  misma cuenta.
-- **Efecto neto en "propia":** −10 (gasto) + 4 (préstamo entrando) = −6.
-- **Resultado:** tu cuenta "propia" termina mostrando exactamente los 6€
-  que de verdad salieron de tu bolsillo. Matemáticamente cuadra perfecto.
+- **Lo que pagaste** (6€): gasto en "propia", como siempre.
+- **Lo que quedó sin pagar** (4€): gasto NUEVO, en "ajena", misma
+  categoría — la transferencia de préstamo (sin cambios) sigue viajando
+  por separado, a "lo que te prestan" si está configurada.
 
-### Escenario 2 — con "cuenta de lo prestado" configurada (ej. Pendiente)
-
-- **Gasto (share):** igual que antes, 10€ en tu cuenta "propia".
-- **Préstamo:** ahora los 4€ entran a tu cuenta de "lo prestado"
-  (Pendiente), no a "propia".
-- **Efecto neto en "propia":** −10 (solo el gasto, nada lo compensa ahí).
-- **Efecto neto en Pendiente:** +4.
-- **Resultado:** entre las dos cuentas sigue sumando lo mismo (−10 + 4 =
-  −6), pero ahora "propia" muestra −10 (como si hubieras pagado el gasto
-  completo con esa cuenta) y "Pendiente" absorbe el +4 que compensa lo que
-  en realidad no pagaste todavía.
-
-### Conclusión
-
-Los dos escenarios son matemáticamente consistentes — el total nunca se
-rompe. La única pregunta real es de categorización, no de plata: en el
-Escenario 2, tu cuenta "propia" (ej. TC Santander) queda mostrando un gasto
-de 10€ completo, cuando en realidad solo saliste 6€ de tu bolsillo real en
-ese momento — los otros 4€ todavía están "pendientes", no son un gasto tuyo
-todavía. Si mirás tus estadísticas por categoría, ese gasto cuenta como 10€
-gastados ya, aunque 4 de esos sean a futuro.
-
-Esto es el mismo principio que ya discutimos para los casos "no pagué
-nada" — el gasto siempre refleja tu parte completa, nunca lo que pagaste
-literalmente. No es una inconsistencia nueva, es la misma filosofía
-aplicada también al caso parcial. No se me ocurre que haya que cambiar nada
-salvo que sientas que ese comportamiento (mostrar el gasto completo ya,
-aunque una parte esté pendiente) no es lo que querés para tus estadísticas
-— en ese caso sería un cambio de diseño más grande, no un bug puntual.
-
-**Pendiente de decidir:** ¿dejamos este comportamiento como está, o hace
-falta ajustar algo?
+Se confirmó con un query que hoy no existe ningún gasto de este tipo
+(ni de Nicolas ni de Paulina), así que el cambio no tocó retroactivamente
+nada ya sincronizado.
 
 ## 3. Rediseño de formularios (en curso, retomar)
 

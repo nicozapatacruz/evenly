@@ -35,10 +35,14 @@ async function ensureEvenGroupAccountGroup(userId) {
 
 // Vincular un grupo de EvenGroup a EvenCapital — 2 cuentas default:
 // "propios" (mi parte, cuando pago yo) y "ajenos" (cuando paga otro
-// miembro), más una 3ra opcional ("lo que prestás"/loanAccountId) que
-// reemplaza cuál cuenta REAL es la contraparte de la transferencia de
-// préstamo (ver evenGroupSync.js) -- si no se pasa, esa transferencia
-// sigue usando "propios"/"ajenos" como hasta ahora, sin ningún cambio.
+// miembro), más 3 opcionales que reemplazan cuál cuenta REAL es la
+// contraparte de la transferencia de préstamo (ver evenGroupSync.js) --
+// si no se pasan, esa transferencia sigue usando "propios"/"ajenos" como
+// hasta ahora, sin ningún cambio:
+//   - lendAccountId: cuando VOS prestás (pagás de más).
+//   - loanAccountId: cuando a VOS te prestan (pagás de menos).
+//   - lendOffsetAccountId: solo si lendAccountId es tarjeta de crédito —
+//     cuenta desde la que se compensa lo prestado al cerrar cada ciclo.
 //
 // La cuenta pseudo (adónde va a parar/de dónde sale ese préstamo del lado
 // del GRUPO, no de una cuenta tuya) siempre se auto-crea/reusa, invisible
@@ -47,7 +51,7 @@ async function ensureEvenGroupAccountGroup(userId) {
 // nada — ver sl_mm_expense_choices (la que fija la cuenta real usada por
 // gasto, para que la transferencia oculta de préstamo siempre viaje junto
 // con el gasto, sin importar qué default tengas hoy).
-export async function linkGroupToAccount({ userId, groupId, memberId, groupName, defaultOwnAccountId, defaultOtherAccountId, currency, loanAccountId }) {
+export async function linkGroupToAccount({ userId, groupId, memberId, groupName, defaultOwnAccountId, defaultOtherAccountId, currency, lendAccountId, loanAccountId, lendOffsetAccountId }) {
   // Si este mismo grupo ya estuvo vinculado antes (y se desvinculó), se
   // reutiliza la misma cuenta pseudo — así no se pierde el saldo pendiente
   // que ya traía. Si esa cuenta vieja se borró a mano, se crea una nueva.
@@ -89,7 +93,9 @@ export async function linkGroupToAccount({ userId, groupId, memberId, groupName,
     default_own_account_id: defaultOwnAccountId,
     default_other_account_id: defaultOtherAccountId,
     pseudo_account_id: pseudoAccountId,
+    lend_account_id: lendAccountId || null,
     loan_account_id: loanAccountId || null,
+    lend_offset_account_id: lendOffsetAccountId || null,
   });
   if (error) throw error;
 }
@@ -100,13 +106,15 @@ export async function linkGroupToAccount({ userId, groupId, memberId, groupName,
 // sl_mm_expense_choices — esto solo cambia qué cuenta se usa de acá en más,
 // para gastos que todavía no tienen una fila ahí. La cuenta pseudo nunca se
 // toca acá (siempre auto-manejada, ver linkGroupToAccount).
-export async function updateLinkDefaults(linkId, { defaultOwnAccountId, defaultOtherAccountId, loanAccountId }) {
+export async function updateLinkDefaults(linkId, { defaultOwnAccountId, defaultOtherAccountId, lendAccountId, loanAccountId, lendOffsetAccountId }) {
   const { error } = await supabase
     .from("sl_mm_links")
     .update({
       default_own_account_id: defaultOwnAccountId,
       default_other_account_id: defaultOtherAccountId,
+      lend_account_id: lendAccountId || null,
       loan_account_id: loanAccountId || null,
+      lend_offset_account_id: lendOffsetAccountId || null,
     })
     .eq("id", linkId);
   if (error) throw error;

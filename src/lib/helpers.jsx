@@ -286,6 +286,24 @@ export function daysInMonth(year, monthIndex) {
   return new Date(year, monthIndex + 1, 0).getDate();
 }
 
+// Arranque del ciclo actual de una tarjeta de crédito: la ocurrencia más
+// reciente de `statementDay` que ya pasó (o hoy mismo). Si ese día todavía
+// no llegó este mes, el corte fue el mes pasado — clampea días cortos
+// (29/30/31 en un mes que no los tiene cae en el último día real de ese
+// mes). Vive acá (no en evenCapitalData.js, donde se usa más) porque
+// evenGroupSync.js también la necesita (compensación por ciclo de tarjeta,
+// ver TAREAS_ACTUALES.md) y evenCapitalData.js ya importa DE evenGroupSync.js
+// -- un import en el otro sentido crearía un ciclo de módulos.
+export function creditCardCycleStart(statementDay, now = new Date()) {
+  const day = Math.min(statementDay, daysInMonth(now.getFullYear(), now.getMonth()));
+  const thisMonth = new Date(now.getFullYear(), now.getMonth(), day);
+  if (thisMonth <= now) return thisMonth;
+  const prevMonthIndex = now.getMonth() - 1;
+  const year = now.getFullYear() + (prevMonthIndex < 0 ? -1 : 0);
+  const month = (prevMonthIndex + 12) % 12;
+  return new Date(year, month, Math.min(statementDay, daysInMonth(year, month)));
+}
+
 // Para la comparación de ritmo de gasto (Estadísticas): null si viewMonth no
 // es el mes real de "now" -- ahí no hay ningún punto "esperado" que marcar,
 // un mes ya cerrado no tiene ritmo que juzgar.

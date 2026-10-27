@@ -2,7 +2,7 @@ import { useCallback, useMemo } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { supabase } from "./supabaseClient.js";
 import { db } from "./localDb.js";
-import { dateInputValueInZone, parseAmountInput, daysInMonth, monthsBefore, normalizeForSearch } from "./helpers.jsx";
+import { dateInputValueInZone, parseAmountInput, daysInMonth, monthsBefore, normalizeForSearch, creditCardCycleStart } from "./helpers.jsx";
 import { hasActiveFilters, matchesFilters } from "./filterHelpers.js";
 import { reconcileEvenGroup, getPendienteTcReviewItems, acknowledgePendienteTcReviewItem } from "./evenGroupSync.js";
 import { computeAccountTotals, computeCategoryMonthTotals, computeAccountMonthTotals } from "./localAggregates.js";
@@ -139,20 +139,10 @@ export function nextOccurrence(startDate, unit, interval, currentNext) {
   return addMonthsClamped(startDate, (stepsSoFar + 1) * stepMonths);
 }
 
-// Arranque del ciclo actual de una tarjeta de crédito: la ocurrencia más
-// reciente de `statementDay` que ya pasó (o hoy mismo). Si ese día todavía
-// no llegó este mes, el corte fue el mes pasado — mismo clamp de días cortos
-// que ya usa `nextOccurrence` (29/30/31 en un mes que no los tiene cae en el
-// último día real de ese mes).
-export function creditCardCycleStart(statementDay, now = new Date()) {
-  const day = Math.min(statementDay, daysInMonth(now.getFullYear(), now.getMonth()));
-  const thisMonth = new Date(now.getFullYear(), now.getMonth(), day);
-  if (thisMonth <= now) return thisMonth;
-  const prevMonthIndex = now.getMonth() - 1;
-  const year = now.getFullYear() + (prevMonthIndex < 0 ? -1 : 0);
-  const month = (prevMonthIndex + 12) % 12;
-  return new Date(year, month, Math.min(statementDay, daysInMonth(year, month)));
-}
+// Movida a helpers.jsx (evenGroupSync.js también la necesita, y ya importa
+// DE acá -- ver el comentario en helpers.jsx). Re-exportada (ya importada
+// arriba) para no romper los imports existentes (ej. creditCard.test.js).
+export { creditCardCycleStart };
 
 // Próxima ocurrencia de `paymentDay` desde `now` (hoy incluido) — el espejo
 // de `creditCardCycleStart`, pero mirando hacia adelante. Se usa para fijar

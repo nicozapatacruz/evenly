@@ -620,19 +620,30 @@ function GroupForm({ group = null, session, evenCapital, onCancel, onCreate, onS
   const [mmLinked, setMmLinked] = useState(!!activeMmLink);
   const [mmOwnAccountId, setMmOwnAccountId] = useState(activeMmLink?.default_own_account_id || "");
   const [mmOtherAccountId, setMmOtherAccountId] = useState(activeMmLink?.default_other_account_id || "");
-  // "Lo que prestás" (loan_account_id) es independiente de la cuenta pseudo
-  // (esa sigue siempre auto-manejada, invisible) -- vacío = la pata de
-  // préstamo sigue usando "propios"/"ajenos" como hasta ahora.
+  // "Lo que prestás" (lend_account_id) y "lo que te prestan" (loan_account_id)
+  // son independientes entre sí -- antes eran un solo campo compartido, se
+  // separaron porque no hay ninguna relación lógica entre las dos
+  // direcciones (ver TAREAS_ACTUALES.md). Las dos son independientes de la
+  // cuenta pseudo (esa sigue siempre auto-manejada, invisible) -- vacío =
+  // esa pata del préstamo sigue usando "propios"/"ajenos" como hasta ahora.
+  const [mmLendAccountId, setMmLendAccountId] = useState(activeMmLink?.lend_account_id || "");
   const [mmLoanAccountId, setMmLoanAccountId] = useState(activeMmLink?.loan_account_id || "");
+  // Solo tiene efecto si "lo que prestás" es una tarjeta de crédito -- ver
+  // EvenGroupCapitalLink, que la oculta si no.
+  const [mmLendOffsetAccountId, setMmLendOffsetAccountId] = useState(activeMmLink?.lend_offset_account_id || "");
   useEffect(() => {
     setMmLinked(!!activeMmLink);
     setMmOwnAccountId(activeMmLink?.default_own_account_id || "");
     setMmOtherAccountId(activeMmLink?.default_other_account_id || "");
+    setMmLendAccountId(activeMmLink?.lend_account_id || "");
     setMmLoanAccountId(activeMmLink?.loan_account_id || "");
-  }, [activeMmLink?.id, activeMmLink?.default_own_account_id, activeMmLink?.default_other_account_id, activeMmLink?.loan_account_id]);
+    setMmLendOffsetAccountId(activeMmLink?.lend_offset_account_id || "");
+  }, [activeMmLink?.id, activeMmLink?.default_own_account_id, activeMmLink?.default_other_account_id, activeMmLink?.lend_account_id, activeMmLink?.loan_account_id, activeMmLink?.lend_offset_account_id]);
   const mmNeedsAccounts = mmLinked && (!mmOwnAccountId || !mmOtherAccountId);
   const mmDirty = !!myMemberId && (activeMmLink
-    ? (mmOwnAccountId !== activeMmLink.default_own_account_id || mmOtherAccountId !== activeMmLink.default_other_account_id || mmLoanAccountId !== (activeMmLink.loan_account_id || ""))
+    ? (mmOwnAccountId !== activeMmLink.default_own_account_id || mmOtherAccountId !== activeMmLink.default_other_account_id
+        || mmLendAccountId !== (activeMmLink.lend_account_id || "") || mmLoanAccountId !== (activeMmLink.loan_account_id || "")
+        || mmLendOffsetAccountId !== (activeMmLink.lend_offset_account_id || ""))
     : (mmLinked && !!mmOwnAccountId && !!mmOtherAccountId));
 
   const canSaveEdit = name.trim() && members.length >= 2 && !hasEmptyCategory && !mmNeedsAccounts;
@@ -692,7 +703,9 @@ function GroupForm({ group = null, session, evenCapital, onCancel, onCreate, onS
           await updateLinkDefaults(activeMmLink.id, {
             defaultOwnAccountId: mmOwnAccountId,
             defaultOtherAccountId: mmOtherAccountId,
+            lendAccountId: mmLendAccountId || null,
             loanAccountId: mmLoanAccountId || null,
+            lendOffsetAccountId: mmLendOffsetAccountId || null,
           });
         } else {
           await linkGroupToAccount({
@@ -702,7 +715,9 @@ function GroupForm({ group = null, session, evenCapital, onCancel, onCreate, onS
             groupName: group.name,
             defaultOwnAccountId: mmOwnAccountId,
             defaultOtherAccountId: mmOtherAccountId,
+            lendAccountId: mmLendAccountId || null,
             loanAccountId: mmLoanAccountId || null,
+            lendOffsetAccountId: mmLendOffsetAccountId || null,
             currency: evenCapital.settings.main_currency,
           });
         }
@@ -940,8 +955,12 @@ function GroupForm({ group = null, session, evenCapital, onCancel, onCreate, onS
             onOwnAccountChange={setMmOwnAccountId}
             otherAccountId={mmOtherAccountId}
             onOtherAccountChange={setMmOtherAccountId}
+            lendAccountId={mmLendAccountId}
+            onLendAccountChange={setMmLendAccountId}
             loanAccountId={mmLoanAccountId}
             onLoanAccountChange={setMmLoanAccountId}
+            lendOffsetAccountId={mmLendOffsetAccountId}
+            onLendOffsetAccountChange={setMmLendOffsetAccountId}
             touched={touched}
             touch={touch}
             disabled={saving}
@@ -1028,11 +1047,13 @@ function GroupForm({ group = null, session, evenCapital, onCancel, onCreate, onS
 function EvenGroupCapitalLink({
   group, session, evenCapital, showError,
   linked, onToggle, ownAccountId, onOwnAccountChange, otherAccountId, onOtherAccountChange,
-  loanAccountId, onLoanAccountChange,
+  lendAccountId, onLendAccountChange, loanAccountId, onLoanAccountChange,
+  lendOffsetAccountId, onLendOffsetAccountChange,
   touched, touch, disabled, isOnline = true,
 }) {
   const [unlinking, setUnlinking] = useState(false);
   const [confirmingUnlink, setConfirmingUnlink] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(!!(lendAccountId || loanAccountId || lendOffsetAccountId));
 
   const myMemberId = group.members.find((m) => m.linkedUserId === session.userId)?.id;
   const activeLink = evenCapital.slLinks.find((l) => l.active && l.group_id === group.id && l.user_id === session.userId);
@@ -1050,6 +1071,14 @@ function EvenGroupCapitalLink({
         .map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
     }))
     .filter((g) => g.items.length > 0);
+
+  // La compensación por ciclo de tarjeta (lendOffsetAccountId) solo tiene
+  // sentido si la cuenta que de verdad se usa para prestar es una tarjeta de
+  // crédito -- y esa no es necesariamente "lo que prestás": si ese campo
+  // queda vacío, el préstamo cae en "propios" (ver ensureExpenseChoices en
+  // evenGroupSync.js), el mismo fallback que ya usa la sincronización.
+  const effectiveLendAccountId = lendAccountId || ownAccountId;
+  const lendAccountIsCreditCard = !!evenCapital.accounts.find((a) => a.id === effectiveLendAccountId)?.is_credit_card;
 
   const handleToggle = (on) => {
     if (on || !activeLink) { onToggle(on); return; }
@@ -1123,20 +1152,8 @@ function EvenGroupCapitalLink({
             />
           </Field>
           <Field
-            label="Cuenta por defecto para lo que prestás"
-            info={"Cuenta aparte para lo que prestás o te prestan en el grupo (en gastos y en pagos/saldar), separada de 'propios'/'ajenos' (esas siguen siendo tu parte del gasto).\nEj: en un gasto de €100 (tu parte €50), si vos pagás, los €50 prestados salen de esta cuenta en vez de 'propios'; si alguien más paga, esos €50 entran acá al mismo tiempo que se registra tu parte en 'ajenos'.\nSi lo dejás vacío, el préstamo sigue mezclado con 'propios'/'ajenos', como hasta ahora."}
-          >
-            <PickerField
-              value={loanAccountId}
-              onChange={onLoanAccountChange}
-              onClear={() => onLoanAccountChange("")}
-              groups={accountGroups}
-              placeholder="Sin cuenta aparte"
-            />
-          </Field>
-          <Field
             label="Cuenta por defecto en gastos ajenos"
-            info={"Cuenta que se usa para tu parte cuando otro miembro crea un gasto en el grupo.\nEj: alguien crea un gasto de €100 del que €50 son tuyos y €50 son de otra persona. Los €50 tuyos que pediste prestado salen de esta cuenta, pero se anulan con una transferencia automática por el mismo monto, así que el dinero no sale de verdad.\nEsa transferencia va a una cuenta invisible, o a 'lo que prestás' si la configuraste."}
+            info={"Cuenta que se usa para tu parte cuando otro miembro crea un gasto en el grupo.\nEj: alguien crea un gasto de €100 del que €50 son tuyos. Esos €50 salen de esta cuenta, pero entran de vuelta al mismo tiempo por una transferencia automática (desde 'lo que te prestan' si la configuraste en Opciones avanzadas, o desde esta misma cuenta si no) -- así que en neto no perdés nada hasta que de verdad le debas esa plata a alguien."}
             required
             error={touched.mmOtherAccountId && !otherAccountId ? "Este campo es obligatorio." : ""}
           >
@@ -1148,6 +1165,65 @@ function EvenGroupCapitalLink({
               placeholder="Elegí una cuenta"
             />
           </Field>
+
+          {/* Opciones avanzadas — casi nadie las necesita (solo quien presta
+              o le prestan plata del grupo y quiere separarla de sus gastos
+              propios/ajenos), así que quedan colapsadas por defecto, salvo
+              que ya haya algo configurado acá (ver advancedOpen más arriba). */}
+          <div>
+            <button
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: "#FAF7F2", border: "1px solid #DDD2BE", borderRadius: advancedOpen ? "10px 10px 0 0" : 10, padding: "10px 14px", cursor: "pointer" }}
+              onClick={() => setAdvancedOpen((v) => !v)}
+              aria-expanded={advancedOpen}
+              type="button"
+            >
+              <span style={styles.label}>Opciones avanzadas</span>
+              {advancedOpen ? <ChevronUp size={18} color="#6B6355" /> : <ChevronDownIcon size={18} color="#6B6355" />}
+            </button>
+
+            {advancedOpen && (
+              <div style={{ border: "1px solid #DDD2BE", borderTop: "none", borderRadius: "0 0 10px 10px", padding: "12px", display: "flex", flexDirection: "column", gap: 10, background: "#fff" }}>
+                <Field
+                  label="Cuenta de lo que prestás"
+                  info={"Cuenta aparte para cuando VOS pagás de más (prestás) en el grupo, separada de 'propios' (esa sigue siendo tu parte del gasto).\nEj: gasto de €100 (tu parte €50), vos pagás los €100. Los otros €50 prestados salen de esta cuenta en vez de 'propios'.\nSi lo dejás vacío, el préstamo sigue mezclado con 'propios', como hasta ahora."}
+                >
+                  <PickerField
+                    value={lendAccountId}
+                    onChange={onLendAccountChange}
+                    onClear={() => onLendAccountChange("")}
+                    groups={accountGroups}
+                    placeholder="Sin cuenta aparte"
+                  />
+                </Field>
+                <Field
+                  label="Cuenta de lo que te prestan"
+                  info={"Cuenta aparte para cuando OTRO paga tu parte en el grupo, separada de 'ajenos' (esa sigue siendo tu parte del gasto).\nEj: gasto de €100 (tu parte €50), paga otra persona. Esos €50 que te prestaron entran acá al mismo tiempo que se registra tu parte en 'ajenos'.\nSi lo dejás vacío, el préstamo sigue mezclado con 'ajenos', como hasta ahora."}
+                >
+                  <PickerField
+                    value={loanAccountId}
+                    onChange={onLoanAccountChange}
+                    onClear={() => onLoanAccountChange("")}
+                    groups={accountGroups}
+                    placeholder="Sin cuenta aparte"
+                  />
+                </Field>
+                {lendAccountIsCreditCard && (
+                  <Field
+                    label="Cuenta de origen para compensar lo prestado"
+                    info={"Si 'lo que prestás' es una tarjeta, pagarla completa (tu parte + lo prestado) hace que tu cuenta líquida se vea baja hasta que el grupo te devuelva esa plata -- es real, no un error.\nSi igual querés que se vea 'limpia' de una, elegí acá una cuenta donde ver temporalmente lo prestado: al cerrar cada ciclo de la tarjeta, se transfiere sola desde acá hacia tu cuenta de gastos ajenos.\nSi lo dejás vacío, no se genera ninguna transferencia -- tu cuenta líquida simplemente se ve baja hasta que te paguen."}
+                  >
+                    <PickerField
+                      value={lendOffsetAccountId}
+                      onChange={onLendOffsetAccountChange}
+                      onClear={() => onLendOffsetAccountChange("")}
+                      groups={accountGroups}
+                      placeholder="Sin compensación automática"
+                    />
+                  </Field>
+                )}
+              </div>
+            )}
+          </div>
         </>
       )}
     </div>
@@ -1865,7 +1941,11 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
       savedMmChoiceRef.current = choice || {};
       setMmAccountId(choice?.account_id || (iPay ? activeLink.default_own_account_id : activeLink.default_other_account_id));
       setMmCategoryId(choice?.category_id || "");
-      setMmLoanAccountId(choice?.loan_account_id || activeLink.loan_account_id || "");
+      // Default según dirección -- igual que "Cuenta" arriba: si pagás vos
+      // (probable préstamo), "lo que prestás"; si no, "lo que te prestan".
+      // Es solo un prellenado, el cálculo real (por monto exacto) lo hace
+      // ensureExpenseChoices en evenGroupSync.js si no se guarda nada acá.
+      setMmLoanAccountId(choice?.loan_account_id || (iPay ? activeLink.lend_account_id : activeLink.loan_account_id) || "");
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2546,7 +2626,9 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
       if (cancelled) return;
       savedMmChoiceRef.current = choice || {};
       setMmAccountId(choice?.account_id || (isFrom ? activeLink.default_own_account_id : activeLink.default_other_account_id));
-      setMmLoanAccountId(choice?.loan_account_id || activeLink.loan_account_id || "");
+      // isFrom (pagás vos) = saldás lo que debías -- "lo que te prestan".
+      // !isFrom (te pagan) = te saldan lo que prestaste -- "lo que prestás".
+      setMmLoanAccountId(choice?.loan_account_id || (isFrom ? activeLink.loan_account_id : activeLink.lend_account_id) || "");
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps

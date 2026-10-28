@@ -9,7 +9,7 @@ import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCen
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { styles } from "../../lib/styles.js";
-import { TopBar, RootHeader, ConfirmInline, Modal, Footer, PhotoPicker, PhotoLightbox, ImageWithFallback, Field, ToggleField, PickerField, EvenGroupIcon, EmptyState, CalculatorAmountInput, SegmentedControl } from "../../components/Shared.jsx";
+import { TopBar, RootHeader, ConfirmInline, Modal, Footer, FormFooter, PhotoPicker, PhotoLightbox, ImageWithFallback, Field, ToggleField, PickerField, DateRow, TextRow, EvenGroupIcon, EmptyState, CalculatorAmountInput, SegmentedControl } from "../../components/Shared.jsx";
 import { linkGroupToAccount, updateLinkDefaults, unlinkGroup } from "../../lib/evenGroupLink.js";
 import { useRecentNoteTitles } from "../../lib/evenCapitalData.js";
 import {
@@ -2062,67 +2062,69 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
       )}
 
       <div style={styles.form}>
-        {extraHeaderField}
-        <Field label="Fecha">
-          <input style={{ ...styles.input, height: 44, boxSizing: "border-box" }} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        </Field>
-
-        <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
-          <Field label="Importe" required style={{ flex: 1 }}>
-            <CalculatorAmountInput value={amount} onChange={setAmount} onBlur={() => touch("amount")} placeholder="0.00" />
-          </Field>
-          <select
-            style={{ ...styles.input, width: 80, flexShrink: 0, padding: "11px 6px", textAlign: "center", fontWeight: 600, color: "#544A3C" }}
-            value={currency}
-            onChange={(e) => setCurrency(e.target.value)}
-          >
-            {[baseCurrency, ...CURRENCY_LIST.filter((c) => c !== baseCurrency)].map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </div>
-        {/* El error vive FUERA del Field (que solo tiene Importe) para que no le
-            sume altura a esa columna sola — si no, el select de moneda
-            (hermano en el flex de arriba, "flex-end") queda alineado con el
-            error de abajo en vez de con el input. */}
-        {touched.amount && !validAmount && (
-          <span style={{ fontSize: 12, fontWeight: 400, color: "#B0473A", marginTop: -8, fontFamily: "system-ui, sans-serif" }}>Ingresá un importe válido.</span>
-        )}
-
-        {mmInvolved && (
-          <Field label="Cuenta" required error={touched.mmAccountId && !mmAccountId ? "Este campo es obligatorio." : ""}>
-            <div style={{ position: "relative" }}>
-              <PickerField
-                value={mmAccountId}
-                onChange={setMmAccountId}
-                onBlur={() => touch("mmAccountId")}
-                placeholder="Elegí una cuenta"
-                groups={evenCapital.groups
-                  .filter((g) => !g.deleted && g.system_key !== "split_ledger")
-                  .map((g) => ({
-                    label: g.name,
-                    items: evenCapital.accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
-                  }))
-                  .filter((g) => g.items.length > 0)}
-              />
-              {/* top:22 (mitad del alto fijo de 44px del botón de PickerField),
-                  no "50%": "50%" se calcula sobre el alto de ESTE wrapper
-                  entero, que incluye la grilla desplegada cuando el picker
-                  está abierto — con "50%" el ícono terminaba centrado en
-                  medio de la grilla abierta en vez de quedarse pegado al
-                  campo cerrado. */}
-              <span style={{ position: "absolute", right: 12, top: 22, transform: "translateY(-50%)", display: "flex", pointerEvents: "none" }} title="Viene de/va a EvenCapital">
-                <EvenGroupIcon size={26} />
-              </span>
-            </div>
-          </Field>
-        )}
-
-        {mmInvolved && (
-          <Field label="Cuenta de lo prestado" info="Para este gasto puntual: de dónde sale (o adónde entra) lo que prestás, si tu grupo tiene configurada una cuenta para eso. Dejalo vacío para usar 'Cuenta' de arriba, como siempre.">
+        {/* Importe "hero": mismo bloque que TransactionForm.jsx/el asistente
+            de fotos (número grande centrado, sin caja, moneda como chip
+            aparte) -- acá la moneda SÍ es elegible (un gasto del grupo puede
+            ser en otra moneda a la del grupo), así que el chip queda tocable,
+            a diferencia del asistente. */}
+        <div style={{ textAlign: "center", padding: "4px 0 2px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, width: "100%" }}>
+            <CalculatorAmountInput
+              value={amount}
+              onChange={setAmount}
+              onBlur={() => touch("amount")}
+              placeholder="0,00"
+              style={{ flex: "0 1 auto", minWidth: 0, width: "auto", height: 56, border: "none", background: "transparent", padding: "0 10px", lineHeight: 1, fontSize: 40, fontWeight: 400, fontFamily: "'Iowan Old Style', 'Georgia', 'Source Serif Pro', serif", color: "#C75D3B", textAlign: "center", justifyContent: "center", borderRadius: 14 }}
+              focusStyle={{ background: "#F3ECE0", boxShadow: "none" }}
+              placeholderColor="#A3968B"
+            />
             <PickerField
+              compact
+              value={currency}
+              onChange={setCurrency}
+              title="Elegí la moneda"
+              groups={[{ label: null, items: [baseCurrency, ...CURRENCY_LIST.filter((c) => c !== baseCurrency)].map((c) => ({ value: c, label: c, icon: CURRENCIES[c]?.symbol })) }]}
+            />
+          </div>
+        </div>
+        {touched.amount && !validAmount && (
+          <p style={{ margin: "-6px 0 0", fontSize: 13, textAlign: "center", color: "#B0473A", fontFamily: "system-ui, sans-serif" }}>Ingresá un importe válido.</p>
+        )}
+
+        {extraHeaderField}
+
+        <DateRow label="Fecha" value={date} onChange={setDate} />
+
+        {mmInvolved && (
+          <Field error={touched.mmAccountId && !mmAccountId ? "Este campo es obligatorio." : ""}>
+            <PickerField
+              rowLabel={<>Cuenta <EvenGroupIcon size={13} style={{ marginLeft: 2 }} /></>}
+              required
+              value={mmAccountId}
+              onChange={setMmAccountId}
+              onBlur={() => touch("mmAccountId")}
+              placeholder="Elegí una cuenta"
+              title="Elegí una cuenta"
+              groups={evenCapital.groups
+                .filter((g) => !g.deleted && g.system_key !== "split_ledger")
+                .map((g) => ({
+                  label: g.name,
+                  items: evenCapital.accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
+                }))
+                .filter((g) => g.items.length > 0)}
+            />
+          </Field>
+        )}
+
+        {mmInvolved && (
+          <Field info="Para este gasto puntual: de dónde sale (o adónde entra) lo que prestás, si tu grupo tiene configurada una cuenta para eso. Dejalo vacío para usar 'Cuenta' de arriba, como siempre.">
+            <PickerField
+              rowLabel={<>Cuenta de lo prestado <EvenGroupIcon size={13} style={{ marginLeft: 2 }} /></>}
               value={mmLoanAccountId}
               onChange={setMmLoanAccountId}
               onClear={() => setMmLoanAccountId("")}
               placeholder="Misma que 'Cuenta'"
+              title="Elegí una cuenta"
               groups={evenCapital.groups
                 .filter((g) => !g.deleted && g.system_key !== "split_ledger")
                 .map((g) => ({
@@ -2135,36 +2137,29 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
         )}
 
         {showMmCategory && (
-          <Field label="Categoría personal">
-            <div style={{ position: "relative" }}>
-              <PickerField
-                value={mmCategoryId}
-                onChange={setMmCategoryId}
-                onClear={() => setMmCategoryId("")}
-                placeholder="Sin categoría"
-                groups={[{
-                  label: null,
-                  items: evenCapital.categories.filter((c) => c.type === "expense" && !c.deleted).map((c) => ({ value: c.id, label: c.name, icon: c.icon })),
-                }]}
-              />
-              {/* right:40 (no 12, como Cuenta) SOLO cuando hay una categoría
-                  elegida — ahí PickerField muestra su propia "X" de limpiar
-                  en right:6 y se superponía con este ícono. Sin selección no
-                  hay "X", así que usa el mismo offset que el resto para
-                  quedar alineado con Cuenta/Grupo. */}
-              <span style={{ position: "absolute", right: mmCategoryId ? 40 : 12, top: 22, transform: "translateY(-50%)", display: "flex", pointerEvents: "none" }} title="Viene de/va a EvenCapital">
-                <EvenGroupIcon size={26} />
-              </span>
-            </div>
+          <Field>
+            <PickerField
+              rowLabel={<>Categoría personal <EvenGroupIcon size={13} style={{ marginLeft: 2 }} /></>}
+              value={mmCategoryId}
+              onChange={setMmCategoryId}
+              onClear={() => setMmCategoryId("")}
+              placeholder="Sin categoría"
+              title="Elegí una categoría"
+              groups={[{
+                label: null,
+                items: evenCapital.categories.filter((c) => c.type === "expense" && !c.deleted).map((c) => ({ value: c.id, label: c.name, icon: c.icon })),
+              }]}
+            />
           </Field>
         )}
-
         {/* La categoría de Split siempre está — la ve todo el grupo. El label
             queda fijo en "Categoría de {grupo}" apenas el grupo está
             vinculado a EvenCapital (participes/pagues o no) — así no
             cambia de nombre según el caso, que sería más confuso que útil. */}
-        <Field label={activeLink ? `Categoría de ${group.name}` : "Categoría"}>
+        <Field>
           <PickerField
+            rowLabel={activeLink ? `Categoría de ${group.name}` : "Categoría"}
+            title="Elegí una categoría"
             value={category}
             onChange={setCategory}
             groups={[{
@@ -2174,33 +2169,22 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
           />
         </Field>
 
-        <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-          <Field label="Descripción" style={{ flex: 1 }}>
-            <div style={{ position: "relative" }}>
-              <input
-                style={{ ...styles.input, width: "100%", height: 44, boxSizing: "border-box" }}
-                value={description}
-                onChange={(e) => { setDescription(e.target.value); setDescriptionDismissed(false); }}
-                onFocus={() => setDescriptionFocused(true)}
-                onBlur={() => setDescriptionFocused(false)}
-                placeholder="Cena, taxi, supermercado… (opcional)"
-              />
-              {descriptionFocused && !descriptionDismissed && descriptionSuggestions.length > 0 && (
-                <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, zIndex: 5, border: "1px solid #DDD2BE", borderRadius: 10, background: "#fff", overflow: "hidden", boxShadow: "0 4px 10px rgba(0,0,0,0.08)" }}>
-                  {descriptionSuggestions.map((s) => (
-                    <button
-                      type="button"
-                      key={s}
-                      onMouseDown={(e) => { e.preventDefault(); setDescription(s); setDescriptionDismissed(true); }}
-                      style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 12px", fontSize: 13, fontFamily: "system-ui, sans-serif", border: "none", background: "#fff", color: "#2B2620", cursor: "pointer" }}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </Field>
+        <TextRow
+          label="Descripción"
+          value={description}
+          onChange={(v) => { setDescription(v); setDescriptionDismissed(false); }}
+          onFocus={() => setDescriptionFocused(true)}
+          onBlur={() => setDescriptionFocused(false)}
+          placeholder="Cena, taxi, supermercado… (opcional)"
+          suggestions={descriptionFocused && !descriptionDismissed ? descriptionSuggestions : []}
+          onPickSuggestion={(s) => { setDescription(s); setDescriptionDismissed(true); }}
+        />
+
+        {/* Foto/Nota no son parte del patrón de fila label-valor (no existen
+            en TransactionForm.jsx/el asistente) -- quedan en su propia fila,
+            como ya estaban, solo que ahora separadas de Descripción (que
+            pasó a ocupar todo el ancho, como el resto de los campos). */}
+        <div style={{ display: "flex", gap: 8 }}>
           <label title="Añadir foto" style={{ width: 44, height: 44, boxSizing: "border-box", borderRadius: 10, border: `1px solid ${imageUrl ? "#C75D3B" : "#DDD2BE"}`, background: imageUrl ? "#C75D3B1a" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, color: imageUrl ? "#C75D3B" : "#6B6355" }}>
             <Camera size={18} />
             <input type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageChange} />
@@ -2422,22 +2406,19 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
         <PhotoLightbox open={showFullPhoto} src={imageUrl} onClose={() => setShowFullPhoto(false)} />
 
         {(notesOpen || notes) && (
-          <textarea style={{ ...styles.input, minHeight: 60, resize: "vertical", fontFamily: "system-ui, sans-serif" }} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas adicionales…" />
+          <TextRow label="Nota" value={notes} onChange={setNotes} placeholder="Notas adicionales…" multiline />
         )}
 
         {err && <p style={styles.errText}>{err}</p>}
       </div>
 
-      <Footer>
-        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
-        <button
-          style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }}
-          onClick={handleSave}
-          disabled={saving}
-        >
-          {saving ? "Guardando…" : "Guardar"}
-        </button>
-      </Footer>
+      <FormFooter
+        onCancel={onCancel}
+        onConfirm={handleSave}
+        confirmLabel={saving ? "Guardando…" : "Guardar"}
+        confirmDisabled={saving}
+        confirmDim={!canSave}
+      />
     </div>
   );
 }
@@ -2469,18 +2450,15 @@ function NewExpense({ group, groups, defaultGroupId, expenseId, onCancel, onSave
     (l) => l.active && l.group_id === effectiveGroup.id && l.user_id === session.userId
   );
   const groupPicker = (
-    <Field label="Grupo">
-      <div style={{ position: "relative" }}>
-        <select style={{ ...styles.input, width: "100%", paddingRight: isGroupLinked ? 44 : undefined }} value={pickedGroupId} onChange={(e) => setPickedGroupId(e.target.value)}>
-          <option value="">Selecciona un grupo…</option>
-          {(groups || []).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-        </select>
-        {isGroupLinked && (
-          <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", display: "flex", pointerEvents: "none" }} title="Vinculado a EvenCapital">
-            <EvenGroupIcon size={26} />
-          </span>
-        )}
-      </div>
+    <Field>
+      <PickerField
+        rowLabel={isGroupLinked ? <>Grupo <EvenGroupIcon size={13} style={{ marginLeft: 2 }} /></> : "Grupo"}
+        value={pickedGroupId}
+        onChange={setPickedGroupId}
+        placeholder="Selecciona un grupo…"
+        title="Elegí un grupo"
+        groups={[{ label: null, items: (groups || []).map((g) => ({ value: g.id, label: g.name })) }]}
+      />
     </Field>
   );
 

@@ -628,11 +628,30 @@ let pickerInstanceCounter = 0;
 // (ver más abajo) — uno solo para toda la app, no uno por instancia del input.
 let amountMeasureCtx = null;
 
+// Tamaño de letra para un ícono de texto corto (ej. símbolo de moneda, "€"
+// vs "COL$") según su largo REAL en caracteres visibles -- Array.from, no
+// `.length`: un emoji como "🍕" cuenta como 2 con `.length` (par subrogado
+// en JS) pero como 1 acá, así que los emojis de categorías/cuentas de
+// siempre NUNCA se achican por error, solo texto de verdad largo (monedas).
+function textIconFontSize(icon, base) {
+  if (typeof icon !== "string") return base;
+  const len = Array.from(icon).length;
+  if (len <= 1) return base;
+  const scale = { 2: 0.85, 3: 0.7, 4: 0.58 }[len] || 0.5;
+  return Math.round(base * scale);
+}
+
 export function PickerField({ value, onChange, groups, placeholder = "Elegir", title, note, onClear, onBlur, disabled = false, emptyMessage = "No hay opciones para elegir.", openSignal, compact = false, small = false, rowLabel, required = false, listStyle = false, lockedValue = false }) {
   const [open, setOpen] = useState(false);
   const idRef = useRef(null);
   if (idRef.current === null) idRef.current = ++pickerInstanceCounter;
   const selected = groups.flatMap((g) => g.items).find((it) => it.value === value);
+  // Para el chip `small` (moneda): el símbolo se achica según cuántos
+  // caracteres tiene (ej. "€" vs "COL$") para que siga entrando en el
+  // cuadrado de 32x32 sin desbordarse -- la lista de monedas es fija y
+  // conocida (CURRENCIES en helpers.jsx), alcanza con esto, no hace falta
+  // medir en vivo con Canvas como hace CalculatorAmountInput.
+  const smallIconFontSize = textIconFontSize(selected?.icon, 16);
 
   // Apertura "a control remoto": un padre que cambia `openSignal` (ej. un
   // contador que sube) abre este picker sin tener que levantar su estado
@@ -745,7 +764,7 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", t
           // que el selector de moneda del mockup, no el chip inline ancho de
           // un picker normal.
           <>
-            <span style={{ fontSize: small ? 16 : 25, fontFamily: "'Iowan Old Style', 'Georgia', 'Source Serif Pro', serif", lineHeight: 1 }}>{selected?.icon || selected?.label || placeholder}</span>
+            <span style={{ fontSize: small ? smallIconFontSize : 25, fontFamily: "'Iowan Old Style', 'Georgia', 'Source Serif Pro', serif", lineHeight: 1 }}>{selected?.icon || selected?.label || placeholder}</span>
             {/* Sin la caja (disabled) o en `small`, el símbolo + código
                 apilados se ven descentrados/apretados -- en los dos casos
                 queda solo el símbolo. */}
@@ -842,7 +861,7 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", t
                                 celda entera y todo lo que sigue se desalinea
                                 (quedó así en nuestro propio "Otros"). Con texto
                                 (1ra letra del nombre) en vez de vacía. */}
-                            <span style={{ ...styles.sheetTileIcon, ...(it.action ? { background: "#E8F1EB" } : null), ...(on ? styles.sheetTileIconOn : null), ...(it.icon ? null : { color: "#A89A87", fontWeight: 600 }) }}>
+                            <span style={{ ...styles.sheetTileIcon, fontSize: textIconFontSize(it.icon, styles.sheetTileIcon.fontSize), ...(it.action ? { background: "#E8F1EB" } : null), ...(on ? styles.sheetTileIconOn : null), ...(it.icon ? null : { color: "#A89A87", fontWeight: 600 }) }}>
                               {it.icon || it.label?.trim()?.[0]?.toUpperCase() || "?"}
                             </span>
                             <span style={{ ...styles.sheetTileName, ...(on ? styles.sheetTileNameOn : null), ...(it.deleted ? { textDecoration: "line-through", color: "#B0473A" } : null) }}>

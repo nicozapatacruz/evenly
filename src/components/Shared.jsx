@@ -722,7 +722,13 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", t
         onClick={() => !disabled && setOpen(true)}
         disabled={disabled}
         style={compact
-          ? { fontFamily: "system-ui, sans-serif", color: "#2B2420", border: "none", borderRadius: 14, minWidth: 54, height: 56, background: open ? "#F6E6DE" : "#F3ECE0", boxShadow: open ? "inset 0 0 0 2px #C75D3B" : "inset 0 0 0 1px #E7DFD2", padding: "0 10px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 0, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.6 : 1, transition: "background-color .15s, box-shadow .15s" }
+          // Si está disabled, no se ve como un botón (sin fondo ni borde) --
+          // si de verdad no se puede tocar, que no lo parezca, en vez de
+          // quedar como un botón activo atenuado.
+          // Sin caja (disabled), el padding/minWidth de "botón" deja un hueco
+          // vacío enorme al lado del importe -- esos valores eran para dar
+          // lugar DENTRO de la caja, que ya no existe.
+          ? { fontFamily: "system-ui, sans-serif", color: "#2B2420", border: "none", borderRadius: 14, minWidth: disabled ? 0 : 54, height: 56, background: disabled ? "transparent" : (open ? "#F6E6DE" : "#F3ECE0"), boxShadow: disabled ? "none" : (open ? "inset 0 0 0 2px #C75D3B" : "inset 0 0 0 1px #E7DFD2"), padding: disabled ? 0 : "0 10px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 0, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.6 : 1, transition: "background-color .15s, box-shadow .15s" }
           : { ...styles.input, width: "100%", height: 44, boxSizing: "border-box", textAlign: "left", display: "flex", alignItems: "center", gap: 8, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.6 : 1, paddingRight: clearable ? 34 : undefined }}
       >
         {compact ? (
@@ -731,7 +737,10 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", t
           // un picker normal.
           <>
             <span style={{ fontSize: 25, fontFamily: "'Iowan Old Style', 'Georgia', 'Source Serif Pro', serif", lineHeight: 1 }}>{selected?.icon || selected?.label || placeholder}</span>
-            {selected?.icon && <span style={{ marginTop: 4, fontSize: 10.5, fontWeight: 600, letterSpacing: "0.04em", color: "#6E625A" }}>{selected.label}</span>}
+            {/* Sin la caja (disabled), el símbolo + código apilados se ven
+                descentrados -- la caja era lo que los mantenía agrupados
+                visualmente. Disabled: solo el símbolo. */}
+            {!disabled && selected?.icon && <span style={{ marginTop: 4, fontSize: 10.5, fontWeight: 600, letterSpacing: "0.04em", color: "#6E625A" }}>{selected.label}</span>}
           </>
         ) : selected ? (
           <>

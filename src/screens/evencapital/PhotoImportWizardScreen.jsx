@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from "react";
-import { TopBar, Footer, Field, PickerField, CalculatorAmountInput, EmptyState, Modal, SegmentedControl } from "../../components/Shared.jsx";
+import { TopBar, Footer, FormFooter, Field, PickerField, DateRow, TextRow, CalculatorAmountInput, EmptyState, Modal, SegmentedControl } from "../../components/Shared.jsx";
 import { styles } from "../../lib/styles.js";
-import { money, parseAmountInput, dateInputValue, useScrollToTopOnChange, normalizeForSearch } from "../../lib/helpers.jsx";
+import { money, parseAmountInput, dateInputValue, useScrollToTopOnChange, normalizeForSearch, useTouched, CURRENCIES } from "../../lib/helpers.jsx";
 import { computeAmountMain, useRecentNoteTitles } from "../../lib/evenCapitalData.js";
 import { useDescriptionRules, findDescriptionRule, upsertDescriptionRule, normalizeDescription } from "../../lib/descriptionRulesData.js";
 import { Check, Inbox, RefreshCw, X } from "lucide-react";
 
 const TYPE_LABEL = { income: "Ingreso", expense: "Gasto" };
+// Mismos colores que AMOUNT_COLOR en TransactionForm.jsx -- acá solo gasto/
+// ingreso, no hay transferencia en este asistente.
+const AMOUNT_COLOR = { expense: "#B0473A", income: "#3B6E62" };
 
 // Busca, dentro de lo ya confirmado en ESTE mismo lote (no en la base
 // todavía: nada se guarda hasta el final), la confirmación más reciente
@@ -231,7 +234,7 @@ function WizardStep({ userId, settings, candidate, savedEntry, rule, categories,
   // (encabezado de fecha más cercano arriba de ella en la foto); si no se
   // detectó ninguna, cae a la fecha elegida en la pantalla anterior.
   const [date, setDate] = useState(saved ? dateInputValue(saved.date) : (candidate.date != null ? dateInputValue(candidate.date) : fallbackDate));
-  const [touched, setTouched] = useState(false);
+  const [touched, touch] = useTouched();
   const [showExitConfirm, setShowExitConfirm] = useState(false);
 
   // Mismo autocompletado de "Descripción" que TransactionForm (misma fuente,
@@ -250,7 +253,7 @@ function WizardStep({ userId, settings, candidate, savedEntry, rule, categories,
   const typeCategories = categories.filter((c) => c.type === type && !c.deleted);
 
   const handleConfirm = () => {
-    setTouched(true);
+    touch("amount");
     if (!validAmount) return;
     onConfirm({ amount: numericAmount, title: title.trim(), type, categoryId, memo: memo.trim(), date });
   };
@@ -276,61 +279,71 @@ function WizardStep({ userId, settings, candidate, savedEntry, rule, categories,
           onChange={setType}
         />
 
-        <Field label="Fecha">
-          <input style={styles.input} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        </Field>
+        {/* Importe "hero": mismo bloque que TransactionForm.jsx (número
+            grande centrado, sin caja/etiqueta, moneda como chip aparte) --
+            acá la moneda es fija (la de la cuenta elegida en el paso 1, para
+            todo el lote), así que el chip es solo informativo, no un picker. */}
+        <div style={{ textAlign: "center", padding: "4px 0 2px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, width: "100%" }}>
+            <CalculatorAmountInput
+              value={amount}
+              onChange={setAmount}
+              onBlur={() => touch("amount")}
+              placeholder="0,00"
+              style={{ flex: "0 1 auto", minWidth: 0, width: "auto", height: 56, border: "none", background: "transparent", padding: "0 10px", lineHeight: 1, fontSize: 40, fontWeight: 400, fontFamily: "'Iowan Old Style', 'Georgia', 'Source Serif Pro', serif", color: AMOUNT_COLOR[type], textAlign: "center", justifyContent: "center", borderRadius: 14 }}
+              focusStyle={{ background: "#F3ECE0", boxShadow: "none" }}
+              placeholderColor="#A3968B"
+            />
+            {/* Simple etiqueta, no un botón -- a diferencia de TransactionForm.jsx,
+                acá la moneda es fija (la de la cuenta elegida en el paso 1,
+                para todo el lote), no hay nada para tocar. Sin fondo/borde y
+                atenuada, como cualquier otro elemento disabled de la app. */}
+            {/* Sin caja, solo el símbolo -- el código abajo (ej. "EUR") se ve
+                descentrado sin la caja que antes los agrupaba. */}
+            <div style={{ fontFamily: "system-ui, sans-serif", color: "#2B2420", height: 56, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, opacity: 0.6 }}>
+              <span style={{ fontSize: 25, fontFamily: "'Iowan Old Style', 'Georgia', 'Source Serif Pro', serif", lineHeight: 1 }}>{CURRENCIES[accountCurrency]?.symbol || accountCurrency}</span>
+            </div>
+          </div>
+        </div>
+        {(touched.amount && !validAmount) || !amount ? (
+          <p style={{ margin: "-6px 0 0", fontSize: 13, textAlign: "center", color: touched.amount && !validAmount ? "#B0473A" : "#8A7F72", fontFamily: "system-ui, sans-serif" }}>
+            {touched.amount && !validAmount ? "Ingresá un importe válido." : "Tocá el número para escribir el importe."}
+          </p>
+        ) : null}
 
-        <Field label="Importe" required error={touched && !validAmount ? "Ingresá un importe válido." : ""}>
-          <CalculatorAmountInput value={amount} onChange={setAmount} onBlur={() => setTouched(true)} placeholder="0.00" currency={accountCurrency} />
-        </Field>
+        <DateRow label="Fecha" value={date} onChange={setDate} />
 
-        <Field label="Categoría">
+        <Field>
           <PickerField
+            rowLabel="Categoría"
             value={categoryId}
             onChange={setCategoryId}
             onClear={() => setCategoryId("")}
             placeholder="Sin categoría"
+            title="Elegí una categoría"
             groups={[{ label: null, items: typeCategories.map((c) => ({ value: c.id, label: c.name, icon: c.icon })) }]}
           />
         </Field>
 
-        <Field label="Descripción">
-          <div style={{ position: "relative" }}>
-            <input
-              style={{ ...styles.input, width: "100%" }}
-              value={title}
-              onChange={(e) => { setTitle(e.target.value); setTitleDismissed(false); }}
-              onFocus={() => setTitleFocused(true)}
-              onBlur={() => setTitleFocused(false)}
-              placeholder="Cena, taxi, supermercado…"
-            />
-            {titleFocused && !titleDismissed && titleSuggestions.length > 0 && (
-              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, zIndex: 5, border: "1px solid #DDD2BE", borderRadius: 10, background: "#fff", overflow: "hidden", boxShadow: "0 4px 10px rgba(0,0,0,0.08)" }}>
-                {titleSuggestions.map((s) => (
-                  <button
-                    type="button"
-                    key={s}
-                    onMouseDown={(e) => { e.preventDefault(); setTitle(s); setTitleDismissed(true); }}
-                    style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 12px", fontSize: 13, fontFamily: "system-ui, sans-serif", border: "none", background: "#fff", color: "#2B2620", cursor: "pointer" }}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </Field>
+        <TextRow
+          label="Descripción"
+          value={title}
+          onChange={(v) => { setTitle(v); setTitleDismissed(false); }}
+          onFocus={() => setTitleFocused(true)}
+          onBlur={() => setTitleFocused(false)}
+          placeholder="Cena, taxi, supermercado…"
+          suggestions={titleFocused && !titleDismissed ? titleSuggestions : []}
+          onPickSuggestion={(s) => { setTitle(s); setTitleDismissed(true); }}
+        />
 
-        <Field label="Nota">
-          <input style={styles.input} value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="Opcional" />
-        </Field>
+        <TextRow label="Nota" value={memo} onChange={setMemo} placeholder="Opcional" multiline />
       </div>
-      <Footer>
-        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onSkip}>Omitir</button>
-        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0 }} onClick={handleConfirm}>
-          Confirmar
-        </button>
-      </Footer>
+      <FormFooter
+        onCancel={onSkip}
+        cancelLabel="Omitir"
+        onConfirm={handleConfirm}
+        confirmLabel="Confirmar"
+      />
 
       {showExitConfirm && (
         <Modal title="¿Salir del asistente?" onClose={() => setShowExitConfirm(false)}>

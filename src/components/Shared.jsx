@@ -628,7 +628,7 @@ let pickerInstanceCounter = 0;
 // (ver más abajo) — uno solo para toda la app, no uno por instancia del input.
 let amountMeasureCtx = null;
 
-export function PickerField({ value, onChange, groups, placeholder = "Elegir", title, note, onClear, onBlur, disabled = false, emptyMessage = "No hay opciones para elegir.", openSignal, compact = false, rowLabel, required = false, listStyle = false, lockedValue = false }) {
+export function PickerField({ value, onChange, groups, placeholder = "Elegir", title, note, onClear, onBlur, disabled = false, emptyMessage = "No hay opciones para elegir.", openSignal, compact = false, small = false, rowLabel, required = false, listStyle = false, lockedValue = false }) {
   const [open, setOpen] = useState(false);
   const idRef = useRef(null);
   if (idRef.current === null) idRef.current = ++pickerInstanceCounter;
@@ -728,7 +728,16 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", t
           // Sin caja (disabled), el padding/minWidth de "botón" deja un hueco
           // vacío enorme al lado del importe -- esos valores eran para dar
           // lugar DENTRO de la caja, que ya no existe.
-          ? { fontFamily: "system-ui, sans-serif", color: "#2B2420", border: "none", borderRadius: 14, minWidth: disabled ? 0 : 54, height: 56, background: disabled ? "transparent" : (open ? "#F6E6DE" : "#F3ECE0"), boxShadow: disabled ? "none" : (open ? "inset 0 0 0 2px #C75D3B" : "inset 0 0 0 1px #E7DFD2"), padding: disabled ? 0 : "0 10px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 0, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.6 : 1, transition: "background-color .15s, box-shadow .15s" }
+          // `small` (compact + no-hero, ej. Importe en fila de SettleUp):
+          // mismo chip, pero a la altura de un texto normal de fila (40px),
+          // no del tamaño "hero" (56px) -- sigue siendo tocable, a diferencia
+          // de `disabled`.
+          // `small`: un poco MENOS alto que la fila que lo contiene (no
+          // 100%), para que quede un respiro arriba/abajo y no toque el
+          // borde inferior de la fila -- antes quedaba pegado a esa línea.
+          // `small` cuadrado: mismo ancho que alto (32x32), sin padding
+          // horizontal -- con padding quedaba más ancho que alto.
+          ? { fontFamily: "system-ui, sans-serif", color: "#2B2420", border: "none", borderRadius: small ? 10 : 14, minWidth: disabled ? 0 : (small ? 32 : 54), width: small ? 32 : undefined, height: disabled ? 56 : (small ? 32 : 56), background: disabled ? "transparent" : (open ? "#F6E6DE" : "#F3ECE0"), boxShadow: disabled ? "none" : (open ? "inset 0 0 0 2px #C75D3B" : "inset 0 0 0 1px #E7DFD2"), padding: disabled ? 0 : (small ? 0 : "0 10px"), display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 0, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.6 : 1, transition: "background-color .15s, box-shadow .15s" }
           : { ...styles.input, width: "100%", height: 44, boxSizing: "border-box", textAlign: "left", display: "flex", alignItems: "center", gap: 8, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.6 : 1, paddingRight: clearable ? 34 : undefined }}
       >
         {compact ? (
@@ -736,11 +745,11 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", t
           // que el selector de moneda del mockup, no el chip inline ancho de
           // un picker normal.
           <>
-            <span style={{ fontSize: 25, fontFamily: "'Iowan Old Style', 'Georgia', 'Source Serif Pro', serif", lineHeight: 1 }}>{selected?.icon || selected?.label || placeholder}</span>
-            {/* Sin la caja (disabled), el símbolo + código apilados se ven
-                descentrados -- la caja era lo que los mantenía agrupados
-                visualmente. Disabled: solo el símbolo. */}
-            {!disabled && selected?.icon && <span style={{ marginTop: 4, fontSize: 10.5, fontWeight: 600, letterSpacing: "0.04em", color: "#6E625A" }}>{selected.label}</span>}
+            <span style={{ fontSize: small ? 16 : 25, fontFamily: "'Iowan Old Style', 'Georgia', 'Source Serif Pro', serif", lineHeight: 1 }}>{selected?.icon || selected?.label || placeholder}</span>
+            {/* Sin la caja (disabled) o en `small`, el símbolo + código
+                apilados se ven descentrados/apretados -- en los dos casos
+                queda solo el símbolo. */}
+            {!disabled && !small && selected?.icon && <span style={{ marginTop: 4, fontSize: 10.5, fontWeight: 600, letterSpacing: "0.04em", color: "#6E625A" }}>{selected.label}</span>}
           </>
         ) : selected ? (
           <>
@@ -1345,21 +1354,34 @@ export function CalculatorAmountInput({ value, onChange, onBlur, onConfirmNext, 
       if (available <= 0) { setFitFontSize(baseFontSize); setVisibleText(text); return; }
       if (!amountMeasureCtx) amountMeasureCtx = document.createElement("canvas").getContext("2d");
       const fontFamily = style?.fontFamily || "system-ui, sans-serif";
-      amountMeasureCtx.font = `${baseFontSize}px ${fontFamily}`;
+      // El peso de letra (ej. fontWeight:600 en Importe de fila de SettleUp)
+      // también afecta el ancho real -- negrita pesa más que texto normal al
+      // mismo tamaño. Sin esto acá, Canvas medía como si SIEMPRE fuera
+      // normal (default), subestimando el ancho real cada vez que el campo
+      // pide negrita -- esto, no el redondeo, era la causa real de que
+      // "a veces" tocara al vecino (dependía de cuánto texto en negrita
+      // hubiera en cada momento, no era un error fijo).
+      const fontWeight = style?.fontWeight || "normal";
+      amountMeasureCtx.font = `${fontWeight} ${baseFontSize}px ${fontFamily}`;
       const textWidth = amountMeasureCtx.measureText(text).width;
       if (textWidth <= available) { setFitFontSize(baseFontSize); setVisibleText(text); return; }
       const minSize = Math.max(16, baseFontSize * 0.35);
-      const scaledSize = baseFontSize * (available / textWidth);
+      // *0.92: la escala lineal (mismo ancho/alto que a baseFontSize) es una
+      // aproximación -- el ancho REAL ya achicado nunca da ejecto igual al
+      // predicho (fuente/kerning), y sin margen de sobra el texto terminaba
+      // tocando lo que viene al lado (visto en vivo con un layout angosto,
+      // ej. Importe en fila con el chip de moneda pegado).
+      const scaledSize = baseFontSize * (available / textWidth) * 0.92;
       if (scaledSize >= minSize) { setFitFontSize(scaledSize); setVisibleText(text); return; }
       // Ni al tamaño mínimo entra entero: se queda en el mínimo y se
       // recorta el TEXTO (no la letra) para que siga entrando.
       setFitFontSize(minSize);
-      setVisibleText(truncateFromStart(text, available, `${minSize}px ${fontFamily}`));
+      setVisibleText(truncateFromStart(text, available, `${fontWeight} ${minSize}px ${fontFamily}`));
     };
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
-  }, [displayValue, placeholder, baseFontSize, style?.fontFamily]);
+  }, [displayValue, placeholder, baseFontSize, style?.fontFamily, style?.fontWeight]);
 
   return (
     // stopPropagation acá (no en cada botón del teclado): si este input

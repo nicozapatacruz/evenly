@@ -9,7 +9,7 @@ import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCen
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { styles } from "../../lib/styles.js";
-import { TopBar, RootHeader, ConfirmInline, Modal, Footer, FormFooter, PhotoPicker, PhotoLightbox, ImageWithFallback, Field, ToggleField, PickerField, DateRow, TextRow, EvenGroupIcon, EmptyState, CalculatorAmountInput, SegmentedControl } from "../../components/Shared.jsx";
+import { TopBar, RootHeader, ConfirmInline, Modal, Footer, FormFooter, PhotoPicker, PhotoLightbox, ImageWithFallback, Field, ToggleField, PickerField, DateRow, TextRow, EvenGroupIcon, EmptyState, CalculatorAmountInput, SegmentedControl, Hint } from "../../components/Shared.jsx";
 import { linkGroupToAccount, updateLinkDefaults, unlinkGroup } from "../../lib/evenGroupLink.js";
 import { useRecentNoteTitles } from "../../lib/evenCapitalData.js";
 import {
@@ -2704,8 +2704,6 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
         />
       )}
       <div style={styles.form}>
-        <p style={{ ...styles.muted, padding: 0 }}>Esto no mueve dinero. Solo anota que el pago ya se hizo fuera de la app, para saldar el balance.</p>
-
         {/* Envuelto en su propio flex-column gap:0 (mismo patrón que
             ConfigScreen) para que la separación entre la pregunta y sus
             chips sea SOLO los 4px de marginBottom (misma convención que
@@ -2749,55 +2747,65 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 10 }}>
-          <Field label="Importe" required error={amountTouched && !validAmount ? "Ingresá un importe válido." : ""} style={{ flex: 1.4 }}>
-            <CalculatorAmountInput value={amount} onChange={setAmount} onBlur={() => setAmountTouched(true)} placeholder="0.00" />
-          </Field>
-          <Field label="Moneda" style={{ flex: 1 }}>
-            <select style={styles.input} value={currency} onChange={(e) => setCurrency(e.target.value)}>
-              {CURRENCY_LIST.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </Field>
+        {/* Importe EN FILA, no "hero" -- a diferencia de ExpenseForm/
+            TransactionForm.jsx, acá "¿Quién paga?"/"¿Quién recibe?" tienen
+            que ir primero (son el dato más importante de un pago), así que
+            el importe deja de ser "lo primero que se ve" -- el tratamiento
+            hero (número gigante) se sentía fuera de lugar en el medio del
+            formulario en vez de al principio. Primer campo de "monto" de la
+            app en formato fila -- reusa los mismos 2 controles (calculadora +
+            chip de moneda) que el hero, solo más chicos y alineados a la
+            derecha como cualquier otra fila. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 40, borderBottom: "1px solid #ECE3D3", fontFamily: "system-ui, sans-serif" }}>
+          <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355" }}>
+            Importe <span style={{ color: "#B0473A" }}>*</span>
+          </span>
+          {/* minWidth:0 ACÁ (no solo adentro de CalculatorAmountInput): es
+              un flex:1 dentro de la fila de "Importe" -- sin esto, un flex
+              item no se achica nunca por debajo del ancho de su propio
+              contenido (default de CSS), así que una expresión larga
+              empujaba toda la fila en vez de recortarse con "…". */}
+          <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
+            <CalculatorAmountInput
+              value={amount}
+              onChange={setAmount}
+              onBlur={() => setAmountTouched(true)}
+              placeholder="0,00"
+              // height:32 (no 40, el alto de la fila) -- igual que el chip de
+              // moneda, para que quede centrado con un respiro arriba/abajo
+              // en vez de tocar la línea de la fila.
+              style={{ flex: "0 1 auto", minWidth: 0, width: "auto", height: 32, border: "none", background: "transparent", padding: "0 4px", lineHeight: 1, fontSize: 22, fontWeight: 600, fontFamily: "'Iowan Old Style', 'Georgia', 'Source Serif Pro', serif", color: "#C75D3B", textAlign: "right", justifyContent: "flex-end" }}
+              focusStyle={{ background: "#F3ECE0", boxShadow: "none" }}
+              placeholderColor="#A3968B"
+            />
+            <PickerField
+              compact
+              small
+              value={currency}
+              onChange={setCurrency}
+              title="Elegí la moneda"
+              groups={[{ label: null, items: [baseCurrency, ...CURRENCY_LIST.filter((c) => c !== baseCurrency)].map((c) => ({ value: c, label: c, icon: CURRENCIES[c]?.symbol })) }]}
+            />
+          </div>
         </div>
-
-        <Field label="Fecha">
-          <input style={styles.input} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        </Field>
-
-        <Field label="Nota (opcional)">
-          <input style={styles.input} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Transferencia, efectivo…" />
-        </Field>
-
-        {mmInvolved && (
-          <Field label="Cuenta" required error={touched.mmAccountId && !mmAccountId ? "Este campo es obligatorio." : ""}>
-            <div style={{ position: "relative" }}>
-              <PickerField
-                value={mmAccountId}
-                onChange={setMmAccountId}
-                onBlur={() => touch("mmAccountId")}
-                placeholder="Elegí una cuenta"
-                groups={evenCapital.groups
-                  .filter((g) => !g.deleted && g.system_key !== "split_ledger")
-                  .map((g) => ({
-                    label: g.name,
-                    items: evenCapital.accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
-                  }))
-                  .filter((g) => g.items.length > 0)}
-              />
-              <span style={{ position: "absolute", right: 12, top: 22, transform: "translateY(-50%)", display: "flex", pointerEvents: "none" }} title="Viene de/va a EvenCapital">
-                <EvenGroupIcon size={26} />
-              </span>
-            </div>
-          </Field>
+        {amountTouched && !validAmount && (
+          <p style={{ margin: "-6px 0 0", fontSize: 13, textAlign: "right", color: "#B0473A", fontFamily: "system-ui, sans-serif" }}>Ingresá un importe válido.</p>
         )}
 
+        <DateRow label="Fecha" value={date} onChange={setDate} />
+
+        <TextRow label="Nota" value={note} onChange={setNote} placeholder="Transferencia, efectivo… (opcional)" />
+
         {mmInvolved && (
-          <Field label="Cuenta de lo prestado" info="Para este pago puntual: de dónde sale (o adónde entra) lo que se salda, si tu grupo tiene configurada una cuenta para eso. Dejalo vacío para usar 'Cuenta' de arriba, como siempre.">
+          <Field error={touched.mmAccountId && !mmAccountId ? "Este campo es obligatorio." : ""}>
             <PickerField
-              value={mmLoanAccountId}
-              onChange={setMmLoanAccountId}
-              onClear={() => setMmLoanAccountId("")}
-              placeholder="Misma que 'Cuenta'"
+              rowLabel={<>Cuenta <EvenGroupIcon size={13} style={{ marginLeft: 2 }} /></>}
+              required
+              value={mmAccountId}
+              onChange={setMmAccountId}
+              onBlur={() => touch("mmAccountId")}
+              placeholder="Elegí una cuenta"
+              title="Elegí una cuenta"
               groups={evenCapital.groups
                 .filter((g) => !g.deleted && g.system_key !== "split_ledger")
                 .map((g) => ({
@@ -2809,13 +2817,38 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
           </Field>
         )}
 
+        {mmInvolved && (
+          <Field info="Para este pago puntual: de dónde sale (o adónde entra) lo que se salda, si tu grupo tiene configurada una cuenta para eso. Dejalo vacío para usar 'Cuenta' de arriba, como siempre.">
+            <PickerField
+              rowLabel={<>Cuenta de lo prestado <EvenGroupIcon size={13} style={{ marginLeft: 2 }} /></>}
+              value={mmLoanAccountId}
+              onChange={setMmLoanAccountId}
+              onClear={() => setMmLoanAccountId("")}
+              placeholder="Misma que 'Cuenta'"
+              title="Elegí una cuenta"
+              groups={evenCapital.groups
+                .filter((g) => !g.deleted && g.system_key !== "split_ledger")
+                .map((g) => ({
+                  label: g.name,
+                  items: evenCapital.accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
+                }))
+                .filter((g) => g.items.length > 0)}
+            />
+          </Field>
+        )}
+
+        {/* Antes era lo primero que se leía, con más peso del que amerita
+            (es una aclaración, no una instrucción) -- abajo del todo, como
+            Hint, queda disponible sin competir por la atención. */}
+        <Hint>Esto no mueve dinero. Solo anota que el pago ya se hizo fuera de la app, para saldar el balance.</Hint>
       </div>
-      <Footer>
-        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
-        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }} onClick={handleSave} disabled={saving}>
-          {saving ? "Guardando…" : (existing ? "Guardar" : "Registrar pago")}
-        </button>
-      </Footer>
+      <FormFooter
+        onCancel={onCancel}
+        onConfirm={handleSave}
+        confirmLabel={saving ? "Guardando…" : (existing ? "Guardar" : "Registrar pago")}
+        confirmDisabled={saving}
+        confirmDim={!canSave}
+      />
     </div>
   );
 }

@@ -6,7 +6,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { offlineSupabase as supabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, Footer, FormFooter, ConfirmInline, IconInput, PickerField, Field, Modal, CalculatorAmountInput, CurrencyConversionField, SegmentedControl, DateRow, TextRow, formatDateRow, Hint } from "../../components/Shared.jsx";
-import { parseAmountInput, todayInputValue, dateInputValue, dateInputValueInZone, money, fmtDate, useScrollToTopOnChange, normalizeForSearch, CURRENCIES, useTouched } from "../../lib/helpers.jsx";
+import { parseAmountInput, todayInputValue, dateInputValue, dateInputValueInZone, money, fmtDate, useScrollToTopOnChange, useScrollIntoViewOnChange, normalizeForSearch, CURRENCIES, useTouched } from "../../lib/helpers.jsx";
 import { RECURRING_FREQUENCIES, nextOccurrence, computeAmountMain, useRecentNoteTitles } from "../../lib/evenCapitalData.js";
 
 const TYPE_INFO = {
@@ -177,6 +177,11 @@ export default function TransactionForm({
   }, [accountId]);
 
   const [recurringOpen, setRecurringOpen] = useState(forceRecurringOpen || !!editingRecurring);
+  // Scroll al contenido recién revelado -- si tocás "Hacer recurrente" con
+  // la vista ya baja, los campos nuevos pueden quedar fuera de pantalla sin
+  // ningún indicio de que pasó algo. Ver helpers.jsx.
+  const recurringRef = useRef(null);
+  useScrollIntoViewOnChange(recurringRef, recurringOpen);
   const initialFreq = editingRecurring ? recurringToFreqState(editingRecurring) : null;
   const [freqValue, setFreqValue] = useState(initialFreq?.freqValue || "month-1");
   const [freqInterval, setFreqInterval] = useState(initialFreq?.freqInterval || "3");
@@ -739,19 +744,21 @@ export default function TransactionForm({
         )}
 
         {!isSynced && recurringOpen && (
-          <RecurringFields
-            type={type}
-            date={date}
-            freqValue={freqValue}
-            setFreqValue={setFreqValue}
-            freqInterval={freqInterval}
-            setFreqInterval={setFreqInterval}
-            intervalTouched={touched.freqInterval}
-            onIntervalBlur={() => touch("freqInterval")}
-            endDate={endDate}
-            setEndDate={setEndDate}
-            onRemove={(hideRemoveRecurring || editingRecurring) ? null : () => setRecurringOpen(false)}
-          />
+          <div ref={recurringRef}>
+            <RecurringFields
+              type={type}
+              date={date}
+              freqValue={freqValue}
+              setFreqValue={setFreqValue}
+              freqInterval={freqInterval}
+              setFreqInterval={setFreqInterval}
+              intervalTouched={touched.freqInterval}
+              onIntervalBlur={() => touch("freqInterval")}
+              endDate={endDate}
+              setEndDate={setEndDate}
+              onRemove={(hideRemoveRecurring || editingRecurring) ? null : () => setRecurringOpen(false)}
+            />
+          </div>
         )}
         </div>
       </div>

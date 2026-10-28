@@ -17,7 +17,7 @@ import {
   DEFAULT_CATEGORIES, groupCategories, catInfo, colorFor, initials, shortName, nameOf,
   computeBalances, simplifyDebts, fairSplit, computeShares,
   dateInputValue, todayInputValue, fmtDate,
-  useImageUpload, resolvePhotoUrl, useScrollToTopOnChange, normalizeForSearch,
+  useImageUpload, resolvePhotoUrl, useScrollToTopOnChange, useScrollIntoViewOnChange, normalizeForSearch,
 } from "../../lib/helpers.jsx";
 
 /* =========================================================================
@@ -589,6 +589,10 @@ function GroupForm({ group = null, session, evenCapital, onCancel, onCreate, onS
   const [categories, setCategories] = useState(() => (group ? groupCategories(group).map(c => ({ ...c })) : []));
   const [editingCatId, setEditingCatId] = useState(null);
   const [catsOpen, setCatsOpen] = useState(false);
+  // Scroll al contenido recién revelado -- ver nota igual en ExpenseForm/
+  // TransactionForm.jsx, mismo motivo (helpers.jsx).
+  const catsRef = useRef(null);
+  useScrollIntoViewOnChange(catsRef, catsOpen);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deletingGroup, setDeletingGroup] = useState(false);
@@ -875,7 +879,7 @@ function GroupForm({ group = null, session, evenCapital, onCancel, onCreate, onS
               </button>
 
               {catsOpen && (
-                <div style={{ border: "1px solid #DDD2BE", borderTop: "none", borderRadius: "0 0 10px 10px", padding: "12px", display: "flex", flexDirection: "column", gap: 10, background: "#fff" }}>
+                <div ref={catsRef} style={{ border: "1px solid #DDD2BE", borderTop: "none", borderRadius: "0 0 10px 10px", padding: "12px", display: "flex", flexDirection: "column", gap: 10, background: "#fff" }}>
                   <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleCategoryDragEnd}>
                     <SortableContext items={categories.map((c) => c.id)} strategy={verticalListSortingStrategy}>
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -1054,6 +1058,8 @@ function EvenGroupCapitalLink({
   const [unlinking, setUnlinking] = useState(false);
   const [confirmingUnlink, setConfirmingUnlink] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(!!(lendAccountId || loanAccountId || lendOffsetAccountId));
+  const advancedRef = useRef(null);
+  useScrollIntoViewOnChange(advancedRef, advancedOpen);
 
   const myMemberId = group.members.find((m) => m.linkedUserId === session.userId)?.id;
   const activeLink = evenCapital.slLinks.find((l) => l.active && l.group_id === group.id && l.user_id === session.userId);
@@ -1182,7 +1188,7 @@ function EvenGroupCapitalLink({
             </button>
 
             {advancedOpen && (
-              <div style={{ border: "1px solid #DDD2BE", borderTop: "none", borderRadius: "0 0 10px 10px", padding: "12px", display: "flex", flexDirection: "column", gap: 10, background: "#fff" }}>
+              <div ref={advancedRef} style={{ border: "1px solid #DDD2BE", borderTop: "none", borderRadius: "0 0 10px 10px", padding: "12px", display: "flex", flexDirection: "column", gap: 10, background: "#fff" }}>
                 <Field
                   label="Cuenta de lo que prestás"
                   info={"Cuenta aparte para cuando VOS pagás de más (prestás) en el grupo, separada de 'propios' (esa sigue siendo tu parte del gasto).\nEj: gasto de €100 (tu parte €50), vos pagás los €100. Los otros €50 prestados salen de esta cuenta en vez de 'propios'.\nSi lo dejás vacío, el préstamo sigue mezclado con 'propios', como hasta ahora."}
@@ -1825,6 +1831,17 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
   const [showFullPhoto, setShowFullPhoto] = useState(false);
   const touch = (field) => setTouched((t) => ({ ...t, [field]: true }));
 
+  // Scroll al contenido recién revelado -- si se toca "Nota"/"Dividido en"
+  // (o se cambia de modo) con la vista ya baja, lo nuevo puede quedar fuera
+  // de la pantalla sin ningún indicio de que pasó algo. Ver helpers.jsx.
+  const notesRef = useRef(null);
+  useScrollIntoViewOnChange(notesRef, notesOpen);
+  const splitRef = useRef(null);
+  useScrollIntoViewOnChange(splitRef, splitExpanded);
+  useScrollIntoViewOnChange(splitRef, splitMode);
+  const payerRef = useRef(null);
+  useScrollIntoViewOnChange(payerRef, payerMode);
+
   // Mi EvenCapital — solo si YO tengo este grupo vinculado. (myMemberId ya
   // se calculó arriba, lo necesitaba el default de "¿quién pagó?")
   const activeLink = evenCapital?.slLinks?.find((l) => l.active && l.group_id === group.id && l.user_id === session?.userId);
@@ -2207,7 +2224,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
         </div>
 
         {payerMode === "single" && (
-          <div style={styles.payerRow}>
+          <div ref={payerRef} style={styles.payerRow}>
             {members.map((m) => (
               <button key={m.id} onClick={() => setSinglePayer(m.id)} style={{ ...styles.payerChip, borderColor: singlePayer === m.id ? colorFor(m.id) : "transparent", background: singlePayer === m.id ? `${colorFor(m.id)}1a` : "#FAF7F2" }}>
                 <span style={{ ...styles.avatar, background: colorFor(m.id), width: 26, height: 26, fontSize: 11 }}>{initials(m.name)}</span>
@@ -2218,7 +2235,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
         )}
 
         {payerMode === "multi" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div ref={payerRef} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {members.map((m) => {
               const isIn = multiPayerSelected.has(m.id);
               return (
@@ -2270,7 +2287,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
           </button>
 
           {splitExpanded && (
-            <div style={{ border: "1px solid #DDD2BE", borderTop: "none", borderRadius: "0 0 10px 10px", padding: "12px", display: "flex", flexDirection: "column", gap: 10, background: "#fff" }}>
+            <div ref={splitRef} style={{ border: "1px solid #DDD2BE", borderTop: "none", borderRadius: "0 0 10px 10px", padding: "12px", display: "flex", flexDirection: "column", gap: 10, background: "#fff" }}>
               {/* Selector de modo */}
               <SegmentedControl
                 options={[["equal", "Iguales"], ["exact", "Montos"], ["percent", "Porcentajes"], ["shares", "Partes"]].map(([id, label]) => ({ value: id, label }))}
@@ -2406,7 +2423,9 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
         <PhotoLightbox open={showFullPhoto} src={imageUrl} onClose={() => setShowFullPhoto(false)} />
 
         {(notesOpen || notes) && (
-          <TextRow label="Nota" value={notes} onChange={setNotes} placeholder="Notas adicionales…" multiline />
+          <div ref={notesRef}>
+            <TextRow label="Nota" value={notes} onChange={setNotes} placeholder="Notas adicionales…" multiline />
+          </div>
         )}
 
         {err && <p style={styles.errText}>{err}</p>}

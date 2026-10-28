@@ -14,13 +14,12 @@ import { Camera, Trash2 } from "lucide-react";
    foto nunca se sube a ningún lado, por eso no se usa resolvePhotoUrl como
    en el resto de la app.
    ========================================================================= */
-export default function PhotoImportEntryScreen({ groups, accounts, onBack, onExtracted, showError }) {
+export default function PhotoImportEntryScreen({ groups, accounts, onBack, onExtracted, showError, showInfo }) {
   const { previewUrl, pendingFile, handleImageChange, clear } = useImageUpload(null, showError);
   const [accountId, setAccountId] = useState("");
   const [date, setDate] = useState(todayInputValue());
   const [touched, touch] = useTouched();
   const [processing, setProcessing] = useState(false);
-  const [progress, setProgress] = useState(null);
   const [showFullPhoto, setShowFullPhoto] = useState(false);
 
   const canProcess = !!pendingFile && !!accountId;
@@ -30,10 +29,15 @@ export default function PhotoImportEntryScreen({ groups, accounts, onBack, onExt
     touch("accountId");
     if (!canProcess || processing) return;
     setProcessing(true);
-    setProgress(null);
+    // El progreso se muestra en el banner fijo de arriba (showInfo), no en un
+    // párrafo del formulario -- ese banner ya está siempre visible sin
+    // importar el scroll, a diferencia de un mensaje metido en el flujo
+    // normal de la página (ver TAREAS_ACTUALES.md / PENDIENTES.md, el mismo
+    // problema que ya resolvimos para los colapsables).
+    showInfo("Leyendo la foto…");
     try {
       const text = await recognizeReceiptText(pendingFile, (p) => {
-        if (p.status === "recognizing text") setProgress(p.progress);
+        if (p.status === "recognizing text") showInfo(`Leyendo la foto (${Math.round(p.progress * 100)}%)`);
       });
       const candidates = parseTransactionCandidates(text);
       if (candidates.length === 0) {
@@ -109,12 +113,6 @@ export default function PhotoImportEntryScreen({ groups, accounts, onBack, onExt
           <DateRow label="Fecha por defecto" value={date} onChange={setDate} />
           <Hint>Se usa solo si el asistente no logra leer la fecha de alguna transacción en la foto: cada una trae la suya propia, editable.</Hint>
         </div>
-
-        {processing && (
-          <p style={{ ...styles.muted, padding: 0, fontWeight: 600 }}>
-            Leyendo la foto{progress != null ? ` (${Math.round(progress * 100)}%)` : "…"}
-          </p>
-        )}
       </div>
       <FormFooter
         onCancel={onBack}

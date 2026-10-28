@@ -1078,7 +1078,11 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
       {syncing && <ReconnectSyncGate />}
       {toast && (
         <div
-          style={{ ...styles.toast, background: toast.type === "success" ? "#3B6E62" : "#2B2620" }}
+          // "error" en rojo (mismo rojo que ya usa la app en el resto de
+          // errores/eliminar) -- "info" vuelve al oscuro de siempre, se vio
+          // mejor que el azul (ej. "sincronizando", que no pasa por acá --
+          // ver ReconnectSyncGate -- igual no quedaba bien la idea en general).
+          style={{ ...styles.toast, background: toast.type === "success" ? "#3B6E62" : toast.type === "error" ? "#B0473A" : "#2B2620" }}
           role="alert"
         >
           {toast.message}
@@ -1242,6 +1246,7 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
           groups={evenCapital.groups}
           accounts={evenCapital.accounts}
           showError={showError}
+          showInfo={showInfo}
           onBack={() => setLedgerView({ screen: "list" })}
           onExtracted={(candidates, accountId, date) =>
             setLedgerView({ screen: "photoImportWizard", candidates, accountId, date, returnTo: "list" })}

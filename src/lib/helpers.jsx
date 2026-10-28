@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useLayoutEffect } from "react";
+import React, { useState, useCallback, useLayoutEffect, useRef } from "react";
 import { supabase } from "./supabaseClient.js";
 import {
   Receipt, UtensilsCrossed, Car, Home as HomeIcon, Plug, PartyPopper, ShoppingBag,
@@ -357,6 +357,41 @@ export function useScrollToTopOnChange(...deps) {
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
+}
+
+// Hace scroll hasta `ref` cuando `value` cambia a algo "abierto" (truthy y
+// distinto de antes) -- para un toggle/colapsable que revela contenido
+// nuevo más abajo en la pantalla (ej. "Nota", "Dividido en", "Hacer
+// recurrente"), que si no, puede aparecer fuera de la vista sin ningún
+// indicio de que pasó algo. No dispara al cerrar (value pasa a falsy) ni
+// al montar con un valor ya abierto de entrada -- solo ante un cambio real
+// hacia un estado "con contenido". Sirve también para un MODO que cambia
+// (ej. "single"→"multi"): cualquier string no vacío cuenta como "abierto".
+export function useScrollIntoViewOnChange(ref, value) {
+  const prevRef = useRef(value);
+  useLayoutEffect(() => {
+    const changed = value !== prevRef.current;
+    prevRef.current = value;
+    if (!changed || !value) return;
+    const scroll = () => {
+      const el = ref.current;
+      if (!el) return;
+      // `scrollIntoView` no sabe que el Footer fijo de abajo (ver
+      // styles.footer) tapa una franja de la pantalla -- sin esto, "nearest"
+      // puede dar por visible un elemento que en realidad queda escondido
+      // atrás del footer. scroll-margin-bottom le dice al navegador "tratá
+      // esta franja como si no fuera visible", así scrollea de más para
+      // compensar. ~70px es el alto real del footer (botón + padding propio
+      // + el padding de abajo del celular) -- un poco más que los 63px que
+      // ya reserva styles.screen (ese cálculo es por la barra de tabs, no
+      // por el footer, así que no son necesariamente el mismo número).
+      el.style.scrollMarginBottom = "calc(80px + env(safe-area-inset-bottom))";
+      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    };
+    scroll();
+    const raf = requestAnimationFrame(scroll);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
 }
 
 /* =========================================================================

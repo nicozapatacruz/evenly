@@ -478,12 +478,12 @@ export default function EstadisticasTab({ userId, settings, accounts, categories
                   </button>
                 </div>
               ) : (
-                <div style={{ display: "flex", gap: 10, height: 44, boxSizing: "border-box" }}>
-                  <select style={{ ...styles.input, flex: 1.4, height: 44, boxSizing: "border-box" }} value={specMonth} onChange={(e) => setSpecMonth(parseInt(e.target.value, 10))}>
+                <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+                  <select style={styles.chipSelect} value={specMonth} onChange={(e) => setSpecMonth(parseInt(e.target.value, 10))}>
                     {monthOptions.map((name, i) => <option key={i} value={i + 1}>{name}</option>)}
                   </select>
                   <select
-                    style={{ ...styles.input, flex: 1, height: 44, boxSizing: "border-box" }}
+                    style={styles.chipSelect}
                     value={specYear}
                     onChange={(e) => {
                       const y = parseInt(e.target.value, 10);

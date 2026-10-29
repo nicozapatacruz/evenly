@@ -176,6 +176,12 @@ export const styles = {
   form: { padding: "12px 20px 28px", display: "flex", flexDirection: "column", gap: 14 },
   label: { fontSize: 13, fontWeight: 600, color: "#544A3C", display: "flex", flexDirection: "column", gap: 6, fontFamily: "system-ui, sans-serif" },
   input: { fontFamily: "system-ui, sans-serif", fontSize: 15, padding: "11px 13px", borderRadius: 10, border: "1px solid #DDD2BE", background: "#fff", color: "#2B2620" },
+  // `<select>` nativo con la misma forma/color que el chip compacto de
+  // PickerField (fondo #F3ECE0, sin borde, bien redondeado) -- pero con
+  // tipografía de select normal (no la serif grande de ese chip): sigue
+  // siendo un selector nativo de verdad (teclado/picker del sistema), solo
+  // se le pidió el lenguaje visual, no el mecanismo de PickerField.
+  chipSelect: { fontFamily: "system-ui, sans-serif", fontSize: 15, fontWeight: 700, padding: "10px 14px", borderRadius: 14, border: "none", background: "#F3ECE0", color: "#2B2620", textAlign: "center", cursor: "pointer" },
   btnDashed: { display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px", borderRadius: 10, border: "1px dashed #C9BBA0", background: "transparent", color: "#8A7253", fontSize: 13.5, fontFamily: "system-ui, sans-serif", fontWeight: 600 },
   btnPrimary: { display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 8, padding: "14px", borderRadius: 12, border: "none", background: "#C75D3B", color: "#fff", fontSize: 15, fontWeight: 700, fontFamily: "system-ui, sans-serif", boxShadow: "0 6px 14px rgba(199,93,59,0.25)" },
   btnSecondary: { display: "flex", alignItems: "center", justifyContent: "center", gap: 7, marginTop: 4, width: "100%", padding: "12px", borderRadius: 12, border: "1px solid #DDD2BE", background: "#fff", color: "#544A3C", fontSize: 14, fontWeight: 600, fontFamily: "system-ui, sans-serif" },

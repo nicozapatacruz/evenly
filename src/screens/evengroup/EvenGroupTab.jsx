@@ -1025,25 +1025,36 @@ function GroupForm({ group = null, session, evenCapital, onCancel, onCreate, onS
       {isEditing && editingCatId && (() => {
         const editingCat = categories.find((c) => c.id === editingCatId);
         return (
-          <Modal title="Elegir ícono" onClose={() => setEditingCatId(null)}>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {ICON_KEYS.map((key) => {
-                const usedByOther = categories.some((c) => c.id !== editingCatId && c.iconKey === key);
-                return (
-                  <button
-                    key={key}
-                    onClick={() => { if (!usedByOther) { updateCategory(editingCatId, { iconKey: key }); setEditingCatId(null); } }}
-                    disabled={usedByOther}
-                    title={usedByOther ? "Ya usado por otra categoría" : undefined}
-                    style={{ width: 34, height: 34, borderRadius: 8, border: editingCat?.iconKey === key ? "2px solid #C75D3B" : "1px solid #DDD2BE", background: editingCat?.iconKey === key ? "#C75D3B1a" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#544A3C", opacity: usedByOther ? 0.3 : 1, cursor: usedByOther ? "not-allowed" : "pointer" }}
-                    aria-label={key}
-                  >
-                    <IconComp iconKey={key} size={16} />
-                  </button>
-                );
-              })}
+          <div style={styles.sheetBackdrop} onClick={() => setEditingCatId(null)}>
+            <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
+              <div style={styles.sheetHandle} />
+              <div style={styles.sheetHeader}>
+                <span />
+                <p style={styles.sheetTitle}>Ícono de la categoría</p>
+                <button type="button" style={styles.sheetClose} onClick={() => setEditingCatId(null)}>Cerrar</button>
+              </div>
+              <div className="no-scrollbar" style={{ ...styles.sheetBody, paddingTop: 8 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, 44px)", justifyContent: "center", gap: 8 }}>
+                  {ICON_KEYS.map((key) => {
+                    const usedByOther = categories.some((c) => c.id !== editingCatId && c.iconKey === key);
+                    const on = editingCat?.iconKey === key;
+                    return (
+                      <button
+                        key={key}
+                        onClick={() => { if (!usedByOther) { updateCategory(editingCatId, { iconKey: key }); setEditingCatId(null); } }}
+                        disabled={usedByOther}
+                        title={usedByOther ? "Ya usado por otra categoría" : undefined}
+                        style={{ width: 44, height: 44, borderRadius: 14, border: "none", background: on ? "#F6E6DE" : "#F3ECE0", boxShadow: on ? "inset 0 0 0 2px #C75D3B" : "none", display: "flex", alignItems: "center", justifyContent: "center", color: "#544A3C", opacity: usedByOther ? 0.3 : 1, cursor: usedByOther ? "not-allowed" : "pointer" }}
+                        aria-label={key}
+                      >
+                        <IconComp iconKey={key} size={20} />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
-          </Modal>
+          </div>
         );
       })()}
 
@@ -1295,7 +1306,7 @@ function SortableCategoryRow({ cat, onEditIcon, onChangeLabel, onRemove, draggab
             alignItems: "center",
             justifyContent: "center",
             alignSelf: "stretch",
-            width: 32,
+            width: 28,
             color: "#C9BBA0",
             cursor: "grab",
             touchAction: "none",
@@ -1304,7 +1315,7 @@ function SortableCategoryRow({ cat, onEditIcon, onChangeLabel, onRemove, draggab
           <Menu size={18} />
         </span>
       ) : (
-        <span style={{ width: 32, flexShrink: 0 }} />
+        <span style={{ width: 28, flexShrink: 0 }} />
       )}
       {/* gap:6 acá adentro (no en la fila entera) — el handle solo necesita
           4px hasta lo siguiente, pero el botón de ícono/input/botón de
@@ -1312,19 +1323,20 @@ function SortableCategoryRow({ cat, onEditIcon, onChangeLabel, onRemove, draggab
       <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
         <button
           onClick={onEditIcon}
-          style={{ width: 34, height: 34, minWidth: 34, borderRadius: 8, border: "1px solid #DDD2BE", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", color: "#544A3C", cursor: "pointer" }}
+          style={{ width: 32, height: 32, minWidth: 32, borderRadius: 10, border: "1px solid #DDD2BE", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", color: "#544A3C", cursor: "pointer" }}
           aria-label="Cambiar ícono"
         >
           <IconComp iconKey={cat.iconKey} size={16} />
         </button>
         <input
-          style={{ ...styles.input, flex: 1, padding: "7px 10px", fontSize: 14 }}
+          className="row-input"
+          style={{ flex: 1, minWidth: 0, fontSize: 14, fontFamily: "system-ui, sans-serif", border: "none", borderBottom: "1px solid #DDD2BE", background: "transparent", padding: "8px 0", color: "#2B2420" }}
           value={cat.label}
           onChange={(e) => onChangeLabel(e.target.value)}
           placeholder="Nombre de categoría"
         />
         <button style={styles.iconBtnGhost} onClick={onRemove} aria-label="Eliminar categoría">
-          <X size={15} />
+          <X size={16} />
         </button>
       </div>
     </div>

@@ -21,80 +21,310 @@ Lista viva de pendientes del proyecto. Reglas:
 - Cuando se agregue algo nuevo (bug encontrado, feature pedida, decisión diferida), se suma acá.
 - Cuando se resuelve algo, **no se borra**: se tacha (`~~texto~~`) y se le agrega la fecha de cuándo quedó resuelto.
 - No depende de la memoria de Claude — este archivo es la fuente de verdad, vive en el repo.
+- Cada tarea tiene un título corto siempre visible; el detalle completo (texto original + resolución) vive en un bloque `<details>` colapsable debajo. Las tareas `[x]` (ya resueltas/descartadas) arrancan colapsadas; las `[ ]` (pendientes) arrancan abiertas.
 
 ---
 
 ## A. Mejoras pendientes
 
-- [x] ~~Input custom de calculadora en los campos de importe, como los de la app Money Manager original (permite escribir operaciones tipo "12+8" y resuelve el cálculo en el campo, en vez de un input numérico plano).~~ Resuelto 2026-10-09: nuevo componente compartido `CalculatorAmountInput` (`src/components/Shared.jsx`), un teclado propio fijo abajo (no el teclado nativo del celular) que muestra la expresión completa mientras se teclea y la resuelve con "=" o "Ok" (este último además salta directo al siguiente campo, igual que la app original). Aplicado en 3 campos: Importe de Transacciones (Money Manager), Importe de "Nuevo/Editar gasto" y de "Registrar pago" (Split Ledger). Revertido a input plano en los campos de lista por persona (pagadores múltiples y modo "Montos" del reparto) por ser muy angostos para el teclado: la lógica de auto-scroll para no tapar el campo queda en el componente, lista para reusar ahí si hace falta más adelante.
-- [x] ~~En el campo de tasa de cambio, permitir que el usuario cargue directamente el monto final convertido en vez de la tasa (ej. en una transacción de 100 USD, poder escribir "90" para decir "esto equivale a 90 EUR" en vez de escribir la tasa "0.9").~~ Resuelto 2026-10-09: nuevo componente `CurrencyConversionField` (`src/components/Shared.jsx`), reemplaza tanto "Importe" como "Tasa de cambio" por una sola hoja (mismo teclado fijo que `CalculatorAmountInput`) que se abre sola al elegir una moneda distinta a la de la cuenta. Pide siempre el "Valor" (importe en la moneda de la transacción, con calculadora completa) y, según el modo, la "Tasa de conversión" (numérico simple) o el "Valor convertido" (el monto ya en la moneda de la cuenta, también con calculadora). Solo en Transacciones (Money Manager): Split Ledger no tiene hoy ningún concepto de tasa de cambio, no aplica ahí.
-- [x] ~~Que el footer (los botones de abajo, ej. Guardar/Cancelar) se vea siempre con menos opacidad/presencia mientras estás en un formulario de edición/creación, para no competir visualmente con el contenido del formulario.~~ Resuelto 2026-10-09, pero no como se planteó originalmente: Nicolas decidió que esto no debería pasar nunca (el footer de Guardar/Cancelar es de formularios, y ahí no hace falta atenuarlo). En cambio, la idea real era mostrar la barra de navegación de 5 tabs (hoy solo visible en la raíz de cada tab) en pantallas de lectura/navegación que no son formularios y hoy la pierden. Se agregó en 4 lugares puntuales: Split Ledger (abrir un grupo, detalle de un gasto, detalle de un pago) y Config → Transacciones repetidas, todo controlado desde un único booleano (`showTabBar` en `src/SplitLedger.jsx`). De paso se corrigió el botón "+" de Split Ledger (grupo), que quedaba tapado por la barra ahora visible ahí.
-- [x] ~~Poder subir una foto de las transacciones del banco y que me reconozca de donde es y el monto. Si la foto tiene 10 transacciones, pues me crea un "modal" con 10 pasos en donde me pregunta 1 a uno esos gastos para yo ponerlos. Me autocompleta el monto. La idea es que sea cómo un machine learning que se aprenda la descripción que aparece. Entonces si luego subo una captura con un lugar que ya había subido, el reconoce que X descripción es Y categoría y Z nota, entonces me autocompleta esas 2 cosas y el monto para que solo sea que yo confirme y sea más rápido.~~ Resuelto 2026-10-10, probado con capturas reales de banco (incluye 2 layouts distintos: fecha+descripción+monto en 2 y en 3 líneas separadas). "Importar gastos" (ícono "Camera" en el menú de Transacciones): pide una foto + una cuenta + una fecha de respaldo, corre OCR 100% local con Tesseract.js (assets auto-alojados en `public/tesseract/`, nunca se descargan de un CDN ni la foto sale del dispositivo, verificado por Network tab), y abre un asistente paso a paso (`PhotoImportWizardScreen`) que muestra cada transacción candidata (fecha, monto con calculadora, categoría, descripción con autocompletado, nota, tipo Ingreso/Gasto) para confirmar u omitir — nada se guarda en la base hasta terminar el lote completo, así "Atrás" y el botón de salir (arriba a la derecha, con confirmación) no dejan nada a medio guardar. Nueva tabla `mm_description_rules` (clave de reconocimiento = descripción cruda del OCR, separada del título final editable) que recuerda, por comercio, la última categoría/nota/tipo usados: no es ML real, es una tabla de búsqueda que se autocorrige con lo que el usuario confirma cada vez, y que además se consulta dentro del mismo lote (si la foto trae el mismo comercio repetido, confirmar el primero ya sugiere en el segundo y el tercero sin esperar a que se guarde nada).
-- [x] ~~Extender el autocompletado de notas (E) a Split Ledger — hoy solo vive en Money Manager.~~ Resuelto 2026-10-14: el campo "Descripción" de `ExpenseForm` sugiere los mismos títulos recientes que ya usa Money Manager (reusa `useRecentNoteTitles` tal cual), solo cuando el grupo está vinculado a Money Manager y el usuario tiene activo "Autocompletar notas" en Ajustes. A propósito NO sugiere desde las descripciones propias de Split Ledger, solo desde las de Money Manager.
-- [x] ~~Modo offline: poder ver transacciones ya cargadas y seguir usando la app sin señal (ej. viajando). Nicolas entiende que sincronizar con la base igual requiere conexión, pero plantea que la data se guarde localmente y las transacciones nuevas/ediciones queden en una cola que se sube sola apenas vuelve la señal.~~ Resuelto 2026-10-17: Money Manager queda offline completo (lectura y escritura) — copia local en IndexedDB vía Dexie (`src/lib/localDb.js`), toda escritura pasa por un shim (`src/lib/offlineSupabase.js`) que escribe directo si hay señal o encola en `write_queue` si no (`src/lib/writeQueue.js`), y al reconectar se drena la cola y se trae todo fresco (`src/lib/syncEngine.js`). Los agregados que antes eran vistas de Postgres (saldos, totales por categoría/mes) se recalculan en el cliente (`src/lib/localAggregates.js`). Un Service Worker (`vite-plugin-pwa`) cachea la app para que incluso un recargo de página sin señal funcione. Split Ledger queda online-only a propósito (sí hay resolución de conflictos real ahí: varios miembros pueden escribir el mismo grupo) — ver idea relacionada en B sobre permitirlo para grupos sin otros miembros.
-- [x] ~~Diferenciar visualmente los botones de "toggle"/selector de estado (ej. pestañas Ingreso/Gasto, el selector "Promedio de N meses" / "Mes específico" del modal de comparar en Estadísticas) de los botones de acción (Guardar, Aplicar, Quitar, etc.) — hoy comparten el mismo estilo (relleno sólido naranja cuando están "activos"/son primarios, borde blanco cuando no), lo que puede confundir "esto es un estado que queda elegido" con "esto es una acción que se ejecuta y termina ahí", sobre todo cuando aparecen juntos en la misma pantalla. Agregado 2026-10-19.~~ Resuelto 2026-10-19: nuevo componente compartido `SegmentedControl` (`src/components/Shared.jsx`) — riel gris con una píldora blanca que "flota" en la opción activa (texto en color, nunca relleno sólido), reemplazando `styles.tab`/`styles.tabActive` en los 11 lugares que los usaban (`ConfigScreen`, `EstadisticasTab` ×2, `AccountActivityScreen`, `FiltersPanel`, `PhotoImportWizardScreen`, `TransactionForm`, `SplitLedgerTab` ×3, y el propio `Shared.jsx`). El naranja sólido queda reservado solo para botones de acción reales. Diseño elegido por Nicolas entre 4 mockups comparados en vivo en la tab de Transacciones.
-- [x] ~~Revisar el loading de todos los botones de acción (guardar, eliminar, crear, etc.): muchos no muestran que el programa está haciendo algo mientras el usuario sigue viendo la pantalla, lo cual da la sensación de que hay un bug. Ejemplo encontrado: al confirmar "Eliminar" en una transacción recurrente, el botón no queda en `disabled` ni cambia su texto (a diferencia de "Guardar"/"Guardando") mientras se borra — se queda ahí sin ningún indicio visual hasta que, un par de segundos después, recién te saca del registro. Probablemente pase en todas las confirmaciones de eliminar (`ConfirmInline`) de otras pantallas también. Hacer una batida completa para confirmar que cada botón de acción queda deshabilitado y cambia su texto a la forma "-ando/-iendo" (ej. "Eliminando…") mientras la acción está en curso, igual que ya pasa con Guardar/Guardando. Agregado 2026-10-17.~~ Resuelto 2026-10-19: batida completa de los 13 usos de `ConfirmInline` (conectado el texto/disabled en los que ya tenían el estado armado, agregado donde faltaba del todo: marcador favorito, categoría, gasto/pago de Split Ledger, cerrar sesión) más 2 botones fuera de `ConfirmInline` (Aceptar/Rechazar invitación, "Confirmar" de borrar grupo completo). De paso se encontró y corrigió un bug real en el propio `ConfirmInline` (`src/components/Shared.jsx`): el atenuado (`opacity`) de `confirmDisabled` solo se aplicaba cuando `danger={false}`, así que ningún botón de "Eliminar/Borrar" (todos `danger=true` por default) se veía atenuado aunque ya estuviera bien deshabilitado — detectado probando en vivo con throttling de red.
-- [x] ~~Customizar todos los inputs para que sean con el mismo diseño propio de la app. Hacer que los campos desplegables de cuentas y categorías (`PickerField`) salgan también abajo del todo (como un teclado fijo), en vez de desplegarse pegados al input como hoy, igual que ya quedó resuelto para la calculadora de Importe. Agregado 2026-10-09.~~ Resuelto 2026-10-24: `PickerField` (componente compartido, `src/components/Shared.jsx`) pasó a ser una hoja que sube desde abajo (mismo mecanismo que `CalculatorAmountInput`) — al ser un cambio en el componente compartido, aplica de una a TODAS las pantallas que ya usaban `PickerField` (`AccountDetailScreen`, `PhotoImportWizardScreen`, `EvenGroupTab`, etc.), no solo a `TransactionForm.jsx`. Lo que SÍ queda pendiente ahí (no en este cambio) son las variantes visuales nuevas (`rowLabel`/`compact`/`listStyle`, fila sin caja) — esas sí son solo de `TransactionForm.jsx` por ahora, ver lista de formularios de la sesión 2026-10-24 para ir llevándolas al resto.
-- [ ] Paleta de color diferente para Split Ledger y para Money Manager — hoy comparten la misma paleta cálida en toda la app. Agregado 2026-10-06, sin diseñar todavía (qué tan distinta, si es solo acento o toda la paleta).
-- [ ] Revisión completa del diseño, los valores usados en los paddings y la UI en general. Los paddings y margins deberían ser múltiplos de 4. Agregado 2026-10-09.
-- [ ] Footer de Cancelar/Guardar (y similares): cambiar de 50/50 (los dos con `flex:1`) a una proporción 1/3 (Cancelar) - 2/3 (acción principal) — le da más peso visual al botón que de verdad importa, sin perder el de cancelar. Encontrado explorando direcciones de rediseño visual con claude.ai (ver sesión 2026-10-22), le gustó a Nicolas de una de las propuestas. Aplica a TODOS los footers de la app, no solo a uno. Hecho en `TransactionForm.jsx` (2026-10-24, parte del rediseño de ese formulario); falta en el resto — ir aplicándolo a medida que se rediseña cada formulario de la lista.
-- [ ] Agregar feedback visual de "presionado" a todos los botones/elementos clickeables de la app — hoy casi ninguno lo tiene. Causa: `-webkit-tap-highlight-color: transparent` (`src/lib/styles.js`) apaga el flash nativo en TODO (`*`), y nunca se construyó un reemplazo propio salvo un caso puntual. Encontrado y resuelto puntualmente 2026-10-24 para las teclas de `CalculatorAmountInput`/`CurrencyConversionField` (`CalculatorKeyButton` en `src/components/Shared.jsx`), como parte del rediseño de `TransactionForm.jsx` — ahí también se confirmó que un intento anterior con CSS `:active` (`.calc-key:active`) no servía: no es confiable en Safari/iOS con un toque real, solo con mouse, hay que manejar el estado por JS (`onPointerDown`/`Up`/`Leave`/`Cancel`). Falta hacer lo mismo para el resto de botones de la app (Guardar/Cancelar, filas de `PickerField`, tiles de las hojas, tabs, etc.) — tarea aparte, no mezclar con el rediseño de cada formulario puntual.
-- [ ] **Rediseño de formularios** (fila label-izquierda/valor-derecha sin caja, hojas que suben desde abajo, `FormFooter` 1/3-2/3, etc. — ver mockup de claude.ai, sesión 2026-10-22 en adelante). Arrancado 2026-10-24, en curso, se va haciendo de a uno (cada uno como su propio commit `REDESIGN -- ...`). Orden acordado:
+- [x] ~~Calculadora en los campos de importe~~
+<details><summary>Ver detalle</summary>
+
+~~Input custom de calculadora en los campos de importe, como los de la app Money Manager original (permite escribir operaciones tipo "12+8" y resuelve el cálculo en el campo, en vez de un input numérico plano).~~ Resuelto 2026-10-09: nuevo componente compartido `CalculatorAmountInput` (`src/components/Shared.jsx`), un teclado propio fijo abajo (no el teclado nativo del celular) que muestra la expresión completa mientras se teclea y la resuelve con "=" o "Ok" (este último además salta directo al siguiente campo, igual que la app original). Aplicado en 3 campos: Importe de Transacciones (Money Manager), Importe de "Nuevo/Editar gasto" y de "Registrar pago" (Split Ledger). Revertido a input plano en los campos de lista por persona (pagadores múltiples y modo "Montos" del reparto) por ser muy angostos para el teclado: la lógica de auto-scroll para no tapar el campo queda en el componente, lista para reusar ahí si hace falta más adelante.
+
+</details>
+
+- [x] ~~Cargar el monto convertido en vez de la tasa de cambio~~
+<details><summary>Ver detalle</summary>
+
+~~En el campo de tasa de cambio, permitir que el usuario cargue directamente el monto final convertido en vez de la tasa (ej. en una transacción de 100 USD, poder escribir "90" para decir "esto equivale a 90 EUR" en vez de escribir la tasa "0.9").~~ Resuelto 2026-10-09: nuevo componente `CurrencyConversionField` (`src/components/Shared.jsx`), reemplaza tanto "Importe" como "Tasa de cambio" por una sola hoja (mismo teclado fijo que `CalculatorAmountInput`) que se abre sola al elegir una moneda distinta a la de la cuenta. Pide siempre el "Valor" (importe en la moneda de la transacción, con calculadora completa) y, según el modo, la "Tasa de conversión" (numérico simple) o el "Valor convertido" (el monto ya en la moneda de la cuenta, también con calculadora). Solo en Transacciones (Money Manager): Split Ledger no tiene hoy ningún concepto de tasa de cambio, no aplica ahí.
+
+</details>
+
+- [x] ~~Barra de tabs visible en pantallas de solo lectura~~
+<details><summary>Ver detalle</summary>
+
+~~Que el footer (los botones de abajo, ej. Guardar/Cancelar) se vea siempre con menos opacidad/presencia mientras estás en un formulario de edición/creación, para no competir visualmente con el contenido del formulario.~~ Resuelto 2026-10-09, pero no como se planteó originalmente: Nicolas decidió que esto no debería pasar nunca (el footer de Guardar/Cancelar es de formularios, y ahí no hace falta atenuarlo). En cambio, la idea real era mostrar la barra de navegación de 5 tabs (hoy solo visible en la raíz de cada tab) en pantallas de lectura/navegación que no son formularios y hoy la pierden. Se agregó en 4 lugares puntuales: Split Ledger (abrir un grupo, detalle de un gasto, detalle de un pago) y Config → Transacciones repetidas, todo controlado desde un único booleano (`showTabBar` en `src/SplitLedger.jsx`). De paso se corrigió el botón "+" de Split Ledger (grupo), que quedaba tapado por la barra ahora visible ahí.
+
+</details>
+
+- [x] ~~Importar gastos desde foto (OCR + reconocimiento de comercio)~~
+<details><summary>Ver detalle</summary>
+
+~~Poder subir una foto de las transacciones del banco y que me reconozca de donde es y el monto. Si la foto tiene 10 transacciones, pues me crea un "modal" con 10 pasos en donde me pregunta 1 a uno esos gastos para yo ponerlos. Me autocompleta el monto. La idea es que sea cómo un machine learning que se aprenda la descripción que aparece. Entonces si luego subo una captura con un lugar que ya había subido, el reconoce que X descripción es Y categoría y Z nota, entonces me autocompleta esas 2 cosas y el monto para que solo sea que yo confirme y sea más rápido.~~ Resuelto 2026-10-10, probado con capturas reales de banco (incluye 2 layouts distintos: fecha+descripción+monto en 2 y en 3 líneas separadas). "Importar gastos" (ícono "Camera" en el menú de Transacciones): pide una foto + una cuenta + una fecha de respaldo, corre OCR 100% local con Tesseract.js (assets auto-alojados en `public/tesseract/`, nunca se descargan de un CDN ni la foto sale del dispositivo, verificado por Network tab), y abre un asistente paso a paso (`PhotoImportWizardScreen`) que muestra cada transacción candidata (fecha, monto con calculadora, categoría, descripción con autocompletado, nota, tipo Ingreso/Gasto) para confirmar u omitir — nada se guarda en la base hasta terminar el lote completo, así "Atrás" y el botón de salir (arriba a la derecha, con confirmación) no dejan nada a medio guardar. Nueva tabla `mm_description_rules` (clave de reconocimiento = descripción cruda del OCR, separada del título final editable) que recuerda, por comercio, la última categoría/nota/tipo usados: no es ML real, es una tabla de búsqueda que se autocorrige con lo que el usuario confirma cada vez, y que además se consulta dentro del mismo lote (si la foto trae el mismo comercio repetido, confirmar el primero ya sugiere en el segundo y el tercero sin esperar a que se guarde nada).
+
+</details>
+
+- [x] ~~Autocompletado de notas también en Split Ledger~~
+<details><summary>Ver detalle</summary>
+
+~~Extender el autocompletado de notas (E) a Split Ledger — hoy solo vive en Money Manager.~~ Resuelto 2026-10-14: el campo "Descripción" de `ExpenseForm` sugiere los mismos títulos recientes que ya usa Money Manager (reusa `useRecentNoteTitles` tal cual), solo cuando el grupo está vinculado a Money Manager y el usuario tiene activo "Autocompletar notas" en Ajustes. A propósito NO sugiere desde las descripciones propias de Split Ledger, solo desde las de Money Manager.
+
+</details>
+
+- [x] ~~Modo offline completo en Money Manager~~
+<details><summary>Ver detalle</summary>
+
+~~Modo offline: poder ver transacciones ya cargadas y seguir usando la app sin señal (ej. viajando). Nicolas entiende que sincronizar con la base igual requiere conexión, pero plantea que la data se guarde localmente y las transacciones nuevas/ediciones queden en una cola que se sube sola apenas vuelve la señal.~~ Resuelto 2026-10-17: Money Manager queda offline completo (lectura y escritura) — copia local en IndexedDB vía Dexie (`src/lib/localDb.js`), toda escritura pasa por un shim (`src/lib/offlineSupabase.js`) que escribe directo si hay señal o encola en `write_queue` si no (`src/lib/writeQueue.js`), y al reconectar se drena la cola y se trae todo fresco (`src/lib/syncEngine.js`). Los agregados que antes eran vistas de Postgres (saldos, totales por categoría/mes) se recalculan en el cliente (`src/lib/localAggregates.js`). Un Service Worker (`vite-plugin-pwa`) cachea la app para que incluso un recargo de página sin señal funcione. Split Ledger queda online-only a propósito (sí hay resolución de conflictos real ahí: varios miembros pueden escribir el mismo grupo) — ver idea relacionada en B sobre permitirlo para grupos sin otros miembros.
+
+</details>
+
+- [x] ~~Diferenciar visualmente toggles/selectores de botones de acción~~
+<details><summary>Ver detalle</summary>
+
+~~Diferenciar visualmente los botones de "toggle"/selector de estado (ej. pestañas Ingreso/Gasto, el selector "Promedio de N meses" / "Mes específico" del modal de comparar en Estadísticas) de los botones de acción (Guardar, Aplicar, Quitar, etc.) — hoy comparten el mismo estilo (relleno sólido naranja cuando están "activos"/son primarios, borde blanco cuando no), lo que puede confundir "esto es un estado que queda elegido" con "esto es una acción que se ejecuta y termina ahí", sobre todo cuando aparecen juntos en la misma pantalla. Agregado 2026-10-19.~~ Resuelto 2026-10-19: nuevo componente compartido `SegmentedControl` (`src/components/Shared.jsx`) — riel gris con una píldora blanca que "flota" en la opción activa (texto en color, nunca relleno sólido), reemplazando `styles.tab`/`styles.tabActive` en los 11 lugares que los usaban (`ConfigScreen`, `EstadisticasTab` ×2, `AccountActivityScreen`, `FiltersPanel`, `PhotoImportWizardScreen`, `TransactionForm`, `SplitLedgerTab` ×3, y el propio `Shared.jsx`). El naranja sólido queda reservado solo para botones de acción reales. Diseño elegido por Nicolas entre 4 mockups comparados en vivo en la tab de Transacciones.
+
+</details>
+
+- [x] ~~Loading en todos los botones de acción~~
+<details><summary>Ver detalle</summary>
+
+~~Revisar el loading de todos los botones de acción (guardar, eliminar, crear, etc.): muchos no muestran que el programa está haciendo algo mientras el usuario sigue viendo la pantalla, lo cual da la sensación de que hay un bug. Ejemplo encontrado: al confirmar "Eliminar" en una transacción recurrente, el botón no queda en `disabled` ni cambia su texto (a diferencia de "Guardar"/"Guardando") mientras se borra — se queda ahí sin ningún indicio visual hasta que, un par de segundos después, recién te saca del registro. Probablemente pase en todas las confirmaciones de eliminar (`ConfirmInline`) de otras pantallas también. Hacer una batida completa para confirmar que cada botón de acción queda deshabilitado y cambia su texto a la forma "-ando/-iendo" (ej. "Eliminando…") mientras la acción está en curso, igual que ya pasa con Guardar/Guardando. Agregado 2026-10-17.~~ Resuelto 2026-10-19: batida completa de los 13 usos de `ConfirmInline` (conectado el texto/disabled en los que ya tenían el estado armado, agregado donde faltaba del todo: marcador favorito, categoría, gasto/pago de Split Ledger, cerrar sesión) más 2 botones fuera de `ConfirmInline` (Aceptar/Rechazar invitación, "Confirmar" de borrar grupo completo). De paso se encontró y corrigió un bug real en el propio `ConfirmInline` (`src/components/Shared.jsx`): el atenuado (`opacity`) de `confirmDisabled` solo se aplicaba cuando `danger={false}`, así que ningún botón de "Eliminar/Borrar" (todos `danger=true` por default) se veía atenuado aunque ya estuviera bien deshabilitado — detectado probando en vivo con throttling de red.
+
+</details>
+
+- [x] ~~PickerField como hoja que sube desde abajo~~
+<details><summary>Ver detalle</summary>
+
+~~Customizar todos los inputs para que sean con el mismo diseño propio de la app. Hacer que los campos desplegables de cuentas y categorías (`PickerField`) salgan también abajo del todo (como un teclado fijo), en vez de desplegarse pegados al input como hoy, igual que ya quedó resuelto para la calculadora de Importe. Agregado 2026-10-09.~~ Resuelto 2026-10-24: `PickerField` (componente compartido, `src/components/Shared.jsx`) pasó a ser una hoja que sube desde abajo (mismo mecanismo que `CalculatorAmountInput`) — al ser un cambio en el componente compartido, aplica de una a TODAS las pantallas que ya usaban `PickerField` (`AccountDetailScreen`, `PhotoImportWizardScreen`, `EvenGroupTab`, etc.), no solo a `TransactionForm.jsx`. Lo que SÍ queda pendiente ahí (no en este cambio) son las variantes visuales nuevas (`rowLabel`/`compact`/`listStyle`, fila sin caja) — esas sí son solo de `TransactionForm.jsx` por ahora, ver lista de formularios de la sesión 2026-10-24 para ir llevándolas al resto.
+
+</details>
+
+- [ ] **Paleta de color distinta para Split Ledger y Money Manager**
+<details open><summary>Ver detalle</summary>
+
+Paleta de color diferente para Split Ledger y para Money Manager — hoy comparten la misma paleta cálida en toda la app. Agregado 2026-10-06, sin diseñar todavía (qué tan distinta, si es solo acento o toda la paleta).
+
+</details>
+
+- [ ] **Revisión completa de paddings/margins (múltiplos de 4)**
+<details open><summary>Ver detalle</summary>
+
+Revisión completa del diseño, los valores usados en los paddings y la UI en general. Los paddings y margins deberían ser múltiplos de 4. Agregado 2026-10-09.
+
+</details>
+
+- [ ] **Footer 1/3-2/3 en todos los formularios**
+<details open><summary>Ver detalle</summary>
+
+Footer de Cancelar/Guardar (y similares): cambiar de 50/50 (los dos con `flex:1`) a una proporción 1/3 (Cancelar) - 2/3 (acción principal) — le da más peso visual al botón que de verdad importa, sin perder el de cancelar. Encontrado explorando direcciones de rediseño visual con claude.ai (ver sesión 2026-10-22), le gustó a Nicolas de una de las propuestas. Aplica a TODOS los footers de la app, no solo a uno. Hecho en `TransactionForm.jsx` (2026-10-24, parte del rediseño de ese formulario); falta en el resto — ir aplicándolo a medida que se rediseña cada formulario de la lista.
+
+</details>
+
+- [ ] **Feedback visual de "presionado" en botones/elementos clickeables**
+<details open><summary>Ver detalle</summary>
+
+Agregar feedback visual de "presionado" a todos los botones/elementos clickeables de la app — hoy casi ninguno lo tiene. Causa: `-webkit-tap-highlight-color: transparent` (`src/lib/styles.js`) apaga el flash nativo en TODO (`*`), y nunca se construyó un reemplazo propio salvo un caso puntual. Encontrado y resuelto puntualmente 2026-10-24 para las teclas de `CalculatorAmountInput`/`CurrencyConversionField` (`CalculatorKeyButton` en `src/components/Shared.jsx`), como parte del rediseño de `TransactionForm.jsx` — ahí también se confirmó que un intento anterior con CSS `:active` (`.calc-key:active`) no servía: no es confiable en Safari/iOS con un toque real, solo con mouse, hay que manejar el estado por JS (`onPointerDown`/`Up`/`Leave`/`Cancel`). Falta hacer lo mismo para el resto de botones de la app (Guardar/Cancelar, filas de `PickerField`, tiles de las hojas, tabs, etc.) — tarea aparte, no mezclar con el rediseño de cada formulario puntual.
+
+</details>
+
+- [ ] **Rediseño de formularios**
+<details open><summary>Ver detalle</summary>
+
+Fila label-izquierda/valor-derecha sin caja, hojas que suben desde abajo, `FormFooter` 1/3-2/3, etc. — ver mockup de claude.ai, sesión 2026-10-22 en adelante. Arrancado 2026-10-24, en curso, se va haciendo de a uno (cada uno como su propio commit `REDESIGN -- ...`). Orden acordado:
+
+  _(Checklist activa — se deja siempre abierta a propósito, es la que se actualiza en cada sesión.)_
+
   - Gasto: [x] `TransactionForm.jsx` — [x] `PhotoImportEntryScreen.jsx` — [x] `PhotoImportWizardScreen.jsx` — [x] `ExpenseForm`/`NewExpense` (EvenGroup) — [x] `SettleUp` (EvenGroup)
   - Cuentas/Categorías: [x] `AccountDetailScreen.jsx` — [x] `ManageCategories` — [x] `CuentasTab.jsx` — [x] `CurrencySettingsScreen.jsx`
     - ~~`ManageCategories` (`TransactionForm.jsx`) quedó parcial 2026-10-29: el sub-formulario "Nueva categoría" ya pasa a la fila sin caja (ícono a la izquierda + nombre, mismo estilo que "Nombre" en `AccountDetailScreen.jsx`) + `FormFooter`. Queda pendiente, a propósito, la lista principal (`SortableCategoryManageRow`, filas arrastrables boxeadas `shareRow`) — mismo patrón de lista que usan las cuentas en `CuentasTab.jsx`, así que se resuelve una sola vez cuando le toque el turno a esa pantalla: dentro de cada card, el ícono+nombre debería pasar al mismo diseño que "Nueva categoría" (input sin borde, solo línea inferior, ícono a la izquierda).~~ Resuelto 2026-10-29, junto con `CuentasTab.jsx`: `SortableCategoryManageRow` pasó al mismo diseño (ícono `small` + input sin caja), con un ajuste encontrado probando en vivo — sin ningún borde se confundía con las filas de solo-lectura de otras listas (cuentas/grupos), así que el ícono quedó con borde y sin relleno, y el nombre con línea inferior, para que se note que son editables. `ManageAccounts` (Editar/Nuevo grupo de cuentas, mismo archivo) también pasó a la fila sin caja + `FormFooter`.
   - Grupos (EvenGroup): [x] `GroupForm` — [x] `InviteScreen` — [ ] `EvenGroupCapitalLink` (siguiente)
   - Filtros/Ajustes: [ ] `FiltersPanel.jsx` — [ ] `PeriodSettingsScreen.jsx`
   - Cuenta de usuario: [ ] `ProfileScreen` — [ ] `ChangePasswordScreen` — [ ] `AuthScreen` — [ ] `RecoverPasswordScreen`
-  
+
   De paso ya quedaron armados varios componentes/helpers compartidos reusables para el resto de la lista: `PickerField` (modos `rowLabel`/`compact`/`listStyle`), `DateRow`, `TextRow`, `FormFooter`, `PhotoLightbox`, `Hint`, `useTouched()`.
-- [x] ~~Scroll al contenido recién revelado: tocar algo que agrega campos nuevos más abajo (Nota, "Dividido en", "Hacer recurrente", "Opciones avanzadas", "Categorías de gasto", cambiar "¿Quién pagó?"/modo de reparto) con la vista ya baja los dejaba fuera de pantalla sin ningún indicio de que pasó algo. Encontrado probando `ExpenseForm` (EvenGroup) en vivo, 2026-10-28.~~ Resuelto: nuevo hook `useScrollIntoViewOnChange(ref, value)` (`helpers.jsx`) — hace scroll hasta el elemento recién revelado cuando `value` cambia a algo "abierto" (truthy y distinto de antes); no dispara al cerrar ni al montar ya abierto. Usa `scroll-margin-bottom` (no solo `scrollIntoView` liso) porque el navegador no sabe que el Footer fijo de abajo tapa una franja — sin eso, "nearest" podía dar por visible algo que en realidad quedaba atrás del footer. Aplicado en `ExpenseForm` (Nota, Dividido en, cambio de modo de pago/reparto), `TransactionForm.jsx` (Hacer recurrente), `EvenGroupCapitalLink` (Opciones avanzadas) y `GroupForm` (Categorías de gasto). El caso de `PhotoImportEntryScreen.jsx` ("Leyendo la foto X%") se resolvió distinto, a propósito: en vez de scrollear hasta un mensaje metido en el formulario, ese progreso ahora se muestra en el banner fijo de arriba (`showInfo`) — siempre visible sin importar el scroll, no hace falta ningún cálculo. De paso, el banner de error pasó de oscuro a rojo (`#B0473A`, el mismo rojo que ya usa el resto de la app) para distinguirse de "info", que se queda en el oscuro de siempre (se probó azul para "info" primero, pero no quedaba bien con otros banners informativos ya existentes, ej. el de sincronización).
-- [ ] **Unificar `TransactionForm.jsx` y el paso del asistente de fotos (`PhotoImportWizardScreen.jsx`)** en un solo componente visual de "campos de transacción" (Tipo/Fecha/Importe/Cuenta/Categoría/Descripción/Nota), que cada uno envuelva con su propia lógica de guardado — en vez de 2 implementaciones separadas que pueden divergir sin que nadie se dé cuenta. Encontrado al redistribuir `PhotoImportWizardScreen.jsx` (2026-10-28): aparecieron 3 divergencias que nadie notó hasta probarlo (título del picker de Categoría, diseño del importe, orden de los campos) — señal de que mantenerlas a mano sincronizadas no escala. Alcance acotado: de las 18 pantallas de la lista de arriba, estas 2 son las ÚNICAS que comparten este set de campos (EvenGroup es, a propósito, un formulario distinto). Queda afuera del componente compartido el caso de tasa de cambio (`needsRate`, exclusivo de transacciones sincronizadas con EvenGroup en otra moneda) — el asistente nunca lo necesita (cuenta/moneda fijas para todo el lote). Decidido con Nicolas: primero terminar el rediseño pantalla por pantalla (arreglando divergencias puntuales a mano mientras tanto), esto se aborda aparte.
-- [x] ~~Revisar scroll innecesario en pantallas que caben completamente. Agregado 2026-10-10.~~ Resuelto 2026-10-20. Causa raíz: `styles.screen` (`src/lib/styles.js`) ya reservaba espacio fijo abajo para que el `Footer`/la barra de tabs no taparan el contenido, pero la mayoría de pantallas con un `.form` lo volvían a agregar a mano encima, duplicándolo. Reauditadas las 40 pantallas que usan `styles.screen` (no solo grep literal, con un script que agrupa por función y detecta si cada una tiene `Footer`, barra de tabs (`showTabBar` en `SplitLedger.jsx`) o el botón flotante "+" (`fab`) real, para saber cuánto espacio necesita de verdad cada una):
+
+</details>
+
+- [ ] **Unificar `TransactionForm.jsx` y `PhotoImportWizardScreen.jsx`**
+<details open><summary>Ver detalle</summary>
+
+Unificar `TransactionForm.jsx` y el paso del asistente de fotos (`PhotoImportWizardScreen.jsx`) en un solo componente visual de "campos de transacción" (Tipo/Fecha/Importe/Cuenta/Categoría/Descripción/Nota), que cada uno envuelva con su propia lógica de guardado — en vez de 2 implementaciones separadas que pueden divergir sin que nadie se dé cuenta. Encontrado al redistribuir `PhotoImportWizardScreen.jsx` (2026-10-28): aparecieron 3 divergencias que nadie notó hasta probarlo (título del picker de Categoría, diseño del importe, orden de los campos) — señal de que mantenerlas a mano sincronizadas no escala. Alcance acotado: de las 18 pantallas de la lista de arriba, estas 2 son las ÚNICAS que comparten este set de campos (EvenGroup es, a propósito, un formulario distinto). Queda afuera del componente compartido el caso de tasa de cambio (`needsRate`, exclusivo de transacciones sincronizadas con EvenGroup en otra moneda) — el asistente nunca lo necesita (cuenta/moneda fijas para todo el lote). Decidido con Nicolas: primero terminar el rediseño pantalla por pantalla (arreglando divergencias puntuales a mano mientras tanto), esto se aborda aparte.
+
+</details>
+
+- [x] ~~Scroll automático al contenido recién revelado~~
+<details><summary>Ver detalle</summary>
+
+~~Scroll al contenido recién revelado: tocar algo que agrega campos nuevos más abajo (Nota, "Dividido en", "Hacer recurrente", "Opciones avanzadas", "Categorías de gasto", cambiar "¿Quién pagó?"/modo de reparto) con la vista ya baja los dejaba fuera de pantalla sin ningún indicio de que pasó algo. Encontrado probando `ExpenseForm` (EvenGroup) en vivo, 2026-10-28.~~ Resuelto: nuevo hook `useScrollIntoViewOnChange(ref, value)` (`helpers.jsx`) — hace scroll hasta el elemento recién revelado cuando `value` cambia a algo "abierto" (truthy y distinto de antes); no dispara al cerrar ni al montar ya abierto. Usa `scroll-margin-bottom` (no solo `scrollIntoView` liso) porque el navegador no sabe que el Footer fijo de abajo tapa una franja — sin eso, "nearest" podía dar por visible algo que en realidad quedaba atrás del footer. Aplicado en `ExpenseForm` (Nota, Dividido en, cambio de modo de pago/reparto), `TransactionForm.jsx` (Hacer recurrente), `EvenGroupCapitalLink` (Opciones avanzadas) y `GroupForm` (Categorías de gasto). El caso de `PhotoImportEntryScreen.jsx` ("Leyendo la foto X%") se resolvió distinto, a propósito: en vez de scrollear hasta un mensaje metido en el formulario, ese progreso ahora se muestra en el banner fijo de arriba (`showInfo`) — siempre visible sin importar el scroll, no hace falta ningún cálculo. De paso, el banner de error pasó de oscuro a rojo (`#B0473A`, el mismo rojo que ya usa el resto de la app) para distinguirse de "info", que se queda en el oscuro de siempre (se probó azul para "info" primero, pero no quedaba bien con otros banners informativos ya existentes, ej. el de sincronización).
+
+</details>
+
+- [x] ~~Scroll innecesario en pantallas que ya caben completas~~
+<details><summary>Ver detalle</summary>
+
+~~Revisar scroll innecesario en pantallas que caben completamente. Agregado 2026-10-10.~~ Resuelto 2026-10-20. Causa raíz: `styles.screen` (`src/lib/styles.js`) ya reservaba espacio fijo abajo para que el `Footer`/la barra de tabs no taparan el contenido, pero la mayoría de pantallas con un `.form` lo volvían a agregar a mano encima, duplicándolo. Reauditadas las 40 pantallas que usan `styles.screen` (no solo grep literal, con un script que agrupa por función y detecta si cada una tiene `Footer`, barra de tabs (`showTabBar` en `SplitLedger.jsx`) o el botón flotante "+" (`fab`) real, para saber cuánto espacio necesita de verdad cada una):
   - 25 pantallas tenían el padding duplicado — arreglo mecánico, se las dejó con un solo padding.
   - 8 pantallas (de navegación, sin Footer/barra de tabs/FAB) no necesitaban nada reservado — quedaron en `paddingBottom: 0`.
   - El número fijo ("100") se reemplazó por un cálculo real a partir de las medidas de la barra de tabs: `calc(63px + env(safe-area-inset-bottom))` (ver comentario en `styles.js`).
   - 4 pantallas con el botón flotante "+" (Transacciones, extracto de cuenta, Split Ledger "Tus grupos" y dentro de un grupo) necesitan más espacio que la barra de tabs sola (el FAB flota por encima de ella) — nuevo `styles.screenWithFab` (`calc(146px + env(safe-area-inset-bottom))`), reusando los mismos números de posición que ya usa el propio FAB.
   - De paso, Cuentas (raíz) pasó a tener el header de Capital/A deber/Balance sticky (mismo patrón que Transacciones), y se encontró y corrigió un bug real en `ConfirmInline` (`src/components/Shared.jsx`): el atenuado de `confirmDisabled` solo se aplicaba con `danger={false}`, así que los botones de "Eliminar" nunca se veían atenuados aunque ya estuvieran bien deshabilitados.
   - Aparte (no es scroll, encontrado en el camino): "Importar gastos" (`PhotoImportEntryScreen.jsx`) dejaba elegir una cuenta del grupo de Split Ledger como destino — corregido con el mismo filtro (`system_key !== "split_ledger"`) que ya usan todos los demás selectores de cuenta de la app.
-- [x] ~~Bug en `GroupForm` (EvenGroup, "Editar grupo"): "Vincular un usuario a un miembro ya creado" arma su lista a partir de `group.members` (la prop ya persistida), no del estado local del formulario — si agregabas una persona nueva y tocabas "Vincular..." sin guardar antes, esa persona no existía todavía del lado de la base y no aparecía para elegir. Encontrado por Nicolas probando en vivo, 2026-10-29.~~ Resuelto 2026-10-29: `onSave` (pasado a `GroupForm` desde `EvenGroupTab.jsx`) dejó de decidir la navegación él mismo — ahora solo persiste y devuelve `true`/`false` (mismo patrón ya usado en `TransactionForm`/`CuentasTab.jsx`), y `GroupForm` decide qué hacer después: `handleSave` (botón "Guardar" de siempre) vuelve a la pantalla del grupo; nuevo `handleSaveAndInvite` guarda lo pendiente (si hay) y sigue derecho a Invitar, sin pantallas intermedias. El botón cambia de texto a "Guardar cambios y vincular un usuario" (con una nota aclaratoria) cuando hay cambios sin guardar, y queda deshabilitado si esos cambios son inválidos (mismas reglas que "Guardar") — si no hay nada pendiente, va directo a Invitar sin guardar nada.
+
+</details>
+
+- [x] ~~Bug: "Vincular un usuario" en GroupForm no veía miembros recién agregados~~
+<details><summary>Ver detalle</summary>
+
+~~Bug en `GroupForm` (EvenGroup, "Editar grupo"): "Vincular un usuario a un miembro ya creado" arma su lista a partir de `group.members` (la prop ya persistida), no del estado local del formulario — si agregabas una persona nueva y tocabas "Vincular..." sin guardar antes, esa persona no existía todavía del lado de la base y no aparecía para elegir. Encontrado por Nicolas probando en vivo, 2026-10-29.~~ Resuelto 2026-10-29: `onSave` (pasado a `GroupForm` desde `EvenGroupTab.jsx`) dejó de decidir la navegación él mismo — ahora solo persiste y devuelve `true`/`false` (mismo patrón ya usado en `TransactionForm`/`CuentasTab.jsx`), y `GroupForm` decide qué hacer después: `handleSave` (botón "Guardar" de siempre) vuelve a la pantalla del grupo; nuevo `handleSaveAndInvite` guarda lo pendiente (si hay) y sigue derecho a Invitar, sin pantallas intermedias. El botón cambia de texto a "Guardar cambios y vincular un usuario" (con una nota aclaratoria) cuando hay cambios sin guardar, y queda deshabilitado si esos cambios son inválidos (mismas reglas que "Guardar") — si no hay nada pendiente, va directo a Invitar sin guardar nada.
+
+</details>
 
 ## B. Mejoras a futuro (sin compromiso de construirlas: ideas, no backlog)
 
-- [ ] Permitir transacciones con importe 0, para usarlas como nota/recordatorio de algo que falta cargar (ej. "falta anotar el gasto de X") sin que sea un movimiento de dinero real. Nicolas lo usaba así en la app anterior, a principio de mes, para marcar pendientes. Duda sin resolver: ensucia los listados/conteo de transacciones si se modela como una transacción de verdad — capaz lo correcto es una funcionalidad de notas/recordatorios separada, no relajar la validación de monto. Sin urgencia, revisar si se repite el caso de uso.
-- [ ] Intereses en tarjetas de crédito: modelar de alguna forma el interés que cobra una tarjeta sobre el saldo no pagado (hoy el sistema de pago automático/catch-up no contempla intereses, solo el monto adeudado).
-- [ ] Fotos adjuntas a transacciones. Sacado del backlog activo 2026-09-30 — sin señal de uso real, pero barato de agregar después.
-- [ ] Subcategorías (jerarquía padre/hijo en Categorías). Sacado del backlog activo 2026-09-30 por no ser útil hoy.
-- [ ] Campo "Comisión" (fee) en transferencias: existe en la base (`mm_transactions.fee_amount`) pero no está expuesto en el formulario. Sacado del backlog activo 2026-10-01 — dudas sin resolver sobre si afecta el saldo origen o destino, y si siempre es en la misma moneda que el monto transferido. Alternativa más simple que ya cubre el caso real: cargar la comisión como un gasto aparte (categorizado) en vez de un campo dentro de la transferencia — así sí aparece en Estadísticas por categoría. Queda como idea, estudiar primero qué tan útil sería de verdad antes de retomarla.
-- [ ] Perfiles de moneda: ir más allá de multi-moneda por cuenta (ver D y `MULTI_CURRENCY_PLAN.md`) y poder cambiar de "perfil" (ej. perfil EUR / perfil COP) como si fueran 2 vistas separadas de la misma cuenta, relacionadas entre sí, sin que la UI se complique demasiado. Sin diseñar todavía, es la idea más grande detrás de multi-moneda. Separado 2026-10-05 de la versión acotada (D) para no bloquear el destrabe de Split Ledger con una decisión de este tamaño.
-- [ ] Permitir usar Split Ledger offline en un grupo que no tenga otros miembros vinculados a un usuario real ni invitaciones pendientes (ej. un grupo para gastos propios) — en ese caso no hay riesgo de que otra persona esté escribiendo al mismo tiempo, el mismo argumento que ya justifica que Money Manager sea offline completo (ver A). Implicaría construir para Split Ledger (gastos, pagos, probablemente crear el grupo en sí) la misma arquitectura de cola de escritura + caché local editable que ya existe para Money Manager (`write_queue`/`offlineSupabase`/Dexie), aplicada a sus propias tablas (`expenses`, `payments`, `groups`). Agregado 2026-10-17: Nicolas decidió dejarlo para después — no es un caso de uso común (la mayoría de los grupos sí tienen otro miembro vinculado).
-- [ ] Si alguna vez se construye una versión nativa (Swift/UIKit/SwiftUI, o React Native) en vez de esta web app: revertir el patrón de `Footer` fijo (`position:"fixed"`) + `paddingBottom:100` reservado a mano en cada pantalla, por un layout nativo normal (header y footer "hug", body con su propio scroll nativo llenando el resto, sin reservar nada a mano). El padding manual de hoy es un compromiso necesario SOLO porque esto corre en un navegador/WebKit (evita el scroll anidado `overflow:auto`, que en iOS Safari se siente con tirones, calcula mal dónde llevar un input tapado por el teclado, y tiene rebote confuso entre scrolls anidados) — en nativo el sistema operativo resuelve todo eso solo, así que el workaround ya no haría falta. Agregado 2026-10-20, a raíz de la revisión de scroll innecesario.
+- [ ] **Permitir transacciones con importe 0 (notas/recordatorios)**
+<details open><summary>Ver detalle</summary>
 
-## C. Descartados (se evaluaron y se decidió no construirlos)
+Permitir transacciones con importe 0, para usarlas como nota/recordatorio de algo que falta cargar (ej. "falta anotar el gasto de X") sin que sea un movimiento de dinero real. Nicolas lo usaba así en la app anterior, a principio de mes, para marcar pendientes. Duda sin resolver: ensucia los listados/conteo de transacciones si se modela como una transacción de verdad — capaz lo correcto es una funcionalidad de notas/recordatorios separada, no relajar la validación de monto. Sin urgencia, revisar si se repite el caso de uso.
 
-- [x] ~~Sub-vistas Calendario/Mensual/Resumen/Descripción en el tab Transacciones (solo queda "Diario").~~ Descartado 2026-09-30.
-- [x] ~~Presupuestos (Budgets) y Tags.~~ Descartado 2026-09-30: la data real de Nicolas casi no los usaba.
-- [x] ~~Sub-tabs "Presupuesto" y "Nota" en Estadísticas.~~ Descartado 2026-09-30: el caso de uso real lo cubre el Buscador de gastos (E).
+</details>
 
-## D. Decisiones diferidas a propósito
+- [ ] **Modelar intereses de tarjetas de crédito**
+<details open><summary>Ver detalle</summary>
+
+Intereses en tarjetas de crédito: modelar de alguna forma el interés que cobra una tarjeta sobre el saldo no pagado (hoy el sistema de pago automático/catch-up no contempla intereses, solo el monto adeudado).
+
+</details>
+
+- [ ] **Fotos adjuntas a transacciones**
+<details open><summary>Ver detalle</summary>
+
+Fotos adjuntas a transacciones. Sacado del backlog activo 2026-09-30 — sin señal de uso real, pero barato de agregar después.
+
+</details>
+
+- [ ] **Subcategorías (jerarquía padre/hijo)**
+<details open><summary>Ver detalle</summary>
+
+Subcategorías (jerarquía padre/hijo en Categorías). Sacado del backlog activo 2026-09-30 por no ser útil hoy.
+
+</details>
+
+- [ ] **Campo "Comisión" (fee) en transferencias**
+<details open><summary>Ver detalle</summary>
+
+Campo "Comisión" (fee) en transferencias: existe en la base (`mm_transactions.fee_amount`) pero no está expuesto en el formulario. Sacado del backlog activo 2026-10-01 — dudas sin resolver sobre si afecta el saldo origen o destino, y si siempre es en la misma moneda que el monto transferido. Alternativa más simple que ya cubre el caso real: cargar la comisión como un gasto aparte (categorizado) en vez de un campo dentro de la transferencia — así sí aparece en Estadísticas por categoría. Queda como idea, estudiar primero qué tan útil sería de verdad antes de retomarla.
+
+</details>
+
+- [ ] **Perfiles de moneda (más allá de multi-moneda por cuenta)**
+<details open><summary>Ver detalle</summary>
+
+Perfiles de moneda: ir más allá de multi-moneda por cuenta (ver D y `MULTI_CURRENCY_PLAN.md`) y poder cambiar de "perfil" (ej. perfil EUR / perfil COP) como si fueran 2 vistas separadas de la misma cuenta, relacionadas entre sí, sin que la UI se complique demasiado. Sin diseñar todavía, es la idea más grande detrás de multi-moneda. Separado 2026-10-05 de la versión acotada (D) para no bloquear el destrabe de Split Ledger con una decisión de este tamaño.
+
+</details>
+
+- [ ] **Split Ledger offline en grupos sin otros miembros vinculados**
+<details open><summary>Ver detalle</summary>
+
+Permitir usar Split Ledger offline en un grupo que no tenga otros miembros vinculados a un usuario real ni invitaciones pendientes (ej. un grupo para gastos propios) — en ese caso no hay riesgo de que otra persona esté escribiendo al mismo tiempo, el mismo argumento que ya justifica que Money Manager sea offline completo (ver A). Implicaría construir para Split Ledger (gastos, pagos, probablemente crear el grupo en sí) la misma arquitectura de cola de escritura + caché local editable que ya existe para Money Manager (`write_queue`/`offlineSupabase`/Dexie), aplicada a sus propias tablas (`expenses`, `payments`, `groups`). Agregado 2026-10-17: Nicolas decidió dejarlo para después — no es un caso de uso común (la mayoría de los grupos sí tienen otro miembro vinculado).
+
+</details>
+
+- [ ] **Revertir el patrón de Footer fijo si se migra a nativo**
+<details open><summary>Ver detalle</summary>
+
+Si alguna vez se construye una versión nativa (Swift/UIKit/SwiftUI, o React Native) en vez de esta web app: revertir el patrón de `Footer` fijo (`position:"fixed"`) + `paddingBottom:100` reservado a mano en cada pantalla, por un layout nativo normal (header y footer "hug", body con su propio scroll nativo llenando el resto, sin reservar nada a mano). El padding manual de hoy es un compromiso necesario SOLO porque esto corre en un navegador/WebKit (evita el scroll anidado `overflow:auto`, que en iOS Safari se siente con tirones, calcula mal dónde llevar un input tapado por el teclado, y tiene rebote confuso entre scrolls anidados) — en nativo el sistema operativo resuelve todo eso solo, así que el workaround ya no haría falta. Agregado 2026-10-20, a raíz de la revisión de scroll innecesario.
+
+</details>
+
+<details><summary><strong>C. Descartados (se evaluaron y se decidió no construirlos)</strong></summary>
+
+- [x] ~~Sub-vistas Calendario/Mensual/Resumen/Descripción en Transacciones~~
+<details><summary>Ver detalle</summary>
+
+~~Sub-vistas Calendario/Mensual/Resumen/Descripción en el tab Transacciones (solo queda "Diario").~~ Descartado 2026-09-30.
+
+</details>
+
+- [x] ~~Presupuestos (Budgets) y Tags~~
+<details><summary>Ver detalle</summary>
+
+~~Presupuestos (Budgets) y Tags.~~ Descartado 2026-09-30: la data real de Nicolas casi no los usaba.
+
+</details>
+
+- [x] ~~Sub-tabs "Presupuesto" y "Nota" en Estadísticas~~
+<details><summary>Ver detalle</summary>
+
+~~Sub-tabs "Presupuesto" y "Nota" en Estadísticas.~~ Descartado 2026-09-30: el caso de uso real lo cubre el Buscador de gastos (E).
+
+</details>
+
+</details>
+
+<details><summary><strong>D. Decisiones diferidas a propósito</strong></summary>
 
 No tocar salvo que Nicolas las traiga de vuelta explícitamente.
 
-- [x] ~~Fase 1 (Cuentas): cambiar la moneda principal en Ajustes rompe el historial viejo (`amount_main` no se recalcula).~~ Resuelto 2026-10-06 de raíz para Cuentas: `mm_accounts.currency` pasó de etiqueta a restricción dura — toda transacción queda en la moneda de SU cuenta (pide tasa si se carga en otra), la moneda se bloquea en cuanto la cuenta ya tiene movimientos (si no, reaparecía el mismo bug a nivel de cuenta), transferencias solo entre cuentas de la misma moneda, tarjeta y cuenta de pago tienen que coincidir. Cuentas/extracto de cuenta ya muestran saldos por moneda en vez de blendeados. "Moneda principal" en Ajustes ya es solo la sugerencia por defecto al crear una cuenta nueva. Ver `MULTI_CURRENCY_PLAN.md` para el diseño detallado.
-- [x] ~~Fase 2: Transacciones (resumen día/mes), Estadísticas (torta) y Buscador (renglón de totales) mezclaban cuentas de monedas distintas en un solo número.~~ Resuelto 2026-10-08: selector de moneda (toggle de botones, con desplegable si hay más de 5 en uso) en las 4 pantallas afectadas (suma el drill-down de categoría), con un nuevo componente compartido `CurrencyToggle` y el helper `currenciesInUse`. De paso se resolvió el gap de `aggregateByCategory` (no filtraba por moneda con filtros activos) y un bug no relacionado encontrado al armar esta fase: `isRatePending` comparaba contra la moneda principal global en vez de la de cada cuenta. Ver `MULTI_CURRENCY_PLAN.md` para el detalle.
-- [x] ~~Unificar categorías de Money Manager con las de Split Ledger (hoy son sistemas totalmente separados).~~ Resuelto de hecho 2026-10-03, no como "unificación" literal: al construir el vínculo Split↔Money (ver `SPLIT_MONEY_LINK_PLAN.md`), cada gasto compartido terminó con sus DOS categorías visibles por separado cuando corresponde — "Categoría personal" (Money, privada) y "Categoría de {grupo}" (Split, la ve todo el grupo) — en vez de fusionar ambos sistemas en uno. Se deja marcado como resuelto porque responde la pregunta original (si debían unificarse) con un "no, pero conviven mostrándose juntas".
+- [x] ~~Fase 1 (Cuentas): cambiar moneda principal rompía el historial viejo~~
+<details><summary>Ver detalle</summary>
 
-## E. Funcionales: features que faltan construir
+~~Fase 1 (Cuentas): cambiar la moneda principal en Ajustes rompe el historial viejo (`amount_main` no se recalcula).~~ Resuelto 2026-10-06 de raíz para Cuentas: `mm_accounts.currency` pasó de etiqueta a restricción dura — toda transacción queda en la moneda de SU cuenta (pide tasa si se carga en otra), la moneda se bloquea en cuanto la cuenta ya tiene movimientos (si no, reaparecía el mismo bug a nivel de cuenta), transferencias solo entre cuentas de la misma moneda, tarjeta y cuenta de pago tienen que coincidir. Cuentas/extracto de cuenta ya muestran saldos por moneda en vez de blendeados. "Moneda principal" en Ajustes ya es solo la sugerencia por defecto al crear una cuenta nueva. Ver `MULTI_CURRENCY_PLAN.md` para el diseño detallado.
 
-- [x] ~~Buscador de gastos: pantalla de búsqueda por texto/nota, con filtros de fecha, categoría y cuenta. Cubre también el caso de "¿cuántas veces fui a Mercadona?" buscando por nota, sin necesidad de una sub-vista nueva en Estadísticas (ver decisión G-6 más abajo).~~ Resuelto 2026-10-01: ícono de lupa en el header de Transacciones abre `SearchScreen` — busca en título+memo sobre todo el historial (filtros server-side, `searchTransactions` en `moneyManagerData.js`), con autocompletado de notas reutilizado, filtros de importe/fecha/cuenta/categoría (`MultiPickerField`, nuevo componente de selección múltiple), totales + contador de resultados, y una fila propia por transacción (fecha dd/mm/yyyy + categoría a la izquierda, nota/cuenta al centro, monto a la derecha) en vez de reusar el agrupado-por-día de Diario, que no tiene sentido cuando los resultados cruzan meses distintos.
-- [x] ~~Autocompletado de notas al escribir una transacción (ej. escribir "Mer" sugiere "Mercadona", basado en notas anteriores).~~ Resuelto 2026-10-01: `useRecentNoteTitles` trae las últimas 300 notas (deduplicadas, más reciente primero), se filtran por coincidencia y se muestran hasta 5 sugerencias bajo el campo "Nota" de `TransactionForm` — respeta el toggle "Autocompletar notas" que ya existía en Configuración. Solo en Money Manager, no en Split Ledger (ver B).
-- [x] ~~Persistencia de tab al cerrar la app: revisar si al cerrar y reabrir en el celular se conserva la pestaña donde estabas (y, dentro de Configuración, la sub-sección Money Manager / Split Ledger).~~ Resuelto 2026-10-01: `activeTab` (shell raíz) y `section` (`ConfigScreen`) se guardan en `localStorage` — sobreviven a un cierre real de la app, no solo a pasar a segundo plano. Convive con "Pantalla de inicio" (`startup_tab`): si está en "Sin preferencia", gana la última pestaña recordada; si tiene una fija, esa gana siempre. Confirmado funcionando por Nicolas.
-- [x] ~~Nota larga (`memo`) editable desde el formulario de transacción, a modo de "Descripción" — hoy `memo` solo se llena vía import masivo.~~ Resuelto 2026-09-30: campo "Descripción" (textarea) agregado bajo "Nota" en `TransactionForm`.
-- [x] ~~Drill-down en Estadísticas: click en una categoría (torta o lista) debería llevar al listado de sus transacciones. Hoy solo resalta (pie ↔ lista), no navega a nada.~~ Resuelto 2026-09-30: la porción de la torta sigue resaltando, la fila de la lista navega a `CategoryDrillDownScreen` (línea de tiempo por mes + listado filtrado). De paso se agregó también el extracto por cuenta (Diario/Mensual/Anual) en el tab Cuentas, no estaba pedido acá pero es la misma idea aplicada a cuentas.
+</details>
+
+- [x] ~~Fase 2: pantallas mezclaban cuentas de monedas distintas en un número~~
+<details><summary>Ver detalle</summary>
+
+~~Fase 2: Transacciones (resumen día/mes), Estadísticas (torta) y Buscador (renglón de totales) mezclaban cuentas de monedas distintas en un solo número.~~ Resuelto 2026-10-08: selector de moneda (toggle de botones, con desplegable si hay más de 5 en uso) en las 4 pantallas afectadas (suma el drill-down de categoría), con un nuevo componente compartido `CurrencyToggle` y el helper `currenciesInUse`. De paso se resolvió el gap de `aggregateByCategory` (no filtraba por moneda con filtros activos) y un bug no relacionado encontrado al armar esta fase: `isRatePending` comparaba contra la moneda principal global en vez de la de cada cuenta. Ver `MULTI_CURRENCY_PLAN.md` para el detalle.
+
+</details>
+
+- [x] ~~Unificar categorías de Money Manager con las de Split Ledger~~
+<details><summary>Ver detalle</summary>
+
+~~Unificar categorías de Money Manager con las de Split Ledger (hoy son sistemas totalmente separados).~~ Resuelto de hecho 2026-10-03, no como "unificación" literal: al construir el vínculo Split↔Money (ver `SPLIT_MONEY_LINK_PLAN.md`), cada gasto compartido terminó con sus DOS categorías visibles por separado cuando corresponde — "Categoría personal" (Money, privada) y "Categoría de {grupo}" (Split, la ve todo el grupo) — en vez de fusionar ambos sistemas en uno. Se deja marcado como resuelto porque responde la pregunta original (si debían unificarse) con un "no, pero conviven mostrándose juntas".
+
+</details>
+
+</details>
+
+<details><summary><strong>E. Funcionales: features que faltan construir</strong></summary>
+
+- [x] ~~Buscador de gastos (texto, fecha, categoría, cuenta)~~
+<details><summary>Ver detalle</summary>
+
+~~Buscador de gastos: pantalla de búsqueda por texto/nota, con filtros de fecha, categoría y cuenta. Cubre también el caso de "¿cuántas veces fui a Mercadona?" buscando por nota, sin necesidad de una sub-vista nueva en Estadísticas (ver decisión G-6 más abajo).~~ Resuelto 2026-10-01: ícono de lupa en el header de Transacciones abre `SearchScreen` — busca en título+memo sobre todo el historial (filtros server-side, `searchTransactions` en `moneyManagerData.js`), con autocompletado de notas reutilizado, filtros de importe/fecha/cuenta/categoría (`MultiPickerField`, nuevo componente de selección múltiple), totales + contador de resultados, y una fila propia por transacción (fecha dd/mm/yyyy + categoría a la izquierda, nota/cuenta al centro, monto a la derecha) en vez de reusar el agrupado-por-día de Diario, que no tiene sentido cuando los resultados cruzan meses distintos.
+
+</details>
+
+- [x] ~~Autocompletado de notas al escribir una transacción~~
+<details><summary>Ver detalle</summary>
+
+~~Autocompletado de notas al escribir una transacción (ej. escribir "Mer" sugiere "Mercadona", basado en notas anteriores).~~ Resuelto 2026-10-01: `useRecentNoteTitles` trae las últimas 300 notas (deduplicadas, más reciente primero), se filtran por coincidencia y se muestran hasta 5 sugerencias bajo el campo "Nota" de `TransactionForm` — respeta el toggle "Autocompletar notas" que ya existía en Configuración. Solo en Money Manager, no en Split Ledger (ver B).
+
+</details>
+
+- [x] ~~Persistencia de tab/sección al cerrar y reabrir la app~~
+<details><summary>Ver detalle</summary>
+
+~~Persistencia de tab al cerrar la app: revisar si al cerrar y reabrir en el celular se conserva la pestaña donde estabas (y, dentro de Configuración, la sub-sección Money Manager / Split Ledger).~~ Resuelto 2026-10-01: `activeTab` (shell raíz) y `section` (`ConfigScreen`) se guardan en `localStorage` — sobreviven a un cierre real de la app, no solo a pasar a segundo plano. Convive con "Pantalla de inicio" (`startup_tab`): si está en "Sin preferencia", gana la última pestaña recordada; si tiene una fija, esa gana siempre. Confirmado funcionando por Nicolas.
+
+</details>
+
+- [x] ~~Nota larga (Descripción) editable en el formulario de transacción~~
+<details><summary>Ver detalle</summary>
+
+~~Nota larga (`memo`) editable desde el formulario de transacción, a modo de "Descripción" — hoy `memo` solo se llena vía import masivo.~~ Resuelto 2026-09-30: campo "Descripción" (textarea) agregado bajo "Nota" en `TransactionForm`.
+
+</details>
+
+- [x] ~~Drill-down en Estadísticas: categoría → listado de transacciones~~
+<details><summary>Ver detalle</summary>
+
+~~Drill-down en Estadísticas: click en una categoría (torta o lista) debería llevar al listado de sus transacciones. Hoy solo resalta (pie ↔ lista), no navega a nada.~~ Resuelto 2026-09-30: la porción de la torta sigue resaltando, la fila de la lista navega a `CategoryDrillDownScreen` (línea de tiempo por mes + listado filtrado). De paso se agregó también el extracto por cuenta (Diario/Mensual/Anual) en el tab Cuentas, no estaba pedido acá pero es la misma idea aplicada a cuentas.
+
+</details>
+
+</details>
 
 ## F. Bugs / cosméticos menores
 
-- [x] ~~Los grupos de Split Ledger no se están borrando.~~ Resuelto
+- [x] ~~Los grupos de Split Ledger no se estaban borrando~~
+<details><summary>Ver detalle</summary>
+
+~~Los grupos de Split Ledger no se están borrando.~~ Resuelto
       2026-10-03: reportado 2026-10-02. Causa real: `deleteGroup` sí marca
       `deleted = true`, pero `useGroups().load()` traía TODOS los grupos sin
       filtrar esa columna — confiaba en un supuesto (nunca verificado) de
@@ -103,17 +333,86 @@ No tocar salvo que Nicolas las traiga de vuelta explícitamente.
       en la próxima recarga de la lista (ej. al aceptar una invitación).
       Arreglado agregando `.eq("deleted", false)` a esa consulta en
       `SplitLedger.jsx`.
-- [x] ~~Drag-and-drop de reordenar con un solo ítem no debería mostrar el ícono de arrastrar (categorías, cuentas, grupos, "otras monedas") — no hay con qué reordenar si hay uno solo.~~ Resuelto 2026-10-02: eran 6 listas arrastrables en total (categorías de Money Manager, categorías de grupo en Split Ledger, "tus grupos", grupos de cuentas, cuentas dentro de un grupo, "otras monedas") — todas reciben ahora un `draggable={lista.length > 1}` que, cuando es `false`, oculta el ícono (deja un espacio vacío del mismo ancho para no desalinear la fila) y además pasa `disabled` a `useSortable` para que tampoco funcione el arrastre por teclado.
-- [x] ~~El contorno de foco naranja del `ConfirmInline` no respeta las esquinas achatadas cuando está pegado a un input arriba (visto en Configuración → Split Ledger → "Nombre visible"). Puramente visual.~~ Resuelto 2026-09-30: los botones ya no llevan anillo de foco, y los inputs pasaron de `outline` a `box-shadow` (ver `DESIGN_NOTES.md`), que sí respeta bordes asimétricos.
-- [ ] En formularios largos (ej. "Editar grupo" con muchos integrantes), si tocás un campo bien al fondo de la página y aparece el teclado, el `Footer` fijo (Guardar/Cancelar) a veces no sube arriba del teclado — se queda atrás, tapado, hasta que cerrás el teclado o scrolleás. Revisado 2026-10-20: no es un bug de nuestro CSS (comparado línea por línea `GroupForm` contra `ExpenseForm`, mismo `Footer` compartido, sin transform/overflow/wrapper distinto entre los dos) — es un comportamiento conocido de Safari/iOS con `position:fixed` + teclado, que no siempre re-ancla bien cuando la página tuvo que hacer scroll grande para traer el campo a la vista. El arreglo real (escuchar `visualViewport` con JS y reposicionar a mano) agrega complejidad real para un caso límite cosmético — se decidió no construirlo.
-- [x] ~~"Pendiente TC" (automatización custom de Nicolas, `customUserConfig.js`/`splitLedgerSync.js`): dos gastos nuevos en Split Ledger no se sumaron solos a la transacción manual "Pendiente TC", sin ningún error visible.~~ Resuelto 2026-10-20. Dos bugs reales encontrados en el camino: (1) `applyPendienteTcAutoSum` buscaba la cuenta "Pendiente" por NOMBRE en todas las cuentas del usuario — con una cuenta "Pendiente" distinta por cada grupo de cuentas (4 en total), el `.find()` podía agarrar cualquiera, no la del vínculo real, y la búsqueda de la transacción "Pendiente TC" fallaba en silencio (a propósito, no es un error). Arreglado resolviendo la cuenta de "lo prestado" por gasto (`choice.loan_account_id`), igual que ya hace `computeDesiredTransactions`, nunca por nombre. (2) El cálculo de `paidAmt - shareAmt` (en ese mismo archivo, usado también para el gasto/transferencia normal que se sincroniza a Money Manager) podía ensuciarse con ruido de punto flotante (ej. `15.520000000000001`) aunque las dos entradas ya fueran centavos limpios — se agregó `roundCents()`, una sola vez justo al calcularlo. De paso: el centavo extra de `fairSplit` en un empate (ej. partir algo impar a la mitad) siempre lo ganaba quien apareciera primero en la lista de integrantes — ahora varía según el día del gasto (`seed` en `fairSplit`/`computeShares`, `helpers.jsx`), no es siempre la misma persona.
 
-## G. Simplificaciones MVP vs. la app original (Realbyte Money Manager): ya revisadas con Nicolas
+</details>
 
-- [x] ~~Cuentas: sin tratamiento especial de tarjetas de crédito (la original separa "Saldo a pagar" / "Saldo restante"); acá todas las cuentas se muestran igual.~~ Resuelto 2026-09-30: split pasado/actual, cuenta de pago, ciclo de facturación y pago automático con catch-up.
-- [x] ~~Categorías: lista plana, sin jerarquía padre/subcategoría (la original sí soporta subcategorías).~~ Decidido 2026-09-30: no es útil por ahora — pasa a "mejoras a futuro" (sección B).
-- [x] ~~Transacciones: un solo campo "Nota" corto. No se replicó "Descripción" con foto adjunta, ni la nota larga (`memo`) editable desde el formulario.~~ Decidido 2026-09-30: el `memo` como "Descripción" sí es útil — pasa a construir (sección E). La foto adjunta queda aparte, ver G-5.
-- [x] ~~Tab Transacciones: solo existe la sub-vista "Diario". No se construyeron Calendario/Mensual/Resumen/Descripción.~~ Decidido 2026-09-30: descartado, no es útil — sección C.
-- [x] ~~Sin presupuestos (Budgets) ni Tags.~~ Decidido 2026-09-30: descartado — sección C.
-- [x] ~~Sin fotos adjuntas a transacciones (la data real solo tenía 1 foto en total).~~ Decidido 2026-09-30: pasa a "mejoras a futuro" (sección B) — la infraestructura ya existe (mismo `PhotoPicker`/`useImageUpload` de Split Ledger), barata de agregar si cambia el uso real, pero sin señal de que haga falta hoy.
-- [x] ~~Estadísticas: solo 2 sub-tabs (Ingreso/Gastos) — la original también tiene "Presupuesto" y "Nota" ahí.~~ Decidido 2026-09-30: descartado — sección C. El caso de uso real ("¿cuántas veces fui a X?") lo cubre el Buscador de gastos (E), no hace falta una sub-vista de Estadísticas para eso.
+- [x] ~~Ícono de arrastrar no debería verse con un solo ítem en la lista~~
+<details><summary>Ver detalle</summary>
+
+~~Drag-and-drop de reordenar con un solo ítem no debería mostrar el ícono de arrastrar (categorías, cuentas, grupos, "otras monedas") — no hay con qué reordenar si hay uno solo.~~ Resuelto 2026-10-02: eran 6 listas arrastrables en total (categorías de Money Manager, categorías de grupo en Split Ledger, "tus grupos", grupos de cuentas, cuentas dentro de un grupo, "otras monedas") — todas reciben ahora un `draggable={lista.length > 1}` que, cuando es `false`, oculta el ícono (deja un espacio vacío del mismo ancho para no desalinear la fila) y además pasa `disabled` a `useSortable` para que tampoco funcione el arrastre por teclado.
+
+</details>
+
+- [x] ~~Contorno de foco de ConfirmInline no respeta esquinas achatadas~~
+<details><summary>Ver detalle</summary>
+
+~~El contorno de foco naranja del `ConfirmInline` no respeta las esquinas achatadas cuando está pegado a un input arriba (visto en Configuración → Split Ledger → "Nombre visible"). Puramente visual.~~ Resuelto 2026-09-30: los botones ya no llevan anillo de foco, y los inputs pasaron de `outline` a `box-shadow` (ver `DESIGN_NOTES.md`), que sí respeta bordes asimétricos.
+
+</details>
+
+- [ ] **Footer tapado por el teclado en formularios largos (iOS Safari)**
+<details open><summary>Ver detalle</summary>
+
+En formularios largos (ej. "Editar grupo" con muchos integrantes), si tocás un campo bien al fondo de la página y aparece el teclado, el `Footer` fijo (Guardar/Cancelar) a veces no sube arriba del teclado — se queda atrás, tapado, hasta que cerrás el teclado o scrolleás. Revisado 2026-10-20: no es un bug de nuestro CSS (comparado línea por línea `GroupForm` contra `ExpenseForm`, mismo `Footer` compartido, sin transform/overflow/wrapper distinto entre los dos) — es un comportamiento conocido de Safari/iOS con `position:fixed` + teclado, que no siempre re-ancla bien cuando la página tuvo que hacer scroll grande para traer el campo a la vista. El arreglo real (escuchar `visualViewport` con JS y reposicionar a mano) agrega complejidad real para un caso límite cosmético — se decidió no construirlo.
+
+</details>
+
+- [x] ~~"Pendiente TC" no se sumaba solo en dos gastos nuevos~~
+<details><summary>Ver detalle</summary>
+
+~~"Pendiente TC" (automatización custom de Nicolas, `customUserConfig.js`/`splitLedgerSync.js`): dos gastos nuevos en Split Ledger no se sumaron solos a la transacción manual "Pendiente TC", sin ningún error visible.~~ Resuelto 2026-10-20. Dos bugs reales encontrados en el camino: (1) `applyPendienteTcAutoSum` buscaba la cuenta "Pendiente" por NOMBRE en todas las cuentas del usuario — con una cuenta "Pendiente" distinta por cada grupo de cuentas (4 en total), el `.find()` podía agarrar cualquiera, no la del vínculo real, y la búsqueda de la transacción "Pendiente TC" fallaba en silencio (a propósito, no es un error). Arreglado resolviendo la cuenta de "lo prestado" por gasto (`choice.loan_account_id`), igual que ya hace `computeDesiredTransactions`, nunca por nombre. (2) El cálculo de `paidAmt - shareAmt` (en ese mismo archivo, usado también para el gasto/transferencia normal que se sincroniza a Money Manager) podía ensuciarse con ruido de punto flotante (ej. `15.520000000000001`) aunque las dos entradas ya fueran centavos limpios — se agregó `roundCents()`, una sola vez justo al calcularlo. De paso: el centavo extra de `fairSplit` en un empate (ej. partir algo impar a la mitad) siempre lo ganaba quien apareciera primero en la lista de integrantes — ahora varía según el día del gasto (`seed` en `fairSplit`/`computeShares`, `helpers.jsx`), no es siempre la misma persona.
+
+</details>
+
+<details><summary><strong>G. Simplificaciones MVP vs. la app original (Realbyte Money Manager): ya revisadas con Nicolas</strong></summary>
+
+- [x] ~~Cuentas: tratamiento especial de tarjetas de crédito~~
+<details><summary>Ver detalle</summary>
+
+~~Cuentas: sin tratamiento especial de tarjetas de crédito (la original separa "Saldo a pagar" / "Saldo restante"); acá todas las cuentas se muestran igual.~~ Resuelto 2026-09-30: split pasado/actual, cuenta de pago, ciclo de facturación y pago automático con catch-up.
+
+</details>
+
+- [x] ~~Categorías: sin jerarquía padre/subcategoría~~
+<details><summary>Ver detalle</summary>
+
+~~Categorías: lista plana, sin jerarquía padre/subcategoría (la original sí soporta subcategorías).~~ Decidido 2026-09-30: no es útil por ahora — pasa a "mejoras a futuro" (sección B).
+
+</details>
+
+- [x] ~~Transacciones: nota larga y foto adjunta~~
+<details><summary>Ver detalle</summary>
+
+~~Transacciones: un solo campo "Nota" corto. No se replicó "Descripción" con foto adjunta, ni la nota larga (`memo`) editable desde el formulario.~~ Decidido 2026-09-30: el `memo` como "Descripción" sí es útil — pasa a construir (sección E). La foto adjunta queda aparte, ver G-5.
+
+</details>
+
+- [x] ~~Tab Transacciones: solo sub-vista "Diario"~~
+<details><summary>Ver detalle</summary>
+
+~~Tab Transacciones: solo existe la sub-vista "Diario". No se construyeron Calendario/Mensual/Resumen/Descripción.~~ Decidido 2026-09-30: descartado, no es útil — sección C.
+
+</details>
+
+- [x] ~~Sin presupuestos (Budgets) ni Tags~~
+<details><summary>Ver detalle</summary>
+
+~~Sin presupuestos (Budgets) ni Tags.~~ Decidido 2026-09-30: descartado — sección C.
+
+</details>
+
+- [x] ~~Sin fotos adjuntas a transacciones~~
+<details><summary>Ver detalle</summary>
+
+~~Sin fotos adjuntas a transacciones (la data real solo tenía 1 foto en total).~~ Decidido 2026-09-30: pasa a "mejoras a futuro" (sección B) — la infraestructura ya existe (mismo `PhotoPicker`/`useImageUpload` de Split Ledger), barata de agregar si cambia el uso real, pero sin señal de que haga falta hoy.
+
+</details>
+
+- [x] ~~Estadísticas: solo 2 sub-tabs (sin Presupuesto/Nota)~~
+<details><summary>Ver detalle</summary>
+
+~~Estadísticas: solo 2 sub-tabs (Ingreso/Gastos) — la original también tiene "Presupuesto" y "Nota" ahí.~~ Decidido 2026-09-30: descartado — sección C. El caso de uso real ("¿cuántas veces fui a X?") lo cubre el Buscador de gastos (E), no hace falta una sub-vista de Estadísticas para eso.
+
+</details>
+
+</details>

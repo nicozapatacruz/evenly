@@ -6,6 +6,23 @@ import { money, parseAmountInput, todayInputValue } from "../lib/helpers.jsx";
 
 const MONTH_LABEL = (d) => d.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
 
+// Texto del label de una fila sin caja (ToggleField/PickerField rowLabel/
+// DateRow/TextRow/CurrencyConversionField) -- tope de 2 líneas con "…" en
+// la 3ra. Sin esto, un label largo (ej. "Cuenta por defecto en gastos
+// propios/ajenos", EvenGroupCapitalLink) le dejaba casi nada de ancho al
+// valor de al lado, que terminaba partiéndose solo en 2 líneas sin avisar
+// (visto en vivo en un iPhone angosto) -- el contenedor de afuera limita el
+// label a 50% del ancho de la fila (ver cada uso), esto es lo que permite
+// que, llegado ese tope, el texto pase a una 2da línea en vez de desbordar.
+const rowLabelTextStyle = {
+  display: "-webkit-box",
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: "vertical",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "normal",
+};
+
 // Logo de EvenGroup (el nudo de cintas entrelazadas) — se usa como
 // marca/badge para señalar "esto está vinculado a EvenCapital" (lista de
 // grupos, selector de grupo al cargar un gasto). Colores propios del logo,
@@ -40,8 +57,15 @@ export function ToggleField({ label, description, checked, onChange, disabled, e
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 40, borderBottom: "1px solid #ECE3D3", fontFamily: "system-ui, sans-serif" }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355" }}>
-          {/* La opacidad de "deshabilitado" va en un span propio, SOLO
+        <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, color: "#6B6355" }}>
+          {/* Sin el tope de 50%/2 líneas que sí llevan PickerField/DateRow/
+              TextRow: ahí protege el espacio del valor de al lado, pero acá
+              el switch siempre mide lo mismo (no compite por espacio), así
+              que el label simplemente envuelve libre si hace falta -- de
+              paso evita un bug real de Safari/iOS encontrado en vivo
+              (texto duplicado) al combinar `-webkit-line-clamp` con el
+              switch animado de al lado.
+              La opacidad de "deshabilitado" va en un span propio, SOLO
               alrededor del texto -- puesta en toda la fila (como antes),
               también apagaba el ícono de info Y, lo que es peor, el globo
               de texto que abre al tocarlo (la opacidad de un contenedor
@@ -758,10 +782,16 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", t
       // deja de usar el mecanismo nativo para no tapar a sus hijos.
       style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 40, padding: "0 2px", border: "none", borderBottom: "1px solid #ECE3D3", background: "transparent", textAlign: "left", fontFamily: "system-ui, sans-serif", cursor: disabled ? "not-allowed" : "pointer" }}
     >
-      <span style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355" }}>
-        {/* La opacidad de "deshabilitado" va en un span propio, solo
+      <span style={{ ...rowLabelTextStyle, maxWidth: "50%", flexShrink: 0, fontSize: 13, color: "#6B6355" }}>
+        {/* El ⓘ va ADENTRO del mismo bloque clampeado (no como hermano
+            flex afuera) -- así fluye con el texto como una palabra más y
+            cae pegado a donde sea que termine la última línea visible, en
+            vez de quedar anclado al ancho de la línea más larga (que es lo
+            que pasaba cuando era un hermano flex: su posición dependía del
+            ancho de la CAJA, no de dónde termina el texto de verdad).
+            La opacidad de "deshabilitado" va en un span propio, solo
             alrededor del texto -- mismo motivo que ya se resolvió en
-            ToggleField: puesta en todo el botón (como era antes), también
+            ToggleField: puesta en todo esto (como era antes), también
             apagaba el ⓘ y su globo de texto, justo cuando `blockedReason`
             existe PARA explicar por qué está apagado. */}
         <span style={{ opacity: disabled ? 0.6 : 1 }}>
@@ -771,7 +801,15 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", t
         {/* Si está bloqueado, no tiene sentido TAMBIÉN explicar qué hace el
             campo en general -- lo único que importa ahí es por qué no se
             puede tocar ahora (el 🚫, del otro lado, junto al valor). */}
-        {info && !(disabled && blockedReason) && <InfoTooltip text={info} />}
+        {/* marginLeft a mano (no un `gap` del contenedor, que ya no es flex
+            ahora que esto vive dentro del bloque clampeado): sin esto el ⓘ
+            queda pegado contra el texto/asterisco, sin aire. verticalAlign
+            también a mano -- un elemento inline dentro de `-webkit-box`
+            alinea por defecto a la línea base del texto (como una letra
+            más), y un ícono ahí se ve corrido hacia arriba; "middle" lo
+            centra contra la línea como ya hacía el `alignItems:"center"`
+            de flexbox antes de este cambio. */}
+        {info && !(disabled && blockedReason) && <span style={{ marginLeft: 4, verticalAlign: "middle" }}><InfoTooltip text={info} /></span>}
       </span>
       <span style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, flex: 1, fontSize: 13.5, minWidth: 0 }}>
         {/* `blockedReason` va del lado del VALOR (no del label, como `info`)
@@ -984,7 +1022,7 @@ export function DateRow({ label, value, onChange, disabled = false, placeholder 
   return (
     <div style={{ position: "relative" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 40, borderBottom: "1px solid #ECE3D3", fontFamily: "system-ui, sans-serif", opacity: disabled ? 0.6 : 1 }}>
-        <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355" }}>{label}</span>
+        <span style={{ ...rowLabelTextStyle, maxWidth: "50%", flexShrink: 0, fontSize: 13, color: "#6B6355" }}>{label}</span>
         <span style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, textAlign: "right", fontSize: 13.5, color: value ? "#2B2620" : "#A3968B" }}>
           {value ? formatDateRow(value) : placeholder}
           {lockedValue && <Lock size={11} color="#8A7F72" style={{ flexShrink: 0 }} />}
@@ -1088,7 +1126,14 @@ export function TextRow({ label, value, onChange, onFocus, onBlur, placeholder, 
         ? { display: "flex", flexDirection: "column", gap: 6, minHeight: 40, borderBottom: "1px solid #ECE3D3", padding: "13px 0 15px" }
         : { display: "flex", alignItems: "center", gap: 12, minHeight: 40, borderBottom: "1px solid #ECE3D3" }}
       >
-        <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355", fontFamily: "system-ui, sans-serif" }}>{label}</span>
+        {/* En modo multiline, label y textarea ya quedan apilados (columna,
+            no fila) -- el label tiene toda la fila para él solo, así que
+            acá SÍ conviene `nowrap` liso (no el tope de 50%/2 líneas de la
+            variante de una sola fila, que acá no aplica y solo lo partiría
+            sin necesidad). */}
+        <span style={multiline
+          ? { flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355", fontFamily: "system-ui, sans-serif" }
+          : { ...rowLabelTextStyle, maxWidth: "50%", flexShrink: 0, fontSize: 13, color: "#6B6355", fontFamily: "system-ui, sans-serif" }}>{label}</span>
         {multiline ? (
           <textarea
             ref={taRef}
@@ -1792,7 +1837,7 @@ export function CurrencyConversionField({ amount, onChangeAmount, currency, acco
         onClick={openEdit}
         style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 40, padding: 0, border: "none", borderBottom: "1px solid #ECE3D3", background: "transparent", textAlign: "left", fontFamily: "system-ui, sans-serif", cursor: "pointer" }}
       >
-        <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355" }}>
+        <span style={{ ...rowLabelTextStyle, maxWidth: "50%", flexShrink: 0, fontSize: 13, color: "#6B6355" }}>
           Importe{required && <span style={{ color: "#B0473A" }}> *</span>}
         </span>
         <span style={{ flex: 1, textAlign: "right", fontSize: 13.5, color: amount ? "#2B2420" : "#A3968B" }}>

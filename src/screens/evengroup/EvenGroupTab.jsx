@@ -848,7 +848,7 @@ function GroupForm({ group = null, session, evenCapital, onCancel, onCreate, onS
                 Field con label+input apilados), que acá partía "Personas" y
                 el "*" en 2 líneas en vez de una. */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            <p style={{ ...styles.label, display: "block", margin: 0 }}>Personas <span style={{ color: "#B0473A" }}>*</span></p>
+            <p style={{ ...styles.label, display: "block", margin: 0 }}>Personas<span style={{ color: "#B0473A" }}>*</span></p>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {members.map((m) => (
                 <div key={m.id} style={{ display: "flex", flexDirection: "column", gap: 0 }}>
@@ -961,7 +961,7 @@ function GroupForm({ group = null, session, evenCapital, onCancel, onCreate, onS
                 y display:"block" para que "Integrantes" y el "*" no se
                 partan en 2 líneas (styles.label trae flexDirection:column). */}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <p style={{ ...styles.label, display: "block", margin: 0 }}>Integrantes <span style={{ color: "#B0473A" }}>*</span></p>
+              <p style={{ ...styles.label, display: "block", margin: 0 }}>Integrantes<span style={{ color: "#B0473A" }}>*</span></p>
 
               {/* Tú — fijo, no se puede quitar */}
               <div style={{ ...styles.shareRow, background: "#F3EFE5", borderColor: "#DDD2BE" }}>
@@ -1188,34 +1188,32 @@ function EvenGroupCapitalLink({
       )}
       {linked && !confirmingUnlink && (
         <>
-          <Field
-            label="Cuenta por defecto en gastos propios"
+          <PickerField
+            rowLabel="Cuenta por defecto en gastos propios"
             info={"Cuenta que se usa para tu parte cuando vos creás un gasto en el grupo.\nEj: creás un gasto de €100 del que €50 son tuyos y €50 son de otra persona. Los €50 tuyos salen de esta cuenta."}
             required
-            error={touched.mmOwnAccountId && !ownAccountId ? "Este campo es obligatorio." : ""}
-          >
-            <PickerField
-              value={ownAccountId}
-              onChange={onOwnAccountChange}
-              onBlur={() => touch("mmOwnAccountId")}
-              groups={accountGroups}
-              placeholder="Elegí una cuenta"
-            />
-          </Field>
-          <Field
-            label="Cuenta por defecto en gastos ajenos"
+            value={ownAccountId}
+            onChange={onOwnAccountChange}
+            onBlur={() => touch("mmOwnAccountId")}
+            groups={accountGroups}
+            placeholder="Elegí una cuenta"
+          />
+          {touched.mmOwnAccountId && !ownAccountId && (
+            <p style={{ margin: "-8px 0 0", fontSize: 12, fontFamily: "system-ui, sans-serif", color: "#B0473A" }}>Este campo es obligatorio.</p>
+          )}
+          <PickerField
+            rowLabel="Cuenta por defecto en gastos ajenos"
             info={"Cuenta que se usa para tu parte cuando otro miembro crea un gasto en el grupo.\nEj: alguien crea un gasto de €100 del que €50 son tuyos. Esos €50 salen de esta cuenta, pero entran de vuelta al mismo tiempo por una transferencia automática (desde 'lo que te prestan' si la configuraste en Opciones avanzadas, o desde esta misma cuenta si no) -- así que en neto no perdés nada hasta que de verdad le debas esa plata a alguien."}
             required
-            error={touched.mmOtherAccountId && !otherAccountId ? "Este campo es obligatorio." : ""}
-          >
-            <PickerField
-              value={otherAccountId}
-              onChange={onOtherAccountChange}
-              onBlur={() => touch("mmOtherAccountId")}
-              groups={accountGroups}
-              placeholder="Elegí una cuenta"
-            />
-          </Field>
+            value={otherAccountId}
+            onChange={onOtherAccountChange}
+            onBlur={() => touch("mmOtherAccountId")}
+            groups={accountGroups}
+            placeholder="Elegí una cuenta"
+          />
+          {touched.mmOtherAccountId && !otherAccountId && (
+            <p style={{ margin: "-8px 0 0", fontSize: 12, fontFamily: "system-ui, sans-serif", color: "#B0473A" }}>Este campo es obligatorio.</p>
+          )}
 
           {/* Opciones avanzadas — casi nadie las necesita (solo quien presta
               o le prestan plata del grupo y quiere separarla de sus gastos
@@ -1234,43 +1232,34 @@ function EvenGroupCapitalLink({
 
             {advancedOpen && (
               <div ref={advancedRef} style={{ border: "1px solid #DDD2BE", borderTop: "none", borderRadius: "0 0 10px 10px", padding: "12px", display: "flex", flexDirection: "column", gap: 10, background: "#fff" }}>
-                <Field
-                  label="Cuenta de lo que prestás"
+                <PickerField
+                  rowLabel="Cuenta de lo que prestás"
                   info={"Cuenta aparte para cuando VOS pagás de más (prestás) en el grupo, separada de 'propios' (esa sigue siendo tu parte del gasto).\nEj: gasto de €100 (tu parte €50), vos pagás los €100. Los otros €50 prestados salen de esta cuenta en vez de 'propios'.\nSi lo dejás vacío, el préstamo sigue mezclado con 'propios', como hasta ahora."}
-                >
-                  <PickerField
-                    value={lendAccountId}
-                    onChange={onLendAccountChange}
-                    onClear={() => onLendAccountChange("")}
-                    groups={accountGroups}
-                    placeholder="Sin cuenta aparte"
-                  />
-                </Field>
-                <Field
-                  label="Cuenta de lo que te prestan"
+                  value={lendAccountId}
+                  onChange={onLendAccountChange}
+                  onClear={() => onLendAccountChange("")}
+                  groups={accountGroups}
+                  placeholder="Sin cuenta aparte"
+                />
+                <PickerField
+                  rowLabel="Cuenta de lo que te prestan"
                   info={"Cuenta aparte para cuando OTRO paga tu parte en el grupo, separada de 'ajenos' (esa sigue siendo tu parte del gasto).\nEj: gasto de €100 (tu parte €50), paga otra persona. Esos €50 que te prestaron entran acá al mismo tiempo que se registra tu parte en 'ajenos'.\nSi lo dejás vacío, el préstamo sigue mezclado con 'ajenos', como hasta ahora."}
-                >
-                  <PickerField
-                    value={loanAccountId}
-                    onChange={onLoanAccountChange}
-                    onClear={() => onLoanAccountChange("")}
-                    groups={accountGroups}
-                    placeholder="Sin cuenta aparte"
-                  />
-                </Field>
+                  value={loanAccountId}
+                  onChange={onLoanAccountChange}
+                  onClear={() => onLoanAccountChange("")}
+                  groups={accountGroups}
+                  placeholder="Sin cuenta aparte"
+                />
                 {lendAccountIsCreditCard && (
-                  <Field
-                    label="Cuenta de origen para compensar lo prestado"
+                  <PickerField
+                    rowLabel="Cuenta de origen para compensar lo prestado"
                     info={"Si 'lo que prestás' es una tarjeta, pagarla completa (tu parte + lo prestado) hace que tu cuenta líquida se vea baja hasta que el grupo te devuelva esa plata -- es real, no un error.\nSi igual querés que se vea 'limpia' de una, elegí acá una cuenta donde ver temporalmente lo prestado: al cerrar cada ciclo de la tarjeta, se transfiere sola desde acá hacia tu cuenta de gastos ajenos.\nSi lo dejás vacío, no se genera ninguna transferencia -- tu cuenta líquida simplemente se ve baja hasta que te paguen."}
-                  >
-                    <PickerField
-                      value={lendOffsetAccountId}
-                      onChange={onLendOffsetAccountChange}
-                      onClear={() => onLendOffsetAccountChange("")}
-                      groups={accountGroups}
-                      placeholder="Sin compensación automática"
-                    />
-                  </Field>
+                    value={lendOffsetAccountId}
+                    onChange={onLendOffsetAccountChange}
+                    onClear={() => onLendOffsetAccountChange("")}
+                    groups={accountGroups}
+                    placeholder="Sin compensación automática"
+                  />
                 )}
               </div>
             )}
@@ -2160,8 +2149,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
         {mmInvolved && (
           <Field error={touched.mmAccountId && !mmAccountId ? "Este campo es obligatorio." : ""}>
             <PickerField
-              rowLabel={<>Cuenta <EvenGroupIcon size={13} style={{ marginLeft: 2 }} /></>}
-              required
+              rowLabel={<>Cuenta<span style={{ color: "#B0473A" }}>*</span><EvenGroupIcon size={13} style={{ marginLeft: 0, verticalAlign: "middle", position: "relative", top: "-1px" }} /></>}
               value={mmAccountId}
               onChange={setMmAccountId}
               onBlur={() => touch("mmAccountId")}
@@ -2180,7 +2168,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
 
         {mmInvolved && (
           <PickerField
-            rowLabel={<>Cuenta de lo prestado <EvenGroupIcon size={13} style={{ marginLeft: 2 }} /></>}
+            rowLabel={<>Cuenta de lo prestado <EvenGroupIcon size={13} style={{ marginLeft: 0, verticalAlign: "middle", position: "relative", top: "-1px" }} /></>}
             info="Para este gasto puntual: de dónde sale (o adónde entra) lo que prestás, si tu grupo tiene configurada una cuenta para eso. Dejalo vacío para usar 'Cuenta' de arriba, como siempre."
             value={mmLoanAccountId}
             onChange={setMmLoanAccountId}
@@ -2200,7 +2188,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
         {showMmCategory && (
           <Field>
             <PickerField
-              rowLabel={<>Categoría personal <EvenGroupIcon size={13} style={{ marginLeft: 2 }} /></>}
+              rowLabel={<>Categoría personal <EvenGroupIcon size={13} style={{ marginLeft: 0, verticalAlign: "middle", position: "relative", top: "-1px" }} /></>}
               value={mmCategoryId}
               onChange={setMmCategoryId}
               onClear={() => setMmCategoryId("")}
@@ -2515,7 +2503,7 @@ function NewExpense({ group, groups, defaultGroupId, expenseId, onCancel, onSave
   const groupPicker = (
     <Field>
       <PickerField
-        rowLabel={isGroupLinked ? <>Grupo <EvenGroupIcon size={13} style={{ marginLeft: 2 }} /></> : "Grupo"}
+        rowLabel={isGroupLinked ? <>Grupo <EvenGroupIcon size={13} style={{ marginLeft: 0, verticalAlign: "middle", position: "relative", top: "-1px" }} /></> : "Grupo"}
         value={pickedGroupId}
         onChange={setPickedGroupId}
         placeholder="Selecciona un grupo…"
@@ -2802,7 +2790,7 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
             derecha como cualquier otra fila. */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 40, borderBottom: "1px solid #ECE3D3", fontFamily: "system-ui, sans-serif" }}>
           <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355" }}>
-            Importe <span style={{ color: "#B0473A" }}>*</span>
+            Importe<span style={{ color: "#B0473A" }}>*</span>
           </span>
           {/* minWidth:0 ACÁ (no solo adentro de CalculatorAmountInput): es
               un flex:1 dentro de la fila de "Importe" -- sin esto, un flex
@@ -2843,8 +2831,7 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
         {mmInvolved && (
           <Field error={touched.mmAccountId && !mmAccountId ? "Este campo es obligatorio." : ""}>
             <PickerField
-              rowLabel={<>Cuenta <EvenGroupIcon size={13} style={{ marginLeft: 2 }} /></>}
-              required
+              rowLabel={<>Cuenta<span style={{ color: "#B0473A" }}>*</span><EvenGroupIcon size={13} style={{ marginLeft: 0, verticalAlign: "middle", position: "relative", top: "-1px" }} /></>}
               value={mmAccountId}
               onChange={setMmAccountId}
               onBlur={() => touch("mmAccountId")}
@@ -2863,7 +2850,7 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
 
         {mmInvolved && (
           <PickerField
-            rowLabel={<>Cuenta de lo prestado <EvenGroupIcon size={13} style={{ marginLeft: 2 }} /></>}
+            rowLabel={<>Cuenta de lo prestado <EvenGroupIcon size={13} style={{ marginLeft: 0, verticalAlign: "middle", position: "relative", top: "-1px" }} /></>}
             info="Para este pago puntual: de dónde sale (o adónde entra) lo que se salda, si tu grupo tiene configurada una cuenta para eso. Dejalo vacío para usar 'Cuenta' de arriba, como siempre."
             value={mmLoanAccountId}
             onChange={setMmLoanAccountId}
@@ -2944,7 +2931,7 @@ function InviteScreen({ group, session, groupInvites = [], onBack, onSend, onCan
             envueltos juntos (gap:6) con margin:0 explícito en el <p> (si no,
             su margen por defecto del navegador se suma al gap). */}
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <p style={{ ...styles.label, display: "block", margin: 0 }}>¿A qué miembro corresponde? <span style={{ color: "#B0473A" }}>*</span></p>
+        <p style={{ ...styles.label, display: "block", margin: 0 }}>¿A qué miembro corresponde?<span style={{ color: "#B0473A" }}>*</span></p>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {invitableMembers.map(m => {
             const pending = groupInvites.find(i => i.memberId === m.id);

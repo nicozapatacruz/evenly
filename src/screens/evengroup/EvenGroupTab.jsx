@@ -2838,7 +2838,7 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
         {/* Antes era lo primero que se leía, con más peso del que amerita
             (es una aclaración, no una instrucción) -- abajo del todo, como
             Hint, queda disponible sin competir por la atención. */}
-        <Hint>Esto no mueve dinero. Solo anota que el pago ya se hizo fuera de la app, para saldar el balance.</Hint>
+        <Hint style={{ fontStyle: "italic" }}>*Esto no mueve dinero. Solo anota que el pago ya se hizo fuera de la app, para saldar el balance.</Hint>
       </div>
       <FormFooter
         onCancel={onCancel}

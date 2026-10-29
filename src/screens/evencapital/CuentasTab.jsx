@@ -7,7 +7,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { offlineSupabase as supabase } from "../../lib/offlineSupabase.js";
 import { db } from "../../lib/localDb.js";
 import { styles } from "../../lib/styles.js";
-import { RootHeader, TopBar, ConfirmInline, Footer, Field, EmptyState } from "../../components/Shared.jsx";
+import { RootHeader, TopBar, ConfirmInline, FormFooter, EmptyState } from "../../components/Shared.jsx";
 import { money, useScrollToTopOnChange } from "../../lib/helpers.jsx";
 import { accountBalance, computeCreditCardBalance, disableAutoPayForDeletedAccounts, useCreditCardActivity } from "../../lib/evenCapitalData.js";
 import { CUSTOM_USER_CONFIG } from "../../lib/customUserConfig.js";
@@ -586,9 +586,23 @@ export function ManageAccounts({ session, group = null, groups, accounts, accoun
         />
       )}
       <div style={styles.form}>
-        <Field label="Nombre" required error={nameTouched && !name.trim() ? "Este campo es obligatorio." : ""}>
-          <input style={styles.input} value={name} disabled={isSystemGroup} onChange={(e) => setName(e.target.value)} onBlur={() => setNameTouched(true)} placeholder={group ? undefined : "Nombre (ej: Santander, Efectivo)"} />
-        </Field>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 40, borderBottom: "1px solid #ECE3D3", fontFamily: "system-ui, sans-serif" }}>
+          <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355" }}>
+            Nombre<span style={{ color: "#B0473A" }}>*</span>
+          </span>
+          <input
+            className="row-input"
+            style={{ flex: 1, minWidth: 0, textAlign: "right", fontSize: 13.5, fontFamily: "system-ui, sans-serif", border: "none", background: "transparent", padding: 0, color: "#2B2620", opacity: isSystemGroup ? 0.6 : 1 }}
+            value={name}
+            disabled={isSystemGroup}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={() => setNameTouched(true)}
+            placeholder={group ? undefined : "Nombre (ej: Santander, Efectivo)"}
+          />
+        </div>
+        {nameTouched && !name.trim() && (
+          <p style={{ margin: "-8px 0 0", fontSize: 12, fontFamily: "system-ui, sans-serif", color: "#B0473A" }}>Este campo es obligatorio.</p>
+        )}
         {isSystemGroup && (
           <p style={{ ...styles.muted, padding: 0, marginTop: -8 }}>
             Se crea solo al vincular un grupo de EvenGroup. Se desvincula desde ahí, no se edita acá.
@@ -616,12 +630,13 @@ export function ManageAccounts({ session, group = null, groups, accounts, accoun
           </>
         )}
       </div>
-      <Footer>
-        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onBack}>Cancelar</button>
-        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }} onClick={handleSave} disabled={saving}>
-          {saving ? (group ? "Guardando…" : "Creando…") : (group ? "Guardar" : "Crear")}
-        </button>
-      </Footer>
+      <FormFooter
+        onCancel={onBack}
+        onConfirm={handleSave}
+        confirmLabel={saving ? (group ? "Guardando…" : "Creando…") : (group ? "Guardar" : "Crear")}
+        confirmDisabled={saving}
+        confirmDim={!canSave}
+      />
     </div>
   );
 }

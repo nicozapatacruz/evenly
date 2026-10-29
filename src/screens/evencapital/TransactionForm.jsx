@@ -1086,8 +1086,14 @@ function SortableCategoryManageRow({ id, name, icon, onChangeName, onBlur, onCha
           4px hasta lo siguiente, pero IconInput/input/botón sí son cajas
           separadas que necesitan su propio espacio visible. */}
       <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
-        <IconInput value={icon} onChange={onChangeIcon} />
-        <input style={{ ...styles.input, flex: 1, padding: "7px 10px", fontSize: 14 }} value={name} onChange={(e) => onChangeName(e.target.value)} onBlur={onBlur} />
+        <IconInput value={icon} onChange={onChangeIcon} small style={{ border: "1px solid #DDD2BE", background: "transparent" }} />
+        <input
+          className="row-input"
+          style={{ flex: 1, minWidth: 0, fontSize: 14, fontFamily: "system-ui, sans-serif", border: "none", borderBottom: "1px solid #DDD2BE", background: "transparent", padding: "8px 0", color: "#2B2420" }}
+          value={name}
+          onChange={(e) => onChangeName(e.target.value)}
+          onBlur={onBlur}
+        />
         <button style={styles.iconBtnGhost} onClick={onRemove} aria-label="Borrar categoría">
           <X size={16} />
         </button>

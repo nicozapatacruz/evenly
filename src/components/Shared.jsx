@@ -422,7 +422,7 @@ export function TodayButton({ viewMonth, setViewMonth }) {
 // `<select>` nativo (funcionaba pero ocupaba más lista que grilla) — la
 // grilla ahorra espacio y se ve todo de un vistazo, sin depender de ningún
 // teclado del sistema.
-export function IconInput({ value, onChange, small = false }) {
+export function IconInput({ value, onChange, small = false, style }) {
   const [open, setOpen] = useState(false);
   const [custom, setCustom] = useState("");
 
@@ -450,11 +450,12 @@ export function IconInput({ value, onChange, small = false }) {
           // moneda `compact small` de PickerField) -- para vivir adentro de
           // una fila sin caja (ej. Nombre de una cuenta), no en un campo
           // boxeado de siempre.
-          ? { width: 32, height: 32, borderRadius: 10, border: "none", background: "#F3ECE0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0, cursor: "pointer", padding: 0 }
+          ? { width: 32, height: 32, borderRadius: 10, border: "none", background: "#F3ECE0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0, cursor: "pointer", padding: 0, ...style }
           : {
               ...styles.input, display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 20, flexShrink: 0, cursor: "pointer", padding: 4, width: 44,
               appearance: "none", WebkitAppearance: "none", textAlign: "center",
+              ...style,
             }}
         aria-label="Elegir ícono"
       >

@@ -54,7 +54,7 @@ async function loadLinkContext(link, userId) {
   // son null, ni se exige que existan.
   const { data: accounts } = await supabase
     .from("mm_accounts")
-    .select("id, deleted, is_credit_card, statement_day")
+    .select("id, deleted, is_credit_card, statement_day, payment_account_id")
     .in("id", [link.default_own_account_id, link.default_other_account_id, link.pseudo_account_id, link.lend_account_id, link.loan_account_id, link.lend_offset_account_id].filter(Boolean));
   const byId = new Map((accounts || []).map((a) => [a.id, a]));
   const own = byId.get(link.default_own_account_id);
@@ -260,9 +260,15 @@ function nextCycleStart(statementDay, cycleStart) {
 // Compensación por ciclo de tarjeta (ver TAREAS_ACTUALES.md, sección 1): si
 // "lo que prestás" es una tarjeta de crédito y hay una "cuenta de origen"
 // elegida, cada ciclo YA CERRADO de esa tarjeta genera UNA transferencia
-// desde esa cuenta de origen hacia "ajenos", por el total prestado en ese
-// ciclo -- así Saldo no se ve rebajado por lo que en realidad le toca
-// devolver al grupo, sin ningún paso manual ni esperar a pagar la tarjeta.
+// desde esa cuenta de origen hacia la cuenta de PAGO de la tarjeta, por el
+// total prestado en ese ciclo -- así esa cuenta (la que de verdad se ve
+// rebajada al pagar la tarjeta completa) no queda baja por lo que en
+// realidad le toca devolver al grupo, sin ningún paso manual ni esperar a
+// pagar la tarjeta.
+// Antes esto iba hacia `default_other_account_id` ("ajenos") en vez de hacia
+// `payment_account_id` -- no tiene relación con qué cuenta de verdad paga la
+// tarjeta, solo "funcionaba" si esas dos cuentas coincidían de casualidad.
+// Bug encontrado por Nicolas, 2026-10-29 (ver PENDIENTES.md).
 //
 // Se calcula por PERÍODO (no por transacción individual), para que sea
 // imposible duplicar: la clave de cada fila es el propio ciclo (fecha de
@@ -270,7 +276,7 @@ function nextCycleStart(statementDay, cycleStart) {
 // siempre la misma fila -- reconcileLink ya sabe actualizar en vez de
 // insertar si el total de ese ciclo cambia (ej. se borra un gasto viejo).
 function computeLendOffsetDesired(link, ctx, desired) {
-  if (!link.lend_offset_account_id || !ctx.lendAccountRow?.is_credit_card || !ctx.lendAccountRow?.statement_day) return [];
+  if (!link.lend_offset_account_id || !ctx.lendAccountRow?.is_credit_card || !ctx.lendAccountRow?.statement_day || !ctx.lendAccountRow?.payment_account_id) return [];
   const statementDay = ctx.lendAccountRow.statement_day;
   const currentCycleStart = creditCardCycleStart(statementDay, new Date());
 
@@ -297,7 +303,7 @@ function computeLendOffsetDesired(link, ctx, desired) {
     offsetDesired.push({
       key: `lend_offset:${cycleStartKey}:${currency}:lend_offset`,
       source_kind: "lend_offset", source_id: cycleStartUuid(cycleStartKey, currency), role: "lend_offset", type: "transfer",
-      account_id: link.lend_offset_account_id, to_account_id: link.default_other_account_id,
+      account_id: link.lend_offset_account_id, to_account_id: ctx.lendAccountRow.payment_account_id,
       amount: total, currency, category_id: null,
       title: "Compensación de lo prestado", memo: `Ciclo ${cycleStartKey}`, date: closeDate.getTime(),
     });

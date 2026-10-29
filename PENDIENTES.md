@@ -27,6 +27,18 @@ Lista viva de pendientes del proyecto. Reglas:
 
 ## A. Mejoras pendientes
 
+- [ ] **Cambiar el registro de toda la app de voseo a tú**
+<details open><summary>Ver detalle</summary>
+
+Hoy toda la UI/chat usa voseo ("Elegí", "Guardá", "Creá", "podés", "vos"). Nicolas pidió pasar a un registro más neutro/formal (tú) — no somos argentinos. Encontrado al revisar los tooltips de `EvenGroupCapitalLink`, 2026-10-29. No es un find-and-replace mecánico: el voseo no se convierte con un simple reemplazo de texto (verbos irregulares: "tenés"→"tienes", "podés"→"puedes", "sos"→"eres", cada uno hay que tocarlo a mano sin romper la gramática). Un conteo rápido con un regex parcial ya dio 22 archivos / 67 coincidencias, sin contar formas irregulares no cubiertas por ese regex — el número real es más alto. Se trata como su propio pase dedicado, no se mezcla con el rediseño de formularios en curso. Sin empezar todavía, a la espera de que Nicolas decida cuándo priorizarlo.
+
+</details>
+- [x] ~~Bug: "Compensar lo prestado" transfiere a la cuenta equivocada~~
+<details><summary>Ver detalle</summary>
+
+~~`computeLendOffsetDesired` (`src/lib/evenGroupSync.js:272-306`) transfiere, al cerrar cada ciclo de la tarjeta, desde `lend_offset_account_id` hacia `link.default_other_account_id` ("Gastos ajenos"). El comentario del propio código dice que el objetivo es que "Saldo no se vea rebajado por lo que en realidad le toca devolver al grupo" — pero el destino real (Gastos ajenos) solo logra eso si esa cuenta coincide con la cuenta de pago de la tarjeta (`payment_account_id`), algo que hoy ni siquiera se trae en la consulta de este archivo. Encontrado por Nicolas, 2026-10-29, al cuestionar el tooltip de este campo: la compensación nace porque la tarjeta pagó algo prestado, así que el destino lógico es la cuenta que pagó la tarjeta, no "Gastos ajenos".~~ Resuelto 2026-10-29: `buildSyncContext` ahora trae `payment_account_id` de la cuenta de "Lo que prestás" (select agregado), y `computeLendOffsetDesired` usa `ctx.lendAccountRow.payment_account_id` como `to_account_id` en vez de `link.default_other_account_id` — con guard nuevo (no genera nada si esa tarjeta no tiene cuenta de pago configurada, caso posible si "Pago automático" está apagado). Se autocorrige solo: `reconcileLink` ya compara `to_account_id` de lo existente contra lo recién calculado, así que cualquier transferencia de compensación creada en meses anteriores con el destino viejo se actualiza sola la próxima vez que sincronice, sin migración a mano.
+
+</details>
 - [x] ~~Calculadora en los campos de importe~~
 <details><summary>Ver detalle</summary>
 
@@ -128,8 +140,9 @@ Fila label-izquierda/valor-derecha sin caja, hojas que suben desde abajo, `FormF
   - Gasto: [x] `TransactionForm.jsx` — [x] `PhotoImportEntryScreen.jsx` — [x] `PhotoImportWizardScreen.jsx` — [x] `ExpenseForm`/`NewExpense` (EvenGroup) — [x] `SettleUp` (EvenGroup)
   - Cuentas/Categorías: [x] `AccountDetailScreen.jsx` — [x] `ManageCategories` — [x] `CuentasTab.jsx` — [x] `CurrencySettingsScreen.jsx`
     - ~~`ManageCategories` (`TransactionForm.jsx`) quedó parcial 2026-10-29: el sub-formulario "Nueva categoría" ya pasa a la fila sin caja (ícono a la izquierda + nombre, mismo estilo que "Nombre" en `AccountDetailScreen.jsx`) + `FormFooter`. Queda pendiente, a propósito, la lista principal (`SortableCategoryManageRow`, filas arrastrables boxeadas `shareRow`) — mismo patrón de lista que usan las cuentas en `CuentasTab.jsx`, así que se resuelve una sola vez cuando le toque el turno a esa pantalla: dentro de cada card, el ícono+nombre debería pasar al mismo diseño que "Nueva categoría" (input sin borde, solo línea inferior, ícono a la izquierda).~~ Resuelto 2026-10-29, junto con `CuentasTab.jsx`: `SortableCategoryManageRow` pasó al mismo diseño (ícono `small` + input sin caja), con un ajuste encontrado probando en vivo — sin ningún borde se confundía con las filas de solo-lectura de otras listas (cuentas/grupos), así que el ícono quedó con borde y sin relleno, y el nombre con línea inferior, para que se note que son editables. `ManageAccounts` (Editar/Nuevo grupo de cuentas, mismo archivo) también pasó a la fila sin caja + `FormFooter`.
-  - Grupos (EvenGroup): [x] `GroupForm` — [x] `InviteScreen` — [ ] `EvenGroupCapitalLink` (siguiente)
-  - Filtros/Ajustes: [ ] `FiltersPanel.jsx` — [ ] `PeriodSettingsScreen.jsx`
+  - Grupos (EvenGroup): [x] `GroupForm` — [x] `InviteScreen` — [x] `EvenGroupCapitalLink`
+  - Modales/secciones sueltas (agregado 2026-10-29, a raíz de revisar `EvenGroupCapitalLink`): [ ] `Comparar con` (modal, Estadísticas) — [ ] `Elegir ícono` (modal, categorías de EvenGroup dentro de `GroupForm`) — [ ] `Categorías de gasto` (EvenGroup — NO es un modal, es la lista embebida en `GroupForm`, mismo patrón boxeado que ya se resolvió en `ManageCategories`/Money Manager, acá sigue sin tocar)
+  - Filtros/Ajustes: [ ] `FiltersPanel.jsx` (siguiente) — [ ] `PeriodSettingsScreen.jsx`
   - Cuenta de usuario: [ ] `ProfileScreen` — [ ] `ChangePasswordScreen` — [ ] `AuthScreen` — [ ] `RecoverPasswordScreen`
 
   De paso ya quedaron armados varios componentes/helpers compartidos reusables para el resto de la lista: `PickerField` (modos `rowLabel`/`compact`/`listStyle`), `DateRow`, `TextRow`, `FormFooter`, `PhotoLightbox`, `Hint`, `useTouched()`.

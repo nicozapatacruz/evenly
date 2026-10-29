@@ -48,6 +48,9 @@ export const globalCss = `
      que el resto de la fila (16px), no el 13px genérico de arriba — y sin
      anillo de foco, porque acá no hay caja (ver PENDIENTES.md). */
   .row-input::placeholder { font-size: 13.5px; color: #A3968B; }
+  /* Placeholder del emoji personalizado (ícono): debe verse del mismo
+     tamaño que un emoji ya elegido (28px), no el 13px genérico de arriba. */
+  .icon-inset-focus::placeholder { font-size: 28px; }
   .row-input:focus { box-shadow: none; outline: none; }
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; animation: none !important; }

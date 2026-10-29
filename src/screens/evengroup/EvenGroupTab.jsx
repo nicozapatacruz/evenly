@@ -2134,23 +2134,22 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
         )}
 
         {mmInvolved && (
-          <Field info="Para este gasto puntual: de dónde sale (o adónde entra) lo que prestás, si tu grupo tiene configurada una cuenta para eso. Dejalo vacío para usar 'Cuenta' de arriba, como siempre.">
-            <PickerField
-              rowLabel={<>Cuenta de lo prestado <EvenGroupIcon size={13} style={{ marginLeft: 2 }} /></>}
-              value={mmLoanAccountId}
-              onChange={setMmLoanAccountId}
-              onClear={() => setMmLoanAccountId("")}
-              placeholder="Misma que 'Cuenta'"
-              title="Elegí una cuenta"
-              groups={evenCapital.groups
-                .filter((g) => !g.deleted && g.system_key !== "split_ledger")
-                .map((g) => ({
-                  label: g.name,
-                  items: evenCapital.accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
-                }))
-                .filter((g) => g.items.length > 0)}
-            />
-          </Field>
+          <PickerField
+            rowLabel={<>Cuenta de lo prestado <EvenGroupIcon size={13} style={{ marginLeft: 2 }} /></>}
+            info="Para este gasto puntual: de dónde sale (o adónde entra) lo que prestás, si tu grupo tiene configurada una cuenta para eso. Dejalo vacío para usar 'Cuenta' de arriba, como siempre."
+            value={mmLoanAccountId}
+            onChange={setMmLoanAccountId}
+            onClear={() => setMmLoanAccountId("")}
+            placeholder="Misma que 'Cuenta'"
+            title="Elegí una cuenta"
+            groups={evenCapital.groups
+              .filter((g) => !g.deleted && g.system_key !== "split_ledger")
+              .map((g) => ({
+                label: g.name,
+                items: evenCapital.accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
+              }))
+              .filter((g) => g.items.length > 0)}
+          />
         )}
 
         {showMmCategory && (
@@ -2818,23 +2817,22 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
         )}
 
         {mmInvolved && (
-          <Field info="Para este pago puntual: de dónde sale (o adónde entra) lo que se salda, si tu grupo tiene configurada una cuenta para eso. Dejalo vacío para usar 'Cuenta' de arriba, como siempre.">
-            <PickerField
-              rowLabel={<>Cuenta de lo prestado <EvenGroupIcon size={13} style={{ marginLeft: 2 }} /></>}
-              value={mmLoanAccountId}
-              onChange={setMmLoanAccountId}
-              onClear={() => setMmLoanAccountId("")}
-              placeholder="Misma que 'Cuenta'"
-              title="Elegí una cuenta"
-              groups={evenCapital.groups
-                .filter((g) => !g.deleted && g.system_key !== "split_ledger")
-                .map((g) => ({
-                  label: g.name,
-                  items: evenCapital.accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
-                }))
-                .filter((g) => g.items.length > 0)}
-            />
-          </Field>
+          <PickerField
+            rowLabel={<>Cuenta de lo prestado <EvenGroupIcon size={13} style={{ marginLeft: 2 }} /></>}
+            info="Para este pago puntual: de dónde sale (o adónde entra) lo que se salda, si tu grupo tiene configurada una cuenta para eso. Dejalo vacío para usar 'Cuenta' de arriba, como siempre."
+            value={mmLoanAccountId}
+            onChange={setMmLoanAccountId}
+            onClear={() => setMmLoanAccountId("")}
+            placeholder="Misma que 'Cuenta'"
+            title="Elegí una cuenta"
+            groups={evenCapital.groups
+              .filter((g) => !g.deleted && g.system_key !== "split_ledger")
+              .map((g) => ({
+                label: g.name,
+                items: evenCapital.accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })),
+              }))
+              .filter((g) => g.items.length > 0)}
+          />
         )}
 
         {/* Antes era lo primero que se leía, con más peso del que amerita

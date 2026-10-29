@@ -1,12 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { Trash2 } from "lucide-react";
 import { offlineSupabase as supabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, Footer, ConfirmInline, IconInput, PickerField, ToggleField, Field } from "../../components/Shared.jsx";
+import { TopBar, FormFooter, ConfirmInline, IconInput, PickerField, ToggleField, Field, InfoTooltip } from "../../components/Shared.jsx";
 import { money, CURRENCIES, CURRENCY_LIST } from "../../lib/helpers.jsx";
 import { accountBalance, computeCreditCardBalance, creditCardNextPaymentDate, disableAutoPayForDeletedAccounts, useCreditCardActivity } from "../../lib/evenCapitalData.js";
-
-const DAY_OPTIONS = Array.from({ length: 31 }, (_, i) => i + 1);
 
 const balanceColor = (n) => (n > 0.004 ? "#3B6E62" : n < -0.004 ? "#B0473A" : "#6B6355");
 
@@ -41,6 +39,8 @@ export default function AccountDetailScreen({ session, account = null, groups, a
   const [paymentAccountId, setPaymentAccountId] = useState(account?.payment_account_id || "");
   const [statementDay, setStatementDay] = useState(account?.statement_day || 1);
   const [paymentDay, setPaymentDay] = useState(account?.payment_day || 1);
+  const statementDayRef = useRef(statementDay);
+  const paymentDayRef = useRef(paymentDay);
   const [autoPay, setAutoPay] = useState(account?.auto_pay || false);
   const [hidden, setHidden] = useState(account?.hidden || false);
   const [saving, setSaving] = useState(false);
@@ -201,32 +201,52 @@ export default function AccountDetailScreen({ session, account = null, groups, a
         />
       )}
       <div style={styles.form}>
-        <Field label="Grupo">
-          {/* El grupo "EvenGroup" es informativo (lo crea/mantiene el
-              programa solo, ver isSystemAccount) — nunca se elige a mano acá,
-              mismo criterio que paymentAccountGroups más abajo. */}
-          <select style={{ ...styles.input, opacity: groupLocked ? 0.6 : 1 }} value={groupId} onChange={(e) => setGroupId(e.target.value)} disabled={groupLocked}>
-            {selectableGroups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-          </select>
-        </Field>
+        {/* El grupo "EvenGroup" es informativo (lo crea/mantiene el
+            programa solo, ver isSystemAccount) — nunca se elige a mano acá,
+            mismo criterio que paymentAccountGroups más abajo. */}
+        <PickerField
+          rowLabel="Grupo"
+          title="Elegí un grupo"
+          value={groupId}
+          onChange={setGroupId}
+          disabled={groupLocked}
+          groups={[{ label: null, items: selectableGroups.map((g) => ({ value: g.id, label: g.name })) }]}
+        />
 
-        <Field label="Nombre" required error={touched.name && nameRequired ? "Este campo es obligatorio." : ""}>
-          <div style={{ display: "flex", gap: 8 }}>
-            <IconInput value={icon} onChange={setIcon} />
-            <input style={{ ...styles.input, flex: 1 }} value={name} disabled={isSystemAccount} onChange={(e) => setName(e.target.value)} onBlur={() => touch("name")} placeholder="Nombre (ej: Saldo, Ahorros)" />
-          </div>
-        </Field>
+        {/* Mismo lenguaje de fila que Importe (SettleUp), al revés: el chip
+            (acá el ícono, no la moneda) va primero, a la izquierda, y el
+            valor (el nombre) ocupa el resto de la fila -- el ícono hace de
+            "etiqueta" de este campo, no hace falta una aparte. */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 40, borderBottom: "1px solid #ECE3D3", fontFamily: "system-ui, sans-serif" }}>
+          <IconInput value={icon} onChange={setIcon} small />
+          <input
+            className="row-input"
+            style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontFamily: "system-ui, sans-serif", border: "none", background: "transparent", padding: 0, color: "#2B2420" }}
+            value={name}
+            disabled={isSystemAccount}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={() => touch("name")}
+            placeholder="Nombre (ej: Saldo, Ahorros)"
+          />
+        </div>
+        {touched.name && nameRequired && (
+          <p style={{ margin: "-8px 0 0", fontSize: 12, fontFamily: "system-ui, sans-serif", color: "#B0473A" }}>Este campo es obligatorio.</p>
+        )}
         {isSystemAccount && (
           <p style={{ ...styles.muted, padding: 0, marginTop: -8 }}>
             Representa un grupo vinculado de EvenGroup. Se desvincula desde ahí, no se edita acá.
           </p>
         )}
 
-        <Field label="Moneda" info={hasTransactions ? "Esta cuenta ya tiene movimientos asociados. No se puede cambiar la moneda." : undefined} infoBlocked={hasTransactions}>
-          <select style={{ ...styles.input, opacity: hasTransactions ? 0.6 : 1 }} value={currency} onChange={(e) => setCurrency(e.target.value)} disabled={hasTransactions}>
-            {CURRENCY_LIST.map((c) => <option key={c} value={c}>{c} ({CURRENCIES[c].symbol})</option>)}
-          </select>
-        </Field>
+        <PickerField
+          rowLabel="Moneda"
+          title="Elegí la moneda"
+          value={currency}
+          onChange={setCurrency}
+          disabled={hasTransactions}
+          blockedReason={hasTransactions ? "Esta cuenta ya tiene movimientos asociados. No se puede cambiar la moneda." : undefined}
+          groups={[{ label: null, items: CURRENCY_LIST.map((c) => ({ value: c, label: c, icon: CURRENCIES[c].symbol })) }]}
+        />
 
         <ToggleField
           label="Tarjeta de crédito"
@@ -234,8 +254,7 @@ export default function AccountDetailScreen({ session, account = null, groups, a
           checked={isCreditCard}
           onChange={setIsCreditCard}
           disabled={hasTransactions}
-          info={hasTransactions ? "Esta cuenta ya tiene movimientos asociados. No se puede convertir en tarjeta de crédito." : undefined}
-          infoBlocked={hasTransactions}
+          blockedReason={hasTransactions ? "Esta cuenta ya tiene movimientos asociados. No se puede convertir en tarjeta de crédito." : undefined}
           error={becomingCardConflict
             ? `Es la cuenta de pago de ${dependentPaymentCards.map((c) => `"${c.name}"`).join(", ")}. Cambiale la cuenta de pago a ${dependentPaymentCards.length > 1 ? "esas tarjetas" : "esa tarjeta"} antes de convertir esta en tarjeta.`
             : ""}
@@ -244,14 +263,16 @@ export default function AccountDetailScreen({ session, account = null, groups, a
         {isCreditCard && (
           <>
             <Field
-              label="Cuenta de pago"
-              info="Cuenta de la cual se pagará esta tarjeta de crédito."
               required={autoPay}
               error={paymentAccountCurrencyMismatch
                 ? "La cuenta de pago asociada está en otra moneda. Para cambiar la moneda de la tarjeta debés quitar la cuenta asociada primero y luego asociar una en la misma moneda."
                 : (touched.paymentAccountId && paymentAccountRequired ? "Este campo es obligatorio." : "")}
             >
               <PickerField
+                rowLabel="Cuenta de pago"
+                info="Cuenta de la cual se pagará esta tarjeta de crédito."
+                title="Elegí una cuenta"
+                required={autoPay}
                 value={paymentAccountId}
                 onChange={setPaymentAccountId}
                 onClear={() => setPaymentAccountId("")}
@@ -266,19 +287,32 @@ export default function AccountDetailScreen({ session, account = null, groups, a
                 <Trash2 size={13} /> Esta cuenta fue eliminada.
               </p>
             )}
-            <div style={{ display: "flex", gap: 10 }}>
-              <Field label="Fecha de liquidación" info="Día del mes en que cierra el ciclo de facturación de la tarjeta." style={{ flex: 1 }}>
-                <select style={styles.input} value={statementDay} onChange={(e) => setStatementDay(parseInt(e.target.value, 10))}>
-                  {DAY_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
-                </select>
-              </Field>
-              <Field label="Fecha de pago" info="Día del mes en que se realiza el pago automático de la tarjeta." style={{ flex: 1 }}>
-                <select style={styles.input} value={paymentDay} onChange={(e) => setPaymentDay(parseInt(e.target.value, 10))}>
-                  {DAY_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
-                </select>
-              </Field>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 40, borderBottom: "1px solid #ECE3D3", fontFamily: "system-ui, sans-serif" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355" }}>
+                Fecha de liquidación
+                <InfoTooltip text="Día del mes en que cierra el ciclo de facturación de la tarjeta." />
+              </span>
+              <input
+                className="row-input"
+                style={{ flex: 1, minWidth: 0, textAlign: "right", fontSize: 13.5, fontFamily: "system-ui, sans-serif", border: "none", background: "transparent", padding: 0, color: "#2B2620" }}
+                inputMode="numeric"
+                value={statementDay}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, "");
+                  setStatementDay(digits === "" ? "" : parseInt(digits, 10));
+                }}
+                onBlur={() => {
+                  const n = Number(statementDay);
+                  if (Number.isInteger(n) && n >= 1 && n <= 31) {
+                    statementDayRef.current = n;
+                    setStatementDay(n);
+                  } else {
+                    setStatementDay(statementDayRef.current);
+                  }
+                }}
+              />
             </div>
-            {(statementDay >= 29 || paymentDay >= 29) && (
+            {statementDay >= 29 && (
               <p style={{ ...styles.muted, padding: 0, marginTop: -8, color: "#A8754A" }}>
                 Si el día elegido no existe en algún mes (ej. 30 o 31 en febrero), se va a usar el último día real de ese mes.
               </p>
@@ -289,8 +323,47 @@ export default function AccountDetailScreen({ session, account = null, groups, a
               checked={autoPay}
               onChange={setAutoPay}
             />
+            {autoPay && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 40, borderBottom: "1px solid #ECE3D3", fontFamily: "system-ui, sans-serif" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355" }}>
+                  Fecha de pago
+                  <InfoTooltip text="Día del mes en que se realiza el pago automático de la tarjeta." />
+                </span>
+                <input
+                  className="row-input"
+                  style={{ flex: 1, minWidth: 0, textAlign: "right", fontSize: 13.5, fontFamily: "system-ui, sans-serif", border: "none", background: "transparent", padding: 0, color: "#2B2620" }}
+                  inputMode="numeric"
+                  value={paymentDay}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, "");
+                    setPaymentDay(digits === "" ? "" : parseInt(digits, 10));
+                  }}
+                  onBlur={() => {
+                    const n = Number(paymentDay);
+                    if (Number.isInteger(n) && n >= 1 && n <= 31) {
+                      paymentDayRef.current = n;
+                      setPaymentDay(n);
+                    } else {
+                      setPaymentDay(paymentDayRef.current);
+                    }
+                  }}
+                />
+              </div>
+            )}
+            {autoPay && statementDay < 29 && paymentDay >= 29 && (
+              <p style={{ ...styles.muted, padding: 0, marginTop: -8, color: "#A8754A" }}>
+                Si el día elegido no existe en algún mes (ej. 30 o 31 en febrero), se va a usar el último día real de ese mes.
+              </p>
+            )}
           </>
         )}
+
+        <ToggleField
+          label="Ocultar"
+          description="Oculta esta cuenta del listado de Cuentas."
+          checked={hidden}
+          onChange={setHidden}
+        />
 
         {account && (
           <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
@@ -313,20 +386,14 @@ export default function AccountDetailScreen({ session, account = null, groups, a
             )}
           </div>
         )}
-
-        <ToggleField
-          label="Ocultar"
-          description="Oculta esta cuenta del listado de Cuentas."
-          checked={hidden}
-          onChange={setHidden}
-        />
       </div>
-      <Footer>
-        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onBack}>Cancelar</button>
-        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }} onClick={handleSave} disabled={saving}>
-          {saving ? (account ? "Guardando…" : "Creando…") : (account ? "Guardar" : "Crear")}
-        </button>
-      </Footer>
+      <FormFooter
+        onCancel={onBack}
+        onConfirm={handleSave}
+        confirmLabel={saving ? (account ? "Guardando…" : "Creando…") : (account ? "Guardar" : "Crear")}
+        confirmDisabled={saving}
+        confirmDim={!canSave}
+      />
     </div>
   );
 }

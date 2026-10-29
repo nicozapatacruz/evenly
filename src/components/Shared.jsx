@@ -26,28 +26,50 @@ export function EvenGroupIcon({ size = 18, color = "#ba5331", style }) {
 // switch dentro de una caja con el mismo estilo que un input. Componentizado
 // a propósito: ya se desalineó dos veces por copiarlo a mano (uno quedó en
 // negrilla por error, otro heredó la negrilla del label sin querer).
-export function ToggleField({ label, description, checked, onChange, disabled, error, info, infoBlocked }) {
+// Fila label-izquierda/switch-derecha, sin caja (mismo lenguaje que el resto
+// de los campos del formulario) -- `description` es la explicación FIJA de
+// qué hace el toggle (siempre presente, va junto al LABEL, como cualquier
+// otro ícono de información); `blockedReason`, en cambio, es la explicación
+// de por qué está deshabilitado AHORA MISMO (solo mientras `disabled` sea
+// true) -- va junto al SWITCH, a su izquierda, no al label, para que quede
+// claro que es sobre el control, no sobre el campo en general (mismo
+// criterio que el candado de `lockedValue` en los demás campos, aunque acá
+// cae a la izquierda del switch y no a la derecha del valor, porque el
+// switch ya está pegado al borde derecho de la fila).
+export function ToggleField({ label, description, checked, onChange, disabled, error, blockedReason }) {
   return (
-    <label style={styles.label}>
-      {info ? (
-        <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          {label}
-          <InfoTooltip text={info} blocked={infoBlocked} />
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 40, borderBottom: "1px solid #ECE3D3", fontFamily: "system-ui, sans-serif" }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355" }}>
+          {/* La opacidad de "deshabilitado" va en un span propio, SOLO
+              alrededor del texto -- puesta en toda la fila (como antes),
+              también apagaba el ícono de info Y, lo que es peor, el globo
+              de texto que abre al tocarlo (la opacidad de un contenedor
+              afecta a todo lo que tenga adentro, incluido lo que se dibuja
+              `position:absolute` por fuera de su caja visual), justo cuando
+              `blockedReason` existe PARA explicar por qué está apagado -- se
+              volvía casi ilegible. */}
+          <span style={{ opacity: disabled ? 0.6 : 1 }}>{label}</span>
+          {/* Si está bloqueado, el ⓘ de "qué hace esto" se saca -- ahí lo
+              único relevante es POR QUÉ no se puede tocar ahora (el 🚫 de
+              `blockedReason`, del otro lado), no una explicación general que
+              en ese momento no sirve de nada. */}
+          {description && !(disabled && blockedReason) && <InfoTooltip text={description} />}
         </span>
-      ) : label}
-      <div style={{ ...styles.input, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, fontWeight: 400, padding: "7px 13px" }}>
-        <span style={{ fontSize: 13, color: "#6B6355", lineHeight: 1.4 }}>{description}</span>
-        <button
-          onClick={() => onChange(!checked)}
-          disabled={disabled}
-          style={{ width: 44, height: 26, borderRadius: 13, border: "none", background: checked ? "#C75D3B" : "#D9CFC1", position: "relative", cursor: disabled ? "default" : "pointer", flexShrink: 0, opacity: disabled ? 0.6 : 1 }}
-          aria-label={label}
-        >
-          <span style={{ position: "absolute", top: 3, left: checked ? 21 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.15s" }} />
-        </button>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+          {disabled && blockedReason && <InfoTooltip text={blockedReason} blocked />}
+          <button
+            onClick={() => onChange(!checked)}
+            disabled={disabled}
+            style={{ width: 44, height: 26, borderRadius: 13, border: "none", background: checked ? "#C75D3B" : "#D9CFC1", position: "relative", cursor: disabled ? "default" : "pointer", flexShrink: 0, opacity: disabled ? 0.6 : 1 }}
+            aria-label={label}
+          >
+            <span style={{ position: "absolute", top: 3, left: checked ? 21 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.15s" }} />
+          </button>
+        </div>
       </div>
-      {error && <span style={{ fontSize: 12, fontWeight: 400, color: "#B0473A" }}>{error}</span>}
-    </label>
+      {error && <p style={{ margin: 0, fontSize: 12, fontFamily: "system-ui, sans-serif", color: "#B0473A" }}>{error}</p>}
+    </div>
   );
 }
 
@@ -111,14 +133,20 @@ export function InfoTooltip({ text, blocked }) {
 
   return (
     <span ref={ref} style={{ position: "relative", display: "inline-flex" }}>
-      <button
-        type="button"
+      {/* `<span role="button">`, no un `<button>` de verdad: esto puede
+          terminar anidado adentro de OTRO botón (ej. la fila entera de un
+          `PickerField rowLabel`, que es un solo `<button>` clickeable) —
+          HTML no permite un botón adentro de otro, y el navegador rompe el
+          comportamiento de ambos. Mismo truco que ya usa la "X" de limpiar
+          selección de `PickerField`, acá abajo. */}
+      <span
+        role="button"
         onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
-        style={{ background: "none", border: "none", padding: 0, display: "flex", color: blocked ? "#B0473A" : "#4A6FA5", cursor: "pointer" }}
+        style={{ display: "flex", color: blocked ? "#B0473A" : "#4A6FA5", cursor: "pointer" }}
         aria-label={blocked ? "Por qué está deshabilitado" : "Más información"}
       >
         {blocked ? <Ban size={14} /> : <Info size={14} />}
-      </button>
+      </span>
       {open && (
         // Anclado desde la derecha del ícono (no desde la izquierda): en los
         // campos con label largo (ej. "Cuenta por defecto en gastos ajenos")
@@ -151,8 +179,13 @@ export function Field({ label, info, infoBlocked, required, error, style, childr
   // Envuelto en un solo <span> siempre (no un fragment) — el wrapper es
   // flex-column, así que label+asterisco sueltos como hijos directos
   // quedaban cada uno en su propia fila en vez de en la misma línea.
+  // Sin gap acá adentro (a propósito): el asterisco va pegado al label, no
+  // separado -- mismo espaciado que ya quedó en PickerField/ToggleField
+  // (ver `blockedReason`/`info` ahí) tras separar la opacidad de
+  // "deshabilitado" en su propio span. El gap de afuera (ver más abajo,
+  // entre esto y el ⓘ) sigue igual.
   const labelContent = (
-    <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+    <span style={{ display: "flex", alignItems: "center" }}>
       {label}
       {required && <span style={{ color: "#B0473A" }}>*</span>}
     </span>
@@ -389,7 +422,7 @@ export function TodayButton({ viewMonth, setViewMonth }) {
 // `<select>` nativo (funcionaba pero ocupaba más lista que grilla) — la
 // grilla ahorra espacio y se ve todo de un vistazo, sin depender de ningún
 // teclado del sistema.
-export function IconInput({ value, onChange }) {
+export function IconInput({ value, onChange, small = false }) {
   const [open, setOpen] = useState(false);
   const [custom, setCustom] = useState("");
 
@@ -412,11 +445,17 @@ export function IconInput({ value, onChange }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        style={{
-          ...styles.input, display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 20, flexShrink: 0, cursor: "pointer", padding: 4, width: 44,
-          appearance: "none", WebkitAppearance: "none", textAlign: "center",
-        }}
+        style={small
+          // `small`: chip redondo sin caja (misma idea que el chip de
+          // moneda `compact small` de PickerField) -- para vivir adentro de
+          // una fila sin caja (ej. Nombre de una cuenta), no en un campo
+          // boxeado de siempre.
+          ? { width: 32, height: 32, borderRadius: 10, border: "none", background: "#F3ECE0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0, cursor: "pointer", padding: 0 }
+          : {
+              ...styles.input, display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 20, flexShrink: 0, cursor: "pointer", padding: 4, width: 44,
+              appearance: "none", WebkitAppearance: "none", textAlign: "center",
+            }}
         aria-label="Elegir ícono"
       >
         {/* "➖" es un emoji real (misma fuente que el resto de los íconos) —
@@ -427,58 +466,74 @@ export function IconInput({ value, onChange }) {
         <span style={{ lineHeight: 1 }}>{value || "➖"}</span>
       </button>
       {open && (
-        <Modal title="Elegir ícono" onClose={() => setOpen(false)}>
-          <div className="no-scrollbar" style={{ maxHeight: "70vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 14 }}>
-            <button style={{ ...styles.btnSecondary, marginTop: 0 }} onClick={() => { onChange(""); setOpen(false); }}>
-              Sin ícono
-            </button>
-            {ICON_OPTIONS.map((g) => (
-              <div key={g.group}>
-                <p style={{ ...styles.label, marginBottom: 6 }}>{g.group}</p>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                  {g.icons.map((ic) => (
-                    <button
-                      key={ic}
-                      onClick={() => { onChange(ic); setOpen(false); }}
-                      style={{
-                        width: 40, height: 40, fontSize: 20, borderRadius: 10,
-                        border: ic === value ? "2px solid #C75D3B" : "1px solid #DDD2BE",
-                        background: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
-                      }}
-                      aria-label={`Ícono ${ic}`}
-                    >
-                      {ic}
-                    </button>
-                  ))}
+        // Hoja que sube desde abajo (mismo mecanismo que PickerField), no el
+        // `Modal` centrado de siempre -- pero con una grilla propia, más
+        // densa y SIN nombre debajo de cada ítem (acá no hay nada que
+        // nombrar, es solo el emoji): mezcla del armazón de PickerField con
+        // el contenido que ya tenía este selector.
+        <div style={styles.sheetBackdrop} onClick={() => setOpen(false)}>
+          <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.sheetHandle} />
+            <div style={styles.sheetHeader}>
+              <span />
+              <p style={styles.sheetTitle}>Elegir ícono</p>
+              <button type="button" style={styles.sheetClose} onClick={() => setOpen(false)}>Cerrar</button>
+            </div>
+            <div className="no-scrollbar" style={{ ...styles.sheetBody, display: "flex", flexDirection: "column", gap: 14 }}>
+              <button style={{ ...styles.btnSecondary, marginTop: 4 }} onClick={() => { onChange(""); setOpen(false); }}>
+                Sin ícono
+              </button>
+              {ICON_OPTIONS.map((g) => (
+                <div key={g.group}>
+                  <p style={{ ...styles.label, marginBottom: 6 }}>{g.group}</p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {g.icons.map((ic) => {
+                      const on = ic === value;
+                      return (
+                        <button
+                          key={ic}
+                          onClick={() => { onChange(ic); setOpen(false); }}
+                          style={{
+                            width: 44, height: 44, fontSize: 22, borderRadius: 14, border: "none",
+                            background: on ? "#F6E6DE" : "#F3ECE0", boxShadow: on ? "inset 0 0 0 2px #C75D3B" : "none",
+                            display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+                          }}
+                          aria-label={`Ícono ${ic}`}
+                        >
+                          {ic}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
+              ))}
+              <div>
+                <p style={{ ...styles.label, marginBottom: 6 }}>Personalizado</p>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    className="icon-inset-focus"
+                    style={{ ...styles.input, width: 56, height: 56, padding: 0, textAlign: "center", fontSize: 28, flexShrink: 0 }}
+                    value={custom}
+                    onChange={(e) => setCustom(e.target.value)}
+                    onBeforeInput={(e) => {
+                      // Bloquea la inserción de texto que no sea emoji (backspace/borrar
+                      // no dispara esto — solo pasa por acá cuando se INSERTA contenido,
+                      // así que no interfiere con el borrado).
+                      if (e.data && !/\p{Extended_Pictographic}/u.test(e.data)) e.preventDefault();
+                    }}
+                    onKeyDown={(e) => e.key === "Enter" && applyCustom()}
+                    placeholder="😀"
+                    aria-label="Ícono personalizado"
+                  />
+                  <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0, opacity: custom ? 1 : 0.5 }} onClick={applyCustom} disabled={!custom}>
+                    Usar este
+                  </button>
+                </div>
+                <p style={{ ...styles.muted, padding: 0, fontSize: 12.5, margin: "6px 0 0" }}>Solo se aceptan emojis.</p>
               </div>
-            ))}
-            <div>
-              <p style={{ ...styles.label, marginBottom: 6 }}>Personalizado</p>
-              <div style={{ display: "flex", gap: 8 }}>
-                <input
-                  className="icon-inset-focus"
-                  style={{ ...styles.input, width: 56, textAlign: "center", fontSize: 20, flexShrink: 0 }}
-                  value={custom}
-                  onChange={(e) => setCustom(e.target.value)}
-                  onBeforeInput={(e) => {
-                    // Bloquea la inserción de texto que no sea emoji (backspace/borrar
-                    // no dispara esto — solo pasa por acá cuando se INSERTA contenido,
-                    // así que no interfiere con el borrado).
-                    if (e.data && !/\p{Extended_Pictographic}/u.test(e.data)) e.preventDefault();
-                  }}
-                  onKeyDown={(e) => e.key === "Enter" && applyCustom()}
-                  placeholder="😀"
-                  aria-label="Ícono personalizado"
-                />
-                <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0, opacity: custom ? 1 : 0.5 }} onClick={applyCustom} disabled={!custom}>
-                  Usar este
-                </button>
-              </div>
-              <p style={{ ...styles.muted, padding: 0, fontSize: 12.5, margin: "6px 0 0" }}>Solo se aceptan emojis.</p>
             </div>
           </div>
-        </Modal>
+        </div>
       )}
     </>
   );
@@ -641,7 +696,7 @@ function textIconFontSize(icon, base) {
   return Math.round(base * scale);
 }
 
-export function PickerField({ value, onChange, groups, placeholder = "Elegir", title, note, onClear, onBlur, disabled = false, emptyMessage = "No hay opciones para elegir.", openSignal, compact = false, small = false, rowLabel, required = false, listStyle = false, lockedValue = false }) {
+export function PickerField({ value, onChange, groups, placeholder = "Elegir", title, note, onClear, onBlur, disabled = false, emptyMessage = "No hay opciones para elegir.", openSignal, compact = false, small = false, rowLabel, info, blockedReason, required = false, listStyle = false, lockedValue = false }) {
   const [open, setOpen] = useState(false);
   const idRef = useRef(null);
   if (idRef.current === null) idRef.current = ++pickerInstanceCounter;
@@ -695,40 +750,63 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", t
     <button
       type="button"
       onClick={() => !disabled && setOpen(true)}
-      disabled={disabled}
-      style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 40, padding: "0 2px", border: "none", borderBottom: "1px solid #ECE3D3", background: "transparent", textAlign: "left", fontFamily: "system-ui, sans-serif", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.6 : 1 }}
+      // Sin el atributo `disabled` nativo (a propósito): un `<button disabled>`
+      // bloquea TODA interacción adentro, incluido el 🚫 de `blockedReason`
+      // que vive en su interior -- quedaba imposible de tocar. El bloqueo de
+      // verdad ya lo hace el `!disabled` del onClick de acá arriba; esto solo
+      // deja de usar el mecanismo nativo para no tapar a sus hijos.
+      style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 40, padding: "0 2px", border: "none", borderBottom: "1px solid #ECE3D3", background: "transparent", textAlign: "left", fontFamily: "system-ui, sans-serif", cursor: disabled ? "not-allowed" : "pointer" }}
     >
       <span style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355" }}>
-        {rowLabel}
-        {required && <span style={{ color: "#B0473A" }}>*</span>}
+        {/* La opacidad de "deshabilitado" va en un span propio, solo
+            alrededor del texto -- mismo motivo que ya se resolvió en
+            ToggleField: puesta en todo el botón (como era antes), también
+            apagaba el ⓘ y su globo de texto, justo cuando `blockedReason`
+            existe PARA explicar por qué está apagado. */}
+        <span style={{ opacity: disabled ? 0.6 : 1 }}>
+          {rowLabel}
+          {required && <span style={{ color: "#B0473A" }}>*</span>}
+        </span>
+        {/* Si está bloqueado, no tiene sentido TAMBIÉN explicar qué hace el
+            campo en general -- lo único que importa ahí es por qué no se
+            puede tocar ahora (el 🚫, del otro lado, junto al valor). */}
+        {info && !(disabled && blockedReason) && <InfoTooltip text={info} />}
       </span>
-      <span style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, flex: 1, fontSize: 13.5, color: selected ? "#2B2620" : "#A3968B", minWidth: 0 }}>
-        {selected ? (
-          <>
-            {selected.icon && <span style={{ display: "inline-flex", alignItems: "center" }}>{selected.icon}</span>}
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", ...(selected.deleted ? { textDecoration: "line-through", color: "#B0473A" } : null) }}>{selected.label}</span>
-            {selected.deleted && (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 1, color: "#B0473A", flexShrink: 0 }}>
-                (<Trash2 size={12} />)
-              </span>
-            )}
-          </>
-        ) : placeholder}
-        {/* `lockedValue` (no `disabled` a secas: eso se usa en muchos otros
-            lados por otras razones, ej. mientras se guarda) -- candado junto
-            al VALOR, no a la etiqueta, para que se note mirando qué dice el
-            campo, no solo su nombre. */}
-        {lockedValue && <Lock size={11} color="#8A7F72" style={{ flexShrink: 0 }} />}
-        {clearable && !disabled && (
-          <span
-            role="button"
-            aria-label="Quitar selección"
-            onClick={(e) => { e.stopPropagation(); setOpen(false); onClear(); }}
-            style={{ display: "inline-flex", color: "#A89A87", flexShrink: 0 }}
-          >
-            <X size={14} />
-          </span>
-        )}
+      <span style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, flex: 1, fontSize: 13.5, minWidth: 0 }}>
+        {/* `blockedReason` va del lado del VALOR (no del label, como `info`)
+            -- mismo criterio que `ToggleField`, donde el 🚫 vive pegado al
+            switch: explica por qué ESE control puntual está apagado, no el
+            campo en general. Afuera del span de abajo (que sí se atenúa) para
+            que el ⓘ/su globo de texto nunca queden atenuados. */}
+        {disabled && blockedReason && <InfoTooltip text={blockedReason} blocked />}
+        <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, color: selected ? "#2B2620" : "#A3968B", opacity: disabled ? 0.6 : 1 }}>
+          {selected ? (
+            <>
+              {selected.icon && <span style={{ display: "inline-flex", alignItems: "center" }}>{selected.icon}</span>}
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", ...(selected.deleted ? { textDecoration: "line-through", color: "#B0473A" } : null) }}>{selected.label}</span>
+              {selected.deleted && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 1, color: "#B0473A", flexShrink: 0 }}>
+                  (<Trash2 size={12} />)
+                </span>
+              )}
+            </>
+          ) : placeholder}
+          {/* `lockedValue` (no `disabled` a secas: eso se usa en muchos otros
+              lados por otras razones, ej. mientras se guarda) -- candado junto
+              al VALOR, no a la etiqueta, para que se note mirando qué dice el
+              campo, no solo su nombre. */}
+          {lockedValue && <Lock size={11} color="#8A7F72" style={{ flexShrink: 0 }} />}
+          {clearable && !disabled && (
+            <span
+              role="button"
+              aria-label="Quitar selección"
+              onClick={(e) => { e.stopPropagation(); setOpen(false); onClear(); }}
+              style={{ display: "inline-flex", color: "#A89A87", flexShrink: 0 }}
+            >
+              <X size={14} />
+            </span>
+          )}
+        </span>
       </span>
     </button>
   ) : (

@@ -9,7 +9,7 @@ import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCen
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { styles } from "../../lib/styles.js";
-import { TopBar, RootHeader, ConfirmInline, Modal, Footer, FormFooter, PhotoPicker, PhotoLightbox, ImageWithFallback, Field, ToggleField, PickerField, DateRow, TextRow, EvenGroupIcon, EmptyState, CalculatorAmountInput, SegmentedControl, Hint } from "../../components/Shared.jsx";
+import { TopBar, RootHeader, ConfirmInline, Modal, FormFooter, PhotoPicker, PhotoLightbox, ImageWithFallback, Field, ToggleField, PickerField, DateRow, TextRow, EvenGroupIcon, EmptyState, CalculatorAmountInput, SegmentedControl, Hint } from "../../components/Shared.jsx";
 import { linkGroupToAccount, updateLinkDefaults, unlinkGroup } from "../../lib/evenGroupLink.js";
 import { useRecentNoteTitles } from "../../lib/evenCapitalData.js";
 import {
@@ -317,7 +317,7 @@ export default function EvenGroupTab({
           isOnline={isOnline}
           onCancel={onBackOverride || (() => setView({ screen: "group", groupId: activeGroup.id }))}
           onSave={async ({ name, baseCurrency, photoUrl, membersToAdd, memberIdsToRemove, categoriesToAdd, categoriesToUpdate, categoryIdsToRemove }) => {
-            if (!isOnline) { blockOffline(); return; }
+            if (!isOnline) { blockOffline(); return false; }
             try {
               const { error: e1 } = await supabase
                 .from("groups")
@@ -357,16 +357,13 @@ export default function EvenGroupTab({
                 if (error) throw error;
               }
               await reloadGroup(activeGroup.id);
-              // Mismo criterio que al guardar un gasto/pago: si vinimos por
-              // un deep link (ej. desde la cuenta pseudo "EvenGroup" en
-              // Cuentas), guardar manda derecho de vuelta ahí en vez de a la
-              // pantalla de grupo.
-              if (onBackOverride) {
-                onBackOverride();
-              } else {
-                setView({ screen: "group", groupId: activeGroup.id });
-              }
-            } catch (e) { showError(`No se pudo guardar el grupo: ${e?.message || e}`); }
+              // Navegar después de guardar es decisión de GroupForm, no de
+              // acá -- "Guardar" vuelve a la pantalla de siempre (su propio
+              // `onCancel`, que ya resuelve el caso del deep link); "Guardar
+              // y vincular" en cambio sigue derecho a Invitar. Esta función
+              // solo persiste y avisa si salió bien.
+              return true;
+            } catch (e) { showError(`No se pudo guardar el grupo: ${e?.message || e}`); return false; }
           }}
           onDeleteGroup={async () => {
             if (!isOnline) { blockOffline(); return; }
@@ -673,14 +670,21 @@ function GroupForm({ group = null, session, evenCapital, onCancel, onCreate, onS
     setConfirmRemoveMemberId(null);
   };
 
-  const handleSave = async () => {
-    if (saving) return;
-    if ((!isDirty && !mmDirty) || !canSaveEdit) {
+  // Persiste los cambios pendientes (si los hay) sin decidir qué pasa
+  // después -- eso queda en manos de quien llama: "Guardar" vuelve a la
+  // pantalla del grupo, "Guardar y vincular" sigue derecho a Invitar (ver
+  // handleSave/handleSaveAndInvite más abajo). Devuelve true si quedó todo
+  // bien (incluido el caso de "no había nada que guardar"), false si hubo
+  // que frenar (validación, offline, o error real) -- en ese caso, quien
+  // llama no debe navegar a ningún lado.
+  const persistPendingChanges = async () => {
+    if (!isDirty && !mmDirty) return true;
+    if (!canSaveEdit) {
       setTouched({ name: true, members: true, categories: true, mmOwnAccountId: true, mmOtherAccountId: true });
       if (hasEmptyCategory) setCatsOpen(true);
-      return;
+      return false;
     }
-    if (!isOnline) { showError("Estás offline, no podés hacer esto ahora."); return; }
+    if (!isOnline) { showError("Estás offline, no podés hacer esto ahora."); return false; }
     setSaving(true);
     try {
       const resolvedPhotoUrl = await resolvePhotoUrl({ pendingFile, removed, currentUrl: group.photoUrl });
@@ -728,15 +732,31 @@ function GroupForm({ group = null, session, evenCapital, onCancel, onCreate, onS
         await evenCapital.reload();
       }
 
-      await onSave({
+      const ok = await onSave({
         name: name.trim(), baseCurrency, photoUrl: resolvedPhotoUrl,
         membersToAdd, memberIdsToRemove, categoriesToAdd, categoriesToUpdate, categoryIdsToRemove,
       });
+      return !!ok;
     } catch (e) {
       showError(`No se pudo guardar: ${e?.message || e}`);
+      return false;
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSave = async () => {
+    if (saving) return;
+    if (await persistPendingChanges()) onCancel();
+  };
+
+  // "Guardar y vincular" -- mismo guardado que "Guardar" de arriba, pero en
+  // vez de volver a la pantalla del grupo sigue derecho a Invitar. Pensado
+  // para el caso de agregar una persona nueva y querer invitarla ya mismo,
+  // sin el viaje redondo de guardar, salir, volver a entrar.
+  const handleSaveAndInvite = async () => {
+    if (saving) return;
+    if (await persistPendingChanges()) onInvite();
   };
 
   const addCategory = () => {
@@ -873,11 +893,26 @@ function GroupForm({ group = null, session, evenCapital, onCancel, onCreate, onS
             )}
 
             {/* Invitar personas. Si ya no queda nadie sin usuario vinculado,
-                no hay nada que invitar: el botón directamente no aparece. */}
+                no hay nada que invitar: el botón directamente no aparece.
+                Bloqueado mientras haya cambios sin guardar -- "Invitar" lee
+                la lista de miembros YA PERSISTIDA (la prop `group`, no este
+                estado local), así que una persona recién agregada acá
+                todavía no existiría del otro lado hasta guardar. */}
             {group.creatorId === session?.userId && members.some((m) => !m.linkedUserId) && (
-              <button style={styles.btnSecondary} onClick={onInvite}>
-                <UserPlus size={16} /> Vincular un usuario a un miembro ya creado
-              </button>
+              <>
+                <button
+                  style={{ ...styles.btnSecondary, opacity: (saving || ((isDirty || mmDirty) && !canSaveEdit)) ? 0.5 : 1 }}
+                  onClick={handleSaveAndInvite}
+                  disabled={saving || ((isDirty || mmDirty) && !canSaveEdit)}
+                >
+                  <UserPlus size={16} /> {(isDirty || mmDirty) ? "Guardar cambios y vincular un usuario" : "Vincular un usuario a un miembro ya creado"}
+                </button>
+                {(isDirty || mmDirty) && (
+                  <p style={{ margin: "-4px 0 0", fontSize: 12, fontFamily: "system-ui, sans-serif", color: "#6B6355" }}>
+                    Se van a guardar todos los cambios pendientes del formulario antes de continuar al formulario de invitación.
+                  </p>
+                )}
+              </>
             )}
             </div>
 
@@ -2969,23 +3004,35 @@ function InviteScreen({ group, session, groupInvites = [], onBack, onSend, onCan
           <p style={{ margin: "-4px 0 0", fontSize: 12, color: "#B0473A", fontFamily: "system-ui, sans-serif" }}>Elegí a qué miembro corresponde.</p>
         )}
 
-        <Field label="Usuario a invitar" required error={touched.username && !targetUsername.trim() ? "Este campo es obligatorio." : ""}>
-          <input style={styles.input} value={targetUsername} onChange={e => setTargetUsername(e.target.value)} onBlur={() => touch("username")} placeholder="nombre_de_usuario" autoCapitalize="none" onKeyDown={e => e.key === "Enter" && canSend && !sending && handle()} />
-        </Field>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 40, borderBottom: "1px solid #ECE3D3", fontFamily: "system-ui, sans-serif" }}>
+          <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355" }}>
+            Usuario a invitar<span style={{ color: "#B0473A" }}>*</span>
+          </span>
+          <input
+            className="row-input"
+            style={{ flex: 1, minWidth: 0, textAlign: "right", fontSize: 13.5, fontFamily: "system-ui, sans-serif", border: "none", background: "transparent", padding: 0, color: "#2B2620" }}
+            value={targetUsername}
+            onChange={e => setTargetUsername(e.target.value)}
+            onBlur={() => touch("username")}
+            placeholder="nombre_de_usuario"
+            autoCapitalize="none"
+            onKeyDown={e => e.key === "Enter" && canSend && !sending && handle()}
+          />
+        </div>
+        {touched.username && !targetUsername.trim() && (
+          <p style={{ margin: "-8px 0 0", fontSize: 12, fontFamily: "system-ui, sans-serif", color: "#B0473A" }}>Este campo es obligatorio.</p>
+        )}
 
         {isSelfInvite && <p style={styles.errText}>No puedes invitarte a ti mismo.</p>}
       </div>
 
-      <Footer>
-        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onBack}>Cancelar</button>
-        <button
-          style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: (sending || !canSend) ? 0.5 : 1 }}
-          onClick={handle}
-          disabled={sending}
-        >
-          {sending ? "Enviando…" : "Enviar invitación"}
-        </button>
-      </Footer>
+      <FormFooter
+        onCancel={onBack}
+        onConfirm={handle}
+        confirmLabel={sending ? "Enviando…" : "Enviar invitación"}
+        confirmDisabled={sending}
+        confirmDim={!canSend}
+      />
     </div>
   );
 }

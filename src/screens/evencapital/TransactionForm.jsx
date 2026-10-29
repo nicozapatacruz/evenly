@@ -5,7 +5,7 @@ import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } 
 import { CSS } from "@dnd-kit/utilities";
 import { offlineSupabase as supabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, Footer, FormFooter, ConfirmInline, IconInput, PickerField, Field, Modal, CalculatorAmountInput, CurrencyConversionField, SegmentedControl, DateRow, TextRow, formatDateRow, Hint } from "../../components/Shared.jsx";
+import { TopBar, FormFooter, ConfirmInline, IconInput, PickerField, Field, Modal, CalculatorAmountInput, CurrencyConversionField, SegmentedControl, DateRow, TextRow, formatDateRow, Hint } from "../../components/Shared.jsx";
 import { parseAmountInput, todayInputValue, dateInputValue, dateInputValueInZone, money, fmtDate, useScrollToTopOnChange, useScrollIntoViewOnChange, normalizeForSearch, CURRENCIES, useTouched } from "../../lib/helpers.jsx";
 import { RECURRING_FREQUENCIES, nextOccurrence, computeAmountMain, useRecentNoteTitles } from "../../lib/evenCapitalData.js";
 
@@ -1042,19 +1042,29 @@ function NewCategoryForm({ session, type, categories, reload, showError, onCance
     <div style={styles.screen}>
       <TopBar title="Nueva categoría" onBack={onCancel} />
       <div style={styles.form}>
-        <Field label="Nombre" required error={nameTouched && !canSave ? "Este campo es obligatorio." : ""}>
-          <div style={{ display: "flex", gap: 8 }}>
-            <IconInput value={icon} onChange={setIcon} />
-            <input style={{ ...styles.input, flex: 1 }} value={name} onChange={(e) => setName(e.target.value)} onBlur={() => setNameTouched(true)} placeholder="Nombre" onKeyDown={(e) => e.key === "Enter" && canSave && create()} />
-          </div>
-        </Field>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 40, borderBottom: "1px solid #ECE3D3", fontFamily: "system-ui, sans-serif" }}>
+          <IconInput value={icon} onChange={setIcon} small />
+          <input
+            className="row-input"
+            style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontFamily: "system-ui, sans-serif", border: "none", background: "transparent", padding: 0, color: "#2B2420" }}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={() => setNameTouched(true)}
+            placeholder="Nombre"
+            onKeyDown={(e) => e.key === "Enter" && canSave && create()}
+          />
+        </div>
+        {nameTouched && !canSave && (
+          <p style={{ margin: "-8px 0 0", fontSize: 12, fontFamily: "system-ui, sans-serif", color: "#B0473A" }}>Este campo es obligatorio.</p>
+        )}
       </div>
-      <Footer>
-        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
-        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave) ? 0.5 : 1 }} onClick={create} disabled={saving}>
-          {saving ? "Creando…" : "Crear"}
-        </button>
-      </Footer>
+      <FormFooter
+        onCancel={onCancel}
+        onConfirm={create}
+        confirmLabel={saving ? "Creando…" : "Crear"}
+        confirmDisabled={saving}
+        confirmDim={!canSave}
+      />
     </div>
   );
 }

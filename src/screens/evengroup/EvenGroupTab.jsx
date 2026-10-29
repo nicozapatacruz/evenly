@@ -787,15 +787,30 @@ function GroupForm({ group = null, session, evenCapital, onCancel, onCreate, onS
         {/* Foto del grupo */}
         <PhotoPicker previewUrl={photoUrl} onChange={handlePhoto} onClear={clearPhoto} shape="square" disabled={!isOnline} onDisabledClick={() => showError("Estás offline, no podés hacer esto ahora.")} />
 
-        <Field label="Nombre del grupo" required error={touched.name && !name.trim() ? "Este campo es obligatorio." : ""}>
-          <input style={styles.input} value={name} onChange={(e) => setName(e.target.value)} onBlur={() => touch("name")} placeholder={isEditing ? undefined : "Viaje a Lisboa, Piso compartido…"} />
-        </Field>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 40, borderBottom: "1px solid #ECE3D3", fontFamily: "system-ui, sans-serif" }}>
+          <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355" }}>
+            Nombre del grupo<span style={{ color: "#B0473A" }}>*</span>
+          </span>
+          <input
+            className="row-input"
+            style={{ flex: 1, minWidth: 0, textAlign: "right", fontSize: 13.5, fontFamily: "system-ui, sans-serif", border: "none", background: "transparent", padding: 0, color: "#2B2620" }}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={() => touch("name")}
+            placeholder={isEditing ? undefined : "Viaje a Lisboa, Piso compartido…"}
+          />
+        </div>
+        {touched.name && !name.trim() && (
+          <p style={{ margin: "-8px 0 0", fontSize: 12, fontFamily: "system-ui, sans-serif", color: "#B0473A" }}>Este campo es obligatorio.</p>
+        )}
 
-        <Field label={isEditing ? "Moneda principal" : "Moneda principal del grupo"}>
-          <select style={styles.input} value={baseCurrency} onChange={(e) => setBaseCurrency(e.target.value)}>
-            {CURRENCY_LIST.map((c) => <option key={c} value={c}>{c} ({CURRENCIES[c].symbol})</option>)}
-          </select>
-        </Field>
+        <PickerField
+          rowLabel={isEditing ? "Moneda principal" : "Moneda principal del grupo"}
+          title="Elegí la moneda"
+          value={baseCurrency}
+          onChange={setBaseCurrency}
+          groups={[{ label: null, items: CURRENCY_LIST.map((c) => ({ value: c, label: c, icon: CURRENCIES[c].symbol })) }]}
+        />
         {!isEditing && (
           <p style={{ ...styles.muted, padding: 0, marginTop: -8 }}>
             Es la moneda que se preselecciona al crear un gasto. Puedes registrar gastos en
@@ -997,18 +1012,13 @@ function GroupForm({ group = null, session, evenCapital, onCancel, onCreate, onS
         );
       })()}
 
-      <Footer>
-        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel}>Cancelar</button>
-        {isEditing ? (
-          <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || (!isDirty && !mmDirty) || !canSaveEdit) ? 0.5 : 1 }} onClick={handleSave} disabled={saving}>
-            {saving ? "Guardando…" : "Guardar"}
-          </button>
-        ) : (
-          <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canCreate) ? 0.5 : 1 }} onClick={handleCreate} disabled={saving}>
-            {saving ? "Creando…" : "Crear"}
-          </button>
-        )}
-      </Footer>
+      <FormFooter
+        onCancel={onCancel}
+        onConfirm={isEditing ? handleSave : handleCreate}
+        confirmLabel={isEditing ? (saving ? "Guardando…" : "Guardar") : (saving ? "Creando…" : "Crear")}
+        confirmDisabled={saving}
+        confirmDim={isEditing ? ((!isDirty && !mmDirty) || !canSaveEdit) : !canCreate}
+      />
 
       {isEditing && showDeleteModal && (
         <Modal title={`¿Borrar "${group.name}"?`} onClose={() => { setShowDeleteModal(false); setDeleteConfirmText(""); }}>

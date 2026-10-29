@@ -27,12 +27,6 @@ Lista viva de pendientes del proyecto. Reglas:
 
 ## A. Mejoras pendientes
 
-- [ ] **Cambiar el registro de toda la app de voseo a tú**
-<details open><summary>Ver detalle</summary>
-
-Hoy toda la UI/chat usa voseo ("Elegí", "Guardá", "Creá", "podés", "vos"). Nicolas pidió pasar a un registro más neutro/formal (tú) — no somos argentinos. Encontrado al revisar los tooltips de `EvenGroupCapitalLink`, 2026-10-29. No es un find-and-replace mecánico: el voseo no se convierte con un simple reemplazo de texto (verbos irregulares: "tenés"→"tienes", "podés"→"puedes", "sos"→"eres", cada uno hay que tocarlo a mano sin romper la gramática). Un conteo rápido con un regex parcial ya dio 22 archivos / 67 coincidencias, sin contar formas irregulares no cubiertas por ese regex — el número real es más alto. Se trata como su propio pase dedicado, no se mezcla con el rediseño de formularios en curso. Sin empezar todavía, a la espera de que Nicolas decida cuándo priorizarlo.
-
-</details>
 - [x] ~~Bug: "Compensar lo prestado" transfiere a la cuenta equivocada~~
 <details><summary>Ver detalle</summary>
 
@@ -146,6 +140,27 @@ Fila label-izquierda/valor-derecha sin caja, hojas que suben desde abajo, `FormF
   - Cuenta de usuario: [ ] `ProfileScreen` — [ ] `ChangePasswordScreen` — [ ] `AuthScreen` — [ ] `RecoverPasswordScreen`
 
   De paso ya quedaron armados varios componentes/helpers compartidos reusables para el resto de la lista: `PickerField` (modos `rowLabel`/`compact`/`listStyle`), `DateRow`, `TextRow`, `FormFooter`, `PhotoLightbox`, `Hint`, `useTouched()`.
+
+</details>
+- [ ] **Saldo Real: terminar de migrar y probar con un ciclo real**
+<details open><summary>Ver detalle</summary>
+
+Migrado desde `TAREAS_ACTUALES.md` (borrado 2026-10-29, ya resuelto el resto de ese archivo) — quedan 3 pasos abiertos del rediseño de "Saldo Real"/Pendiente TC:
+1. Congelar "Pendiente TC": el saldo acumulado de préstamos viejos (de antes del mecanismo directo TC↔pseudo-cuenta del grupo) se deja quieto tal cual, no se intenta reconciliar con el sistema nuevo. De acá en adelante esa cuenta solo se sigue usando a mano para lo que no es de ningún grupo (ej. "pizza entre amigos").
+2. Vaciar `pendienteTcAutoSum` del bloque de Nico en `src/lib/customUserConfig.js`: esa automatización sumaba cada préstamo nuevo a mano a "Pendiente TC", comportamiento viejo que el mecanismo nuevo (TC→pseudo-cuenta directo) ya no necesita. Se borra una vez confirmado que el sistema nuevo funciona bien un ciclo completo (ver punto 3).
+3. Probar con un ciclo real completo: prestar algo nuevo vía la tarjeta, esperar a que cierre el ciclo de facturación, y confirmar que "Compensación de lo prestado" se genera sola, con el monto correcto, al destino correcto (la cuenta de pago de la tarjeta, recién corregido 2026-10-29 — ver el bug ya resuelto arriba en esta misma sección). Plan de Nicolas: probarlo con su cuenta real el mes que viene.
+
+</details>
+- [ ] **Gastos futuros, todavía no cobrados en la cuenta**
+<details open><summary>Ver detalle</summary>
+
+Migrado desde `TAREAS_ACTUALES.md` (borrado 2026-10-29). Poder cargar un gasto que ya se sabe que va a pasar en una fecha futura (ej. un viaje que se va a cobrar tal día) pero que todavía no impactó el saldo real de la cuenta — para tenerlo anotado/planeado sin que ya reste del balance como si hubiera pasado. Pensar cómo se distingue esto de un gasto normal (¿un estado "pendiente de cobro" aparte, una fecha futura que no cuenta para el saldo corriente hasta que llega, algo manual que se marca como "ya se cobró"?) y cómo interactúa con lo demás (recurrentes, estadísticas, Saldo Real).
+
+</details>
+- [ ] **Cambiar el registro de toda la app de voseo a tú**
+<details open><summary>Ver detalle</summary>
+
+Hoy toda la UI/chat usa voseo ("Elegí", "Guardá", "Creá", "podés", "vos"). Nicolas pidió pasar a un registro más neutro/formal (tú) — no somos argentinos. Encontrado al revisar los tooltips de `EvenGroupCapitalLink`, 2026-10-29. No es un find-and-replace mecánico: el voseo no se convierte con un simple reemplazo de texto (verbos irregulares: "tenés"→"tienes", "podés"→"puedes", "sos"→"eres", cada uno hay que tocarlo a mano sin romper la gramática). Un conteo rápido con un regex parcial ya dio 22 archivos / 67 coincidencias, sin contar formas irregulares no cubiertas por ese regex — el número real es más alto. Se trata como su propio pase dedicado, no se mezcla con el rediseño de formularios en curso. Sin empezar todavía, a la espera de que Nicolas decida cuándo priorizarlo.
 
 </details>
 

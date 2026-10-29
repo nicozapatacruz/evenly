@@ -5,7 +5,7 @@ import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } 
 import { CSS } from "@dnd-kit/utilities";
 import { offlineSupabase as supabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, FormFooter, ConfirmInline, IconInput, PickerField, Field, Modal, CalculatorAmountInput, CurrencyConversionField, SegmentedControl, DateRow, TextRow, formatDateRow, Hint } from "../../components/Shared.jsx";
+import { TopBar, FormFooter, ConfirmInline, IconInput, PickerField, Field, Modal, CalculatorAmountInput, CurrencyConversionField, SegmentedControl, DateRow, TextRow, Hint } from "../../components/Shared.jsx";
 import { parseAmountInput, todayInputValue, dateInputValue, dateInputValueInZone, money, fmtDate, useScrollToTopOnChange, useScrollIntoViewOnChange, normalizeForSearch, CURRENCIES, useTouched } from "../../lib/helpers.jsx";
 import { RECURRING_FREQUENCIES, nextOccurrence, computeAmountMain, useRecentNoteTitles } from "../../lib/evenCapitalData.js";
 

@@ -5,7 +5,7 @@ import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } 
 import { CSS } from "@dnd-kit/utilities";
 import { offlineSupabase as supabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, Footer, ConfirmInline, Field } from "../../components/Shared.jsx";
+import { TopBar, FormFooter, ConfirmInline, PickerField } from "../../components/Shared.jsx";
 import { CURRENCIES, CURRENCY_LIST } from "../../lib/helpers.jsx";
 
 /* =========================================================================
@@ -60,11 +60,14 @@ export default function CurrencySettingsScreen({ session, settings, reload, show
     <div style={styles.screen}>
       <TopBar title="Ajustes de moneda" onBack={onBack} />
       <div style={styles.form}>
-        <Field label="Moneda principal" info="Es la moneda por defecto sugerida al crear una cuenta nueva. No afecta a las cuentas que ya existen.">
-          <select style={styles.input} value={mainCurrency} onChange={(e) => setMainCurrency(e.target.value)}>
-            {CURRENCY_LIST.map((c) => <option key={c} value={c}>{c} ({CURRENCIES[c].symbol})</option>)}
-          </select>
-        </Field>
+        <PickerField
+          rowLabel="Moneda principal"
+          info="Es la moneda por defecto sugerida al crear una cuenta nueva. No afecta a las cuentas que ya existen."
+          title="Elegí la moneda"
+          value={mainCurrency}
+          onChange={setMainCurrency}
+          groups={[{ label: null, items: CURRENCY_LIST.map((c) => ({ value: c, label: c, icon: CURRENCIES[c].symbol })) }]}
+        />
 
         <div>
           <p style={{ ...styles.label, marginBottom: 6 }}>Otras monedas</p>
@@ -116,12 +119,13 @@ export default function CurrencySettingsScreen({ session, settings, reload, show
           )}
         </div>
       </div>
-      <Footer>
-        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onBack}>Cancelar</button>
-        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !isDirty) ? 0.5 : 1 }} onClick={save} disabled={saving || !isDirty}>
-          {saving ? "Guardando…" : "Guardar"}
-        </button>
-      </Footer>
+      <FormFooter
+        onCancel={onBack}
+        onConfirm={save}
+        confirmLabel={saving ? "Guardando…" : "Guardar"}
+        confirmDisabled={saving || !isDirty}
+        confirmDim={!isDirty}
+      />
     </div>
   );
 }

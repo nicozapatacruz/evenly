@@ -1188,9 +1188,10 @@ function EvenGroupCapitalLink({
       )}
       {linked && !confirmingUnlink && (
         <>
+          <p style={{ ...styles.label, display: "block", margin: 0 }}>Cuenta por defecto para:</p>
           <PickerField
-            rowLabel="Cuenta por defecto en gastos propios"
-            info={"Cuenta que se usa para tu parte cuando vos creás un gasto en el grupo.\nEj: creás un gasto de €100 del que €50 son tuyos y €50 son de otra persona. Los €50 tuyos salen de esta cuenta."}
+            rowLabel="Gastos propios"
+            info={"Cuenta que se usa para tu parte cuando creas un gasto en el grupo.\nEj: creas un gasto de €100 del que €50 son tuyos y €50 son de otra persona. Los €50 tuyos salen de esta cuenta."}
             required
             value={ownAccountId}
             onChange={onOwnAccountChange}
@@ -1202,8 +1203,8 @@ function EvenGroupCapitalLink({
             <p style={{ margin: "-8px 0 0", fontSize: 12, fontFamily: "system-ui, sans-serif", color: "#B0473A" }}>Este campo es obligatorio.</p>
           )}
           <PickerField
-            rowLabel="Cuenta por defecto en gastos ajenos"
-            info={"Cuenta que se usa para tu parte cuando otro miembro crea un gasto en el grupo.\nEj: alguien crea un gasto de €100 del que €50 son tuyos. Esos €50 salen de esta cuenta, pero entran de vuelta al mismo tiempo por una transferencia automática (desde 'lo que te prestan' si la configuraste en Opciones avanzadas, o desde esta misma cuenta si no) -- así que en neto no perdés nada hasta que de verdad le debas esa plata a alguien."}
+            rowLabel="Gastos ajenos"
+            info={"Cuenta que se usa para tu parte cuando otro miembro crea un gasto en el grupo.\nEj: alguien crea un gasto de €100 del que €50 son tuyos. Esos €50 salen de esta cuenta. Como en realidad no salió dinero tuyo (lo pagó la otra persona), se crea también una transferencia automática: desde el grupo de EvenGroup hacia 'Lo que te prestan' si la configuraste en Opciones avanzadas, o hacia esta misma cuenta si no."}
             required
             value={otherAccountId}
             onChange={onOtherAccountChange}
@@ -1233,8 +1234,8 @@ function EvenGroupCapitalLink({
             {advancedOpen && (
               <div ref={advancedRef} style={{ border: "1px solid #DDD2BE", borderTop: "none", borderRadius: "0 0 10px 10px", padding: "12px", display: "flex", flexDirection: "column", gap: 10, background: "#fff" }}>
                 <PickerField
-                  rowLabel="Cuenta de lo que prestás"
-                  info={"Cuenta aparte para cuando VOS pagás de más (prestás) en el grupo, separada de 'propios' (esa sigue siendo tu parte del gasto).\nEj: gasto de €100 (tu parte €50), vos pagás los €100. Los otros €50 prestados salen de esta cuenta en vez de 'propios'.\nSi lo dejás vacío, el préstamo sigue mezclado con 'propios', como hasta ahora."}
+                  rowLabel="Lo que prestas"
+                  info={"Cuenta aparte para cuando TÚ pagas de más (prestas) en el grupo, separada de 'Gastos propios' (esa sigue siendo tu parte del gasto).\nEj: gasto de €100 (tu parte €50), tú pagas los €100. Los otros €50 prestados salen de esta cuenta en vez de 'Gastos propios'.\nSi lo dejas vacío, el préstamo sigue mezclado con 'Gastos propios', como hasta ahora."}
                   value={lendAccountId}
                   onChange={onLendAccountChange}
                   onClear={() => onLendAccountChange("")}
@@ -1242,8 +1243,8 @@ function EvenGroupCapitalLink({
                   placeholder="Sin cuenta aparte"
                 />
                 <PickerField
-                  rowLabel="Cuenta de lo que te prestan"
-                  info={"Cuenta aparte para cuando OTRO paga tu parte en el grupo, separada de 'ajenos' (esa sigue siendo tu parte del gasto).\nEj: gasto de €100 (tu parte €50), paga otra persona. Esos €50 que te prestaron entran acá al mismo tiempo que se registra tu parte en 'ajenos'.\nSi lo dejás vacío, el préstamo sigue mezclado con 'ajenos', como hasta ahora."}
+                  rowLabel="Lo que te prestan"
+                  info={"Cuenta aparte para cuando OTRO paga tu parte en el grupo, separada de 'Gastos ajenos' (esa sigue siendo tu parte del gasto).\nEj: gasto de €100 (tu parte €50), paga otra persona. Esos €50 que te prestaron entran acá al mismo tiempo que se registra tu parte en 'Gastos ajenos'.\nAsí puedes ver cuánto le debes al grupo por separado, sin que se mezcle con el resto de 'Gastos ajenos'.\nSi lo dejas vacío, el préstamo sigue mezclado con 'Gastos ajenos', como hasta ahora."}
                   value={loanAccountId}
                   onChange={onLoanAccountChange}
                   onClear={() => onLoanAccountChange("")}
@@ -1252,8 +1253,8 @@ function EvenGroupCapitalLink({
                 />
                 {lendAccountIsCreditCard && (
                   <PickerField
-                    rowLabel="Cuenta de origen para compensar lo prestado"
-                    info={"Si 'lo que prestás' es una tarjeta, pagarla completa (tu parte + lo prestado) hace que tu cuenta líquida se vea baja hasta que el grupo te devuelva esa plata -- es real, no un error.\nSi igual querés que se vea 'limpia' de una, elegí acá una cuenta donde ver temporalmente lo prestado: al cerrar cada ciclo de la tarjeta, se transfiere sola desde acá hacia tu cuenta de gastos ajenos.\nSi lo dejás vacío, no se genera ninguna transferencia -- tu cuenta líquida simplemente se ve baja hasta que te paguen."}
+                    rowLabel="Compensar lo prestado"
+                    info={"Como 'Lo que prestas' es una tarjeta de crédito, cuando la pagas hace que lo que prestaste también salga de la cuenta con la que la pagas.\nPon acá una cuenta si quieres que la parte prestada salga de esa cuenta (se crea una transferencia de esta cuenta a la cuenta con la que pagas la tarjeta).\nSi lo dejas vacío, no se genera ninguna transferencia -- tu cuenta líquida simplemente se ve baja hasta que te paguen."}
                     value={lendOffsetAccountId}
                     onChange={onLendOffsetAccountChange}
                     onClear={() => onLendOffsetAccountChange("")}

@@ -782,34 +782,29 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", t
       // deja de usar el mecanismo nativo para no tapar a sus hijos.
       style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 40, padding: "0 2px", border: "none", borderBottom: "1px solid #ECE3D3", background: "transparent", textAlign: "left", fontFamily: "system-ui, sans-serif", cursor: disabled ? "not-allowed" : "pointer" }}
     >
-      <span style={{ ...rowLabelTextStyle, maxWidth: "50%", flexShrink: 0, fontSize: 13, color: "#6B6355" }}>
-        {/* El ⓘ va ADENTRO del mismo bloque clampeado (no como hermano
-            flex afuera) -- así fluye con el texto como una palabra más y
-            cae pegado a donde sea que termine la última línea visible, en
-            vez de quedar anclado al ancho de la línea más larga (que es lo
-            que pasaba cuando era un hermano flex: su posición dependía del
-            ancho de la CAJA, no de dónde termina el texto de verdad).
+      <span style={{ display: "flex", alignItems: "center", gap: 4, maxWidth: "50%", flexShrink: 0, fontSize: 13, color: "#6B6355" }}>
+        {/* El ⓘ vuelve a ser un hermano flex de afuera (no parte del texto
+            clampeado) -- se probó metido adentro (fluyendo pegado a la
+            última palabra) pero un label que casi llena su línea sin dejar
+            lugar para el ícono lo mandaba SOLO a una 2da línea, huérfano,
+            desconectado del texto (visto en vivo con "Cuenta de lo que
+            prestás"/"te prestan", EvenGroupCapitalLink). Como hermano flex
+            el ícono siempre cae en una posición predecible (nunca solo en
+            su propia línea), a cambio de no "pegarse" a la última palabra
+            cuando el label ocupa 2 líneas -- se ancla al ancho de la caja.
             La opacidad de "deshabilitado" va en un span propio, solo
             alrededor del texto -- mismo motivo que ya se resolvió en
             ToggleField: puesta en todo esto (como era antes), también
             apagaba el ⓘ y su globo de texto, justo cuando `blockedReason`
             existe PARA explicar por qué está apagado. */}
-        <span style={{ opacity: disabled ? 0.6 : 1 }}>
+        <span style={{ ...rowLabelTextStyle, opacity: disabled ? 0.6 : 1 }}>
           {rowLabel}
           {required && <span style={{ color: "#B0473A" }}>*</span>}
         </span>
         {/* Si está bloqueado, no tiene sentido TAMBIÉN explicar qué hace el
             campo en general -- lo único que importa ahí es por qué no se
             puede tocar ahora (el 🚫, del otro lado, junto al valor). */}
-        {/* marginLeft a mano (no un `gap` del contenedor, que ya no es flex
-            ahora que esto vive dentro del bloque clampeado): sin esto el ⓘ
-            queda pegado contra el texto/asterisco, sin aire. verticalAlign
-            también a mano -- un elemento inline dentro de `-webkit-box`
-            alinea por defecto a la línea base del texto (como una letra
-            más), y un ícono ahí se ve corrido hacia arriba; "middle" lo
-            centra contra la línea como ya hacía el `alignItems:"center"`
-            de flexbox antes de este cambio. */}
-        {info && !(disabled && blockedReason) && <span style={{ marginLeft: 4, verticalAlign: "middle" }}><InfoTooltip text={info} /></span>}
+        {info && !(disabled && blockedReason) && <InfoTooltip text={info} />}
       </span>
       <span style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, flex: 1, fontSize: 13.5, minWidth: 0 }}>
         {/* `blockedReason` va del lado del VALOR (no del label, como `info`)
@@ -818,7 +813,7 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", t
             campo en general. Afuera del span de abajo (que sí se atenúa) para
             que el ⓘ/su globo de texto nunca queden atenuados. */}
         {disabled && blockedReason && <InfoTooltip text={blockedReason} blocked />}
-        <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, color: selected ? "#2B2620" : "#A3968B", opacity: disabled ? 0.6 : 1 }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, textAlign: "right", color: selected ? "#2B2620" : "#A3968B", opacity: disabled ? 0.6 : 1 }}>
           {selected ? (
             <>
               {selected.icon && <span style={{ display: "inline-flex", alignItems: "center" }}>{selected.icon}</span>}

@@ -219,8 +219,11 @@ export default function SearchScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // system_key "split_ledger" (EvenGroup) afuera: las únicas transacciones
+  // que tocan esa cuenta pseudo son role:"loan", y esas quedan excluidas del
+  // feed por `sl_hidden` -- filtrar por esa cuenta acá nunca encontraría nada.
   const accountGroups = groups
-    .filter((g) => !g.deleted)
+    .filter((g) => !g.deleted && g.system_key !== "split_ledger")
     .map((g) => ({ label: g.name, items: accounts.filter((a) => a.group_id === g.id && !a.hidden && !a.deleted).map((a) => ({ value: a.id, label: a.name, icon: a.icon })) }))
     .filter((g) => g.items.length > 0);
 

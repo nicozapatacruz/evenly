@@ -681,7 +681,7 @@ export function Footer({ children }) {
 export function FormFooter({ onCancel, cancelLabel = "Cancelar", cancelDisabled = false, onConfirm, confirmLabel, confirmDisabled = false, confirmDim = false, confirmColor = "#C75D3B" }) {
   return (
     <Footer>
-      <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onCancel} disabled={cancelDisabled}>
+      <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0, opacity: cancelDisabled ? 0.5 : 1 }} onClick={onCancel} disabled={cancelDisabled}>
         {cancelLabel}
       </button>
       <button
@@ -1985,18 +1985,18 @@ export function HeaderMenu({ trigger, items = [], currencies = [], currency, onC
   );
 }
 
-// Misma base visual que PickerField (grilla agrupada de 3 columnas) pero de
-// selección múltiple — pensado para los filtros del Buscador (cuenta,
-// categoría). Diferencias clave: tocar un ítem lo prende/apaga sin cerrar el
-// desplegable (tenés que poder elegir varios seguidos), y el botón de arriba
-// resume cuántos hay elegidos en vez de mostrar un solo valor.
+// Misma hoja/grilla que PickerField (sube desde abajo, íconos agrupados de a
+// 3) pero de selección múltiple — pensado para los filtros del Buscador
+// (cuenta, categoría). Diferencia clave: tocar un ítem lo prende/apaga SIN
+// cerrar la hoja (hace falta poder elegir varios seguidos) — el botón de
+// "Cerrar" de arriba es la única forma de salir. El botón de arriba resume
+// cuántos hay elegidos en vez de mostrar un solo valor.
 let multiPickerInstanceCounter = 0;
 
-export function MultiPickerField({ value, onChange, groups, placeholder = "Elegir" }) {
+export function MultiPickerField({ value, onChange, groups, placeholder = "Elegir", title, rowLabel, required = false }) {
   const [open, setOpen] = useState(false);
   const idRef = useRef(null);
   if (idRef.current === null) idRef.current = ++multiPickerInstanceCounter;
-  const containerRef = useRef(null);
   const selectedItems = groups.flatMap((g) => g.items).filter((it) => value.includes(it.value));
 
   useEffect(() => {
@@ -2008,72 +2008,84 @@ export function MultiPickerField({ value, onChange, groups, placeholder = "Elegi
     return () => window.removeEventListener("ec-picker-open", onOtherOpen);
   }, []);
 
-  useEffect(() => {
-    if (!open) return;
-    const onClickOutside = (e) => {
-      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false);
-    };
-    document.addEventListener("click", onClickOutside);
-    return () => document.removeEventListener("click", onClickOutside);
-  }, [open]);
-
   const toggle = (v) => onChange(value.includes(v) ? value.filter((x) => x !== v) : [...value, v]);
 
   const summary = selectedItems.length === 0 ? placeholder
     : selectedItems.length === 1 ? selectedItems[0].label
       : `${selectedItems.length} seleccionadas`;
 
+  const trigger = rowLabel ? (
+    <button
+      type="button"
+      onClick={() => setOpen(true)}
+      style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 40, padding: "0 2px", border: "none", borderBottom: "1px solid #ECE3D3", background: "transparent", textAlign: "left", fontFamily: "system-ui, sans-serif", cursor: "pointer" }}
+    >
+      <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355" }}>
+        {rowLabel}
+        {required && <span style={{ color: "#B0473A" }}>*</span>}
+      </span>
+      <span style={{ flex: 1, minWidth: 0, textAlign: "right", fontSize: 13.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: selectedItems.length ? "#2B2620" : "#A3968B" }}>
+        {summary}
+      </span>
+    </button>
+  ) : (
+    <button
+      type="button"
+      onClick={() => setOpen(true)}
+      style={{ ...styles.input, width: "100%", height: 44, boxSizing: "border-box", textAlign: "left", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}
+    >
+      <span style={selectedItems.length === 0 ? { color: "#A89A87", fontSize: 13 } : undefined}>{summary}</span>
+    </button>
+  );
+
   return (
-    <div ref={containerRef}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        style={{ ...styles.input, width: "100%", height: 44, boxSizing: "border-box", textAlign: "left", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", borderRadius: open ? "10px 10px 0 0" : 10 }}
-      >
-        <span style={selectedItems.length === 0 ? { color: "#A89A87", fontSize: 13 } : undefined}>{summary}</span>
-      </button>
+    <>
+      {trigger}
       {open && (
-        <div style={{ border: "1px solid #DDD2BE", borderTop: "none", borderRadius: "0 0 10px 10px", background: "#fff", overflow: "hidden" }}>
-          {groups.map((g) => (
-            <div key={g.label || "flat"}>
-              {g.label && (
-                <p style={{ margin: 0, padding: "6px 10px", fontSize: 11, fontWeight: 700, color: "#A8754A", textTransform: "uppercase", letterSpacing: "0.04em", background: "#FAF7F2", borderBottom: "1px solid #F0EBE2", pointerEvents: "none" }}>
-                  {g.label}
+        <div style={styles.sheetBackdrop} onClick={() => setOpen(false)}>
+          <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.sheetHandle} />
+            <div style={styles.sheetHeader}>
+              <span />
+              <p style={styles.sheetTitle}>{title || placeholder}</p>
+              <button type="button" style={styles.sheetClose} onClick={() => setOpen(false)}>{selectedItems.length > 0 ? "Listo" : "Cerrar"}</button>
+            </div>
+            <div className="no-scrollbar" style={styles.sheetBody}>
+              {groups.length === 0 && (
+                <p style={{ margin: "16px 4px 0", fontSize: 13, color: "#A89A87", fontFamily: "system-ui, sans-serif", textAlign: "center" }}>
+                  No hay opciones para elegir.
                 </p>
               )}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1, background: "#F0EBE2" }}>
-                {g.items.map((it) => {
-                  const checked = value.includes(it.value);
-                  return (
-                    <button
-                      type="button"
-                      key={it.value}
-                      // Solo onPointerUp (no también onClick, como en
-                      // PickerField): ahí onChange+setOpen(false) son
-                      // idempotentes y da igual que se disparen dos veces,
-                      // pero toggle() invierte el valor — disparar los dos
-                      // eventos prendía y apagaba en el mismo click.
-                      onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); toggle(it.value); }}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 6, padding: "10px 8px", fontSize: 12.5, fontFamily: "system-ui, sans-serif",
-                        border: "none", background: checked ? "#FBEDE7" : "#fff", color: "#2B2620", textAlign: "left", cursor: "pointer", minWidth: 0,
-                      }}
-                    >
-                      {it.icon && <span style={{ flexShrink: 0, display: "inline-flex", alignItems: "center" }}>{it.icon}</span>}
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{it.label}</span>
-                      {checked && <Check size={14} style={{ flexShrink: 0, color: "#C75D3B" }} />}
-                    </button>
-                  );
-                })}
-                {Array.from({ length: (3 - (g.items.length % 3)) % 3 }).map((_, i) => (
-                  <div key={`empty-${i}`} style={{ background: "#F5F1E8", pointerEvents: "none" }} />
-                ))}
-              </div>
+              {groups.map((g) => (
+                <div key={g.label || "flat"}>
+                  {g.label && (
+                    <div style={styles.sheetGroupTitle}>
+                      <span>{g.label}</span>
+                      <span style={styles.sheetGroupRule} />
+                    </div>
+                  )}
+                  <div style={styles.sheetGrid}>
+                    {g.items.map((it) => {
+                      const on = value.includes(it.value);
+                      return (
+                        <button type="button" key={it.value} style={styles.sheetTile} onClick={() => toggle(it.value)}>
+                          <span style={{ ...styles.sheetTileIcon, fontSize: textIconFontSize(it.icon, styles.sheetTileIcon.fontSize), ...(on ? styles.sheetTileIconOn : null), ...(it.icon ? null : { color: "#A89A87", fontWeight: 600 }) }}>
+                            {it.icon || it.label?.trim()?.[0]?.toUpperCase() || "?"}
+                          </span>
+                          <span style={{ ...styles.sheetTileName, ...(on ? styles.sheetTileNameOn : null) }}>
+                            {it.label}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 

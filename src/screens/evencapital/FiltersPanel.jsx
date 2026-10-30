@@ -1,88 +1,97 @@
-import React, { useState } from "react";
+import React from "react";
 import { styles } from "../../lib/styles.js";
-import { TopBar, Footer, Field, MultiPickerField, SegmentedControl } from "../../components/Shared.jsx";
+import { TopBar, FormFooter, MultiPickerField, DateRow } from "../../components/Shared.jsx";
 import { EMPTY_FILTERS, filtersEqual } from "../../lib/filterHelpers.js";
 
 // Compartido entre el Buscador y el filtro persistente de Transacciones/
 // Estadísticas — misma UI de filtros en los dos casos, solo cambia qué hace
 // "Aplicar" con el resultado (correr una búsqueda vs. filtrar en el cliente).
 export function FiltersPanel({ draft, setDraft, filters, accountGroups, categories, onBack, onApply, onClear, title = "Filtros" }) {
-  const [categoryFilterType, setCategoryFilterType] = useState("expense");
-  const categoryItems = categories.filter((c) => c.type === categoryFilterType && !c.deleted).map((c) => ({ value: c.id, label: c.name, icon: c.icon }));
   const unchanged = filtersEqual(draft, filters);
   const empty = filtersEqual(draft, EMPTY_FILTERS);
 
-  // Cuántas categorías elegidas hay de cada tipo — para avisar en la
-  // pestaña que no estás mirando que ahí también quedó algo seleccionado
-  // (categoryIds es un solo array para los dos tipos, así que cambiar de
-  // pestaña no se "ve" si no hay algo que lo marque).
-  const countByType = (t) => draft.categoryIds.filter((id) => categories.find((c) => c.id === id)?.type === t).length;
-  const expenseCount = countByType("expense");
-  const incomeCount = countByType("income");
+  // `categoryIds` sigue siendo un solo array por debajo (gasto + ingreso
+  // mezclados) -- acá arriba se separa solo para mostrar 2 filas
+  // independientes en vez de 1 con un toggle, cada `onChange` vuelve a
+  // mezclar su parte con la del otro tipo sin tocarla.
+  const expenseCategoryItems = categories.filter((c) => c.type === "expense" && !c.deleted).map((c) => ({ value: c.id, label: c.name, icon: c.icon }));
+  const incomeCategoryItems = categories.filter((c) => c.type === "income" && !c.deleted).map((c) => ({ value: c.id, label: c.name, icon: c.icon }));
+  const selectedExpenseIds = draft.categoryIds.filter((id) => categories.find((c) => c.id === id)?.type === "expense");
+  const selectedIncomeIds = draft.categoryIds.filter((id) => categories.find((c) => c.id === id)?.type === "income");
 
   return (
     <div style={styles.screen}>
       <TopBar title={title} onBack={onBack} />
       <div style={styles.form}>
-        {/* minWidth:0 en los dos Field de cada fila — por default un hijo de
-            flex no se achica más allá del tamaño de SU contenido ("min-width:
-            auto"), y un <input type="date"> vacío en iOS renderiza bastante
-            más ancho que la mitad de la pantalla. Sin esto, empuja el layout
-            entero más ancho que el viewport en vez de achicarse al 50%. */}
-        <div style={{ display: "flex", gap: 10 }}>
-          <Field label="Importe mínimo" style={{ flex: 1, minWidth: 0 }}>
-            <input style={{ ...styles.input, width: "100%" }} value={draft.amountMin} onChange={(e) => setDraft((d) => ({ ...d, amountMin: e.target.value }))} placeholder="0.00" inputMode="decimal" />
-          </Field>
-          <Field label="Importe máximo" style={{ flex: 1, minWidth: 0 }}>
-            <input style={{ ...styles.input, width: "100%" }} value={draft.amountMax} onChange={(e) => setDraft((d) => ({ ...d, amountMax: e.target.value }))} placeholder="0.00" inputMode="decimal" />
-          </Field>
+        <div style={{ display: "flex", gap: 20 }}>
+          <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8, minHeight: 40, borderBottom: "1px solid #ECE3D3", fontFamily: "system-ui, sans-serif" }}>
+            <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355" }}>Mínimo</span>
+            <input
+              className="row-input"
+              style={{ flex: 1, minWidth: 0, textAlign: "right", fontSize: 13.5, fontFamily: "system-ui, sans-serif", border: "none", background: "transparent", padding: 0, color: "#2B2620" }}
+              value={draft.amountMin}
+              onChange={(e) => setDraft((d) => ({ ...d, amountMin: e.target.value }))}
+              placeholder="0.00"
+              inputMode="decimal"
+            />
+          </div>
+          <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8, minHeight: 40, borderBottom: "1px solid #ECE3D3", fontFamily: "system-ui, sans-serif" }}>
+            <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355" }}>Máximo</span>
+            <input
+              className="row-input"
+              style={{ flex: 1, minWidth: 0, textAlign: "right", fontSize: 13.5, fontFamily: "system-ui, sans-serif", border: "none", background: "transparent", padding: 0, color: "#2B2620" }}
+              value={draft.amountMax}
+              onChange={(e) => setDraft((d) => ({ ...d, amountMax: e.target.value }))}
+              placeholder="0.00"
+              inputMode="decimal"
+            />
+          </div>
         </div>
 
-        <div style={{ display: "flex", gap: 10 }}>
-          <Field label="Desde" style={{ flex: 1, minWidth: 0 }}>
-            <input style={{ ...styles.input, width: "100%", minHeight: 44, boxSizing: "border-box" }} type="date" value={draft.dateFrom} onChange={(e) => setDraft((d) => ({ ...d, dateFrom: e.target.value }))} />
-          </Field>
-          <Field label="Hasta" style={{ flex: 1, minWidth: 0 }}>
-            <input style={{ ...styles.input, width: "100%", minHeight: 44, boxSizing: "border-box" }} type="date" value={draft.dateTo} onChange={(e) => setDraft((d) => ({ ...d, dateTo: e.target.value }))} />
-          </Field>
+        <div style={{ display: "flex", gap: 20 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <DateRow label="Desde" value={draft.dateFrom} onChange={(v) => setDraft((d) => ({ ...d, dateFrom: v }))} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <DateRow label="Hasta" value={draft.dateTo} onChange={(v) => setDraft((d) => ({ ...d, dateTo: v }))} />
+          </div>
         </div>
 
-        <Field label="Cuenta">
-          <MultiPickerField
-            value={draft.accountIds}
-            onChange={(v) => setDraft((d) => ({ ...d, accountIds: v }))}
-            groups={accountGroups}
-            placeholder="Todas"
-          />
-        </Field>
+        <MultiPickerField
+          rowLabel="Cuenta"
+          title="Elegí una o más cuentas"
+          value={draft.accountIds}
+          onChange={(v) => setDraft((d) => ({ ...d, accountIds: v }))}
+          groups={accountGroups}
+          placeholder="Todas"
+        />
 
-        <Field label="Categoría">
-          <SegmentedControl
-            options={[
-              {
-                value: "expense", label: "Gasto",
-                badge: expenseCount > 0 ? <span style={{ position: "absolute", top: -8, right: -8, minWidth: 20, height: 20, padding: "0 4px", borderRadius: 10, background: "#C75D3B", color: "#fff", fontSize: 11.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff" }}>{expenseCount}</span> : null,
-              },
-              {
-                value: "income", label: "Ingreso",
-                badge: incomeCount > 0 ? <span style={{ position: "absolute", top: -8, right: -8, minWidth: 20, height: 20, padding: "0 4px", borderRadius: 10, background: "#C75D3B", color: "#fff", fontSize: 11.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff" }}>{incomeCount}</span> : null,
-              },
-            ]}
-            value={categoryFilterType}
-            onChange={setCategoryFilterType}
-          />
-          <MultiPickerField
-            value={draft.categoryIds}
-            onChange={(v) => setDraft((d) => ({ ...d, categoryIds: v }))}
-            groups={[{ label: null, items: categoryItems }]}
-            placeholder="Todas"
-          />
-        </Field>
+        <MultiPickerField
+          rowLabel="Categorías de gasto"
+          title="Elegí una o más categorías"
+          value={selectedExpenseIds}
+          onChange={(v) => setDraft((d) => ({ ...d, categoryIds: [...v, ...selectedIncomeIds] }))}
+          groups={[{ label: null, items: expenseCategoryItems }]}
+          placeholder="Todas"
+        />
+
+        <MultiPickerField
+          rowLabel="Categorías de ingreso"
+          title="Elegí una o más categorías"
+          value={selectedIncomeIds}
+          onChange={(v) => setDraft((d) => ({ ...d, categoryIds: [...selectedExpenseIds, ...v] }))}
+          groups={[{ label: null, items: incomeCategoryItems }]}
+          placeholder="Todas"
+        />
       </div>
-      <Footer>
-        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0, opacity: empty ? 0.5 : 1 }} onClick={onClear} disabled={empty}>Limpiar</button>
-        <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: unchanged ? 0.5 : 1 }} onClick={onApply} disabled={unchanged}>Aplicar</button>
-      </Footer>
+      <FormFooter
+        onCancel={onClear}
+        cancelLabel="Limpiar"
+        cancelDisabled={empty}
+        onConfirm={onApply}
+        confirmLabel="Aplicar"
+        confirmDisabled={unchanged}
+      />
     </div>
   );
 }

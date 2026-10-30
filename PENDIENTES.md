@@ -113,6 +113,44 @@ Resuelto 2026-10-30 con la solución robusta (elegida por Nicolas sobre una alte
 
 </details>
 
+- [ ] **Gastos futuros, todavía no cobrados en la cuenta**
+<details open><summary>Ver detalle</summary>
+
+Migrado desde `TAREAS_ACTUALES.md` (borrado 2026-10-29). Poder cargar un gasto que ya se sabe que va a pasar en una fecha futura (ej. un viaje que se va a cobrar tal día) pero que todavía no impactó el saldo real de la cuenta — para tenerlo anotado/planeado sin que ya reste del balance como si hubiera pasado. Pensar cómo se distingue esto de un gasto normal (¿un estado "pendiente de cobro" aparte, una fecha futura que no cuenta para el saldo corriente hasta que llega, algo manual que se marca como "ya se cobró"?) y cómo interactúa con lo demás (recurrentes, estadísticas, Saldo Real).
+
+</details>
+
+- [ ] **Saldo Real: terminar de migrar y probar con un ciclo real**
+<details open><summary>Ver detalle</summary>
+
+Migrado desde `TAREAS_ACTUALES.md` (borrado 2026-10-29, ya resuelto el resto de ese archivo) — quedan 3 pasos abiertos del rediseño de "Saldo Real"/Pendiente TC:
+1. Congelar "Pendiente TC": el saldo acumulado de préstamos viejos (de antes del mecanismo directo TC↔pseudo-cuenta del grupo) se deja quieto tal cual, no se intenta reconciliar con el sistema nuevo. De acá en adelante esa cuenta solo se sigue usando a mano para lo que no es de ningún grupo (ej. "pizza entre amigos").
+2. Vaciar `pendienteTcAutoSum` del bloque de Nico en `src/lib/customUserConfig.js`: esa automatización sumaba cada préstamo nuevo a mano a "Pendiente TC", comportamiento viejo que el mecanismo nuevo (TC→pseudo-cuenta directo) ya no necesita. Se borra una vez confirmado que el sistema nuevo funciona bien un ciclo completo (ver punto 3).
+3. Probar con un ciclo real completo: prestar algo nuevo vía la tarjeta, esperar a que cierre el ciclo de facturación, y confirmar que "Compensación de lo prestado" se genera sola, con el monto correcto, al destino correcto (la cuenta de pago de la tarjeta, recién corregido 2026-10-29 — ver el bug ya resuelto arriba en esta misma sección). Plan de Nicolas: probarlo con su cuenta real el mes que viene.
+
+</details>
+
+- [ ] **Unificar `TransactionForm.jsx` y `PhotoImportWizardScreen.jsx`**
+<details open><summary>Ver detalle</summary>
+
+Unificar `TransactionForm.jsx` y el paso del asistente de fotos (`PhotoImportWizardScreen.jsx`) en un solo componente visual de "campos de transacción" (Tipo/Fecha/Importe/Cuenta/Categoría/Descripción/Nota), que cada uno envuelva con su propia lógica de guardado — en vez de 2 implementaciones separadas que pueden divergir sin que nadie se dé cuenta. Encontrado al redistribuir `PhotoImportWizardScreen.jsx` (2026-10-28): aparecieron 3 divergencias que nadie notó hasta probarlo (título del picker de Categoría, diseño del importe, orden de los campos) — señal de que mantenerlas a mano sincronizadas no escala. Alcance acotado: de las 18 pantallas de la lista de arriba, estas 2 son las ÚNICAS que comparten este set de campos (EvenGroup es, a propósito, un formulario distinto). Queda afuera del componente compartido el caso de tasa de cambio (`needsRate`, exclusivo de transacciones sincronizadas con EvenGroup en otra moneda) — el asistente nunca lo necesita (cuenta/moneda fijas para todo el lote). Decidido con Nicolas: primero terminar el rediseño pantalla por pantalla (arreglando divergencias puntuales a mano mientras tanto), esto se aborda aparte.
+
+</details>
+
+- [ ] **Cambiar el registro de toda la app de voseo a tú**
+<details open><summary>Ver detalle</summary>
+
+Hoy toda la UI/chat usa voseo ("Elegí", "Guardá", "Creá", "podés", "vos"). Nicolas pidió pasar a un registro más neutro/formal (tú) — no somos argentinos. Encontrado al revisar los tooltips de `EvenGroupCapitalLink`, 2026-10-29. No es un find-and-replace mecánico: el voseo no se convierte con un simple reemplazo de texto (verbos irregulares: "tenés"→"tienes", "podés"→"puedes", "sos"→"eres", cada uno hay que tocarlo a mano sin romper la gramática). Un conteo rápido con un regex parcial ya dio 22 archivos / 67 coincidencias, sin contar formas irregulares no cubiertas por ese regex — el número real es más alto. Se trata como su propio pase dedicado, no se mezcla con el rediseño de formularios en curso. Sin empezar todavía, a la espera de que Nicolas decida cuándo priorizarlo.
+
+</details>
+
+- [ ] **Feedback visual de "presionado" en botones/elementos clickeables**
+<details open><summary>Ver detalle</summary>
+
+Agregar feedback visual de "presionado" a todos los botones/elementos clickeables de la app — hoy casi ninguno lo tiene. Causa: `-webkit-tap-highlight-color: transparent` (`src/lib/styles.js`) apaga el flash nativo en TODO (`*`), y nunca se construyó un reemplazo propio salvo un caso puntual. Encontrado y resuelto puntualmente 2026-10-24 para las teclas de `CalculatorAmountInput`/`CurrencyConversionField` (`CalculatorKeyButton` en `src/components/Shared.jsx`), como parte del rediseño de `TransactionForm.jsx` — ahí también se confirmó que un intento anterior con CSS `:active` (`.calc-key:active`) no servía: no es confiable en Safari/iOS con un toque real, solo con mouse, hay que manejar el estado por JS (`onPointerDown`/`Up`/`Leave`/`Cancel`). Falta hacer lo mismo para el resto de botones de la app (Guardar/Cancelar, filas de `PickerField`, tiles de las hojas, tabs, etc.) — tarea aparte, no mezclar con el rediseño de cada formulario puntual.
+
+</details>
+
 - [ ] **Paleta de color distinta para Split Ledger y Money Manager**
 <details open><summary>Ver detalle</summary>
 
@@ -127,19 +165,14 @@ Revisión completa del diseño, los valores usados en los paddings y la UI en ge
 
 </details>
 
+_(Orden de esta lista de pendientes activos acordado con Nicolas 2026-10-30 — es el orden en que los vamos a ir haciendo.)_
+
 - [x] ~~Footer 1/3-2/3 en todos los formularios~~
 <details><summary>Ver detalle</summary>
 
 ~~Footer de Cancelar/Guardar (y similares): cambiar de 50/50 (los dos con `flex:1`) a una proporción 1/3 (Cancelar) - 2/3 (acción principal) — le da más peso visual al botón que de verdad importa, sin perder el de cancelar. Encontrado explorando direcciones de rediseño visual con claude.ai (ver sesión 2026-10-22), le gustó a Nicolas de una de las propuestas. Aplica a TODOS los footers de la app, no solo a uno.~~ Resuelto 2026-10-30, como efecto colateral de terminar "Rediseño de formularios" (todos esos pasaron a `FormFooter`, ya 1/3-2/3 de por sí) — quedaba un solo lugar suelto, el modal "Comparar con" de `EstadisticasTab.jsx` (no usa `FormFooter`/`Footer` porque vive dentro de un `Modal` centrado, no de una pantalla con `styles.screen` — ahí el ratio se aplicó a mano, mismo `flex:1`/`flex:2`). Los otros 2 lugares con `flex:1, marginTop:0` que parecían sospechosos (`PhotoImportWizardScreen.jsx` "Listo", `Shared.jsx` "Usar este" del picker de ícono personalizado) son botones únicos, no pares Cancelar/Confirmar — no les aplica este ratio.
 
 También se revisaron (a pedido de Nicolas, que notó que la búsqueda inicial podía estar incompleta) los pares `btnGhostSmall`/`btnDangerSmall` de `ConfirmInline` (componente compartido, usado en 7 archivos para confirmar borrados) y los 2 modales de confirmación hechos a mano con el mismo estilo (`PhotoImportWizardScreen.jsx` "¿Salir del asistente?", `EvenGroupTab.jsx` "¿Borrar grupo?") — decidido con Nicolas 2026-10-30: esos quedan 50/50 a propósito, no se les aplica el ratio. Es una confirmación chica de una acción DESTRUCTIVA, no un formulario — no se le quiere dar más peso visual a "Eliminar"/"Salir" sobre "Cancelar".
-
-</details>
-
-- [ ] **Feedback visual de "presionado" en botones/elementos clickeables**
-<details open><summary>Ver detalle</summary>
-
-Agregar feedback visual de "presionado" a todos los botones/elementos clickeables de la app — hoy casi ninguno lo tiene. Causa: `-webkit-tap-highlight-color: transparent` (`src/lib/styles.js`) apaga el flash nativo en TODO (`*`), y nunca se construyó un reemplazo propio salvo un caso puntual. Encontrado y resuelto puntualmente 2026-10-24 para las teclas de `CalculatorAmountInput`/`CurrencyConversionField` (`CalculatorKeyButton` en `src/components/Shared.jsx`), como parte del rediseño de `TransactionForm.jsx` — ahí también se confirmó que un intento anterior con CSS `:active` (`.calc-key:active`) no servía: no es confiable en Safari/iOS con un toque real, solo con mouse, hay que manejar el estado por JS (`onPointerDown`/`Up`/`Leave`/`Cancel`). Falta hacer lo mismo para el resto de botones de la app (Guardar/Cancelar, filas de `PickerField`, tiles de las hojas, tabs, etc.) — tarea aparte, no mezclar con el rediseño de cada formulario puntual.
 
 </details>
 
@@ -157,34 +190,6 @@ Agregar feedback visual de "presionado" a todos los botones/elementos clickeable
   - Cuenta de usuario: [x] `ProfileScreen` — [x] `ChangePasswordScreen` — [ ] ~~`AuthScreen`~~ — [ ] ~~`RecoverPasswordScreen`~~ (decidido con Nicolas 2026-10-30: quedan afuera a propósito — son una tarjeta de login centrada, sin `TopBar`/`styles.screen`, contexto distinto al resto de los formularios navegados; no se les aplica el lenguaje de filas sin caja)
 
   De paso ya quedaron armados varios componentes/helpers compartidos reusables para el resto de la lista: `PickerField` (modos `rowLabel`/`compact`/`listStyle`), `DateRow`, `TextRow`, `FormFooter`, `PhotoLightbox`, `Hint`, `useTouched()`.
-
-</details>
-- [ ] **Saldo Real: terminar de migrar y probar con un ciclo real**
-<details open><summary>Ver detalle</summary>
-
-Migrado desde `TAREAS_ACTUALES.md` (borrado 2026-10-29, ya resuelto el resto de ese archivo) — quedan 3 pasos abiertos del rediseño de "Saldo Real"/Pendiente TC:
-1. Congelar "Pendiente TC": el saldo acumulado de préstamos viejos (de antes del mecanismo directo TC↔pseudo-cuenta del grupo) se deja quieto tal cual, no se intenta reconciliar con el sistema nuevo. De acá en adelante esa cuenta solo se sigue usando a mano para lo que no es de ningún grupo (ej. "pizza entre amigos").
-2. Vaciar `pendienteTcAutoSum` del bloque de Nico en `src/lib/customUserConfig.js`: esa automatización sumaba cada préstamo nuevo a mano a "Pendiente TC", comportamiento viejo que el mecanismo nuevo (TC→pseudo-cuenta directo) ya no necesita. Se borra una vez confirmado que el sistema nuevo funciona bien un ciclo completo (ver punto 3).
-3. Probar con un ciclo real completo: prestar algo nuevo vía la tarjeta, esperar a que cierre el ciclo de facturación, y confirmar que "Compensación de lo prestado" se genera sola, con el monto correcto, al destino correcto (la cuenta de pago de la tarjeta, recién corregido 2026-10-29 — ver el bug ya resuelto arriba en esta misma sección). Plan de Nicolas: probarlo con su cuenta real el mes que viene.
-
-</details>
-- [ ] **Gastos futuros, todavía no cobrados en la cuenta**
-<details open><summary>Ver detalle</summary>
-
-Migrado desde `TAREAS_ACTUALES.md` (borrado 2026-10-29). Poder cargar un gasto que ya se sabe que va a pasar en una fecha futura (ej. un viaje que se va a cobrar tal día) pero que todavía no impactó el saldo real de la cuenta — para tenerlo anotado/planeado sin que ya reste del balance como si hubiera pasado. Pensar cómo se distingue esto de un gasto normal (¿un estado "pendiente de cobro" aparte, una fecha futura que no cuenta para el saldo corriente hasta que llega, algo manual que se marca como "ya se cobró"?) y cómo interactúa con lo demás (recurrentes, estadísticas, Saldo Real).
-
-</details>
-- [ ] **Cambiar el registro de toda la app de voseo a tú**
-<details open><summary>Ver detalle</summary>
-
-Hoy toda la UI/chat usa voseo ("Elegí", "Guardá", "Creá", "podés", "vos"). Nicolas pidió pasar a un registro más neutro/formal (tú) — no somos argentinos. Encontrado al revisar los tooltips de `EvenGroupCapitalLink`, 2026-10-29. No es un find-and-replace mecánico: el voseo no se convierte con un simple reemplazo de texto (verbos irregulares: "tenés"→"tienes", "podés"→"puedes", "sos"→"eres", cada uno hay que tocarlo a mano sin romper la gramática). Un conteo rápido con un regex parcial ya dio 22 archivos / 67 coincidencias, sin contar formas irregulares no cubiertas por ese regex — el número real es más alto. Se trata como su propio pase dedicado, no se mezcla con el rediseño de formularios en curso. Sin empezar todavía, a la espera de que Nicolas decida cuándo priorizarlo.
-
-</details>
-
-- [ ] **Unificar `TransactionForm.jsx` y `PhotoImportWizardScreen.jsx`**
-<details open><summary>Ver detalle</summary>
-
-Unificar `TransactionForm.jsx` y el paso del asistente de fotos (`PhotoImportWizardScreen.jsx`) en un solo componente visual de "campos de transacción" (Tipo/Fecha/Importe/Cuenta/Categoría/Descripción/Nota), que cada uno envuelva con su propia lógica de guardado — en vez de 2 implementaciones separadas que pueden divergir sin que nadie se dé cuenta. Encontrado al redistribuir `PhotoImportWizardScreen.jsx` (2026-10-28): aparecieron 3 divergencias que nadie notó hasta probarlo (título del picker de Categoría, diseño del importe, orden de los campos) — señal de que mantenerlas a mano sincronizadas no escala. Alcance acotado: de las 18 pantallas de la lista de arriba, estas 2 son las ÚNICAS que comparten este set de campos (EvenGroup es, a propósito, un formulario distinto). Queda afuera del componente compartido el caso de tasa de cambio (`needsRate`, exclusivo de transacciones sincronizadas con EvenGroup en otra moneda) — el asistente nunca lo necesita (cuenta/moneda fijas para todo el lote). Decidido con Nicolas: primero terminar el rediseño pantalla por pantalla (arreglando divergencias puntuales a mano mientras tanto), esto se aborda aparte.
 
 </details>
 

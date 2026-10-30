@@ -583,6 +583,29 @@ function GroupForm({ group = null, session, evenCapital, onCancel, onCreate, onS
   const [members, setMembers] = useState(() => (group?.members || []).filter((m) => !m.deleted));
   const [newMemberName, setNewMemberName] = useState("");
   const [confirmRemoveMemberId, setConfirmRemoveMemberId] = useState(null);
+
+  // @usuario de cada miembro VINCULADO a una cuenta real (no los que son
+  // solo un nombre suelto, sin invitar) -- para distinguirlos a simple
+  // vista en la lista de "Personas" (ver PENDIENTES.md). Consulta propia y
+  // chica, separada del query compartido de grupos (`GROUP_SELECT` en
+  // EvenlyApp.jsx) a propósito: no hay certeza de que `linked_user_id`
+  // tenga declarada la FK que el embedding de PostgREST necesitaría para
+  // traer esto ahí (`profiles!linked_user_id(username)`), y romper esa
+  // consulta rompería TODA la carga de grupos, no solo esta pantalla --
+  // un `.in()` liso sobre `profiles` es lo mismo que ya usa el buscador de
+  // usuario para invitar (más abajo en este archivo), sin ese riesgo.
+  const [linkedUsernames, setLinkedUsernames] = useState({});
+  useEffect(() => {
+    const ids = [...new Set(members.map((m) => m.linkedUserId).filter(Boolean))];
+    if (!ids.length) { setLinkedUsernames({}); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.from("profiles").select("id, username").in("id", ids);
+      if (!cancelled) setLinkedUsernames(Object.fromEntries((data || []).map((p) => [p.id, p.username])));
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [members.map((m) => m.linkedUserId).join(",")]);
   const [categories, setCategories] = useState(() => (group ? groupCategories(group).map(c => ({ ...c })) : []));
   const [editingCatId, setEditingCatId] = useState(null);
   const [catsOpen, setCatsOpen] = useState(false);
@@ -856,7 +879,14 @@ function GroupForm({ group = null, session, evenCapital, onCancel, onCreate, onS
                     <span style={{ ...styles.avatar, background: colorFor(m.id) }}>{initials(m.name)}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <span style={{ display: "block" }}>{m.name}</span>
-                      {groupInvites.find((i) => i.memberId === m.id) && (
+                      {m.linkedUserId && linkedUsernames[m.linkedUserId] ? (
+                        // Distingue a simple vista un miembro vinculado a una
+                        // cuenta real de uno que es solo un nombre suelto (sin
+                        // invitar) -- pedido de Nicolas, 2026-10-30.
+                        <span style={{ display: "block", fontSize: 11, color: "#6B6355", fontFamily: "system-ui, sans-serif" }}>
+                          @{linkedUsernames[m.linkedUserId]}
+                        </span>
+                      ) : groupInvites.find((i) => i.memberId === m.id) && (
                         <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#3B6E62", fontFamily: "system-ui, sans-serif" }}>
                           Invitación enviada a @{groupInvites.find((i) => i.memberId === m.id).username}
                         </span>

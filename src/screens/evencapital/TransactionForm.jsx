@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { X, Menu, Plus, Trash2, Copy, Star, Divide, Lock } from "lucide-react";
+import { X, Menu, Plus, Trash2, Copy, Star, Divide } from "lucide-react";
 import { DndContext, MouseSensor, TouchSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";

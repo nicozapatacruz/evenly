@@ -1140,7 +1140,14 @@ function EvenGroupCapitalLink({
   // queda vacío, el préstamo cae en "propios" (ver ensureExpenseChoices en
   // evenGroupSync.js), el mismo fallback que ya usa la sincronización.
   const effectiveLendAccountId = lendAccountId || ownAccountId;
-  const lendAccountIsCreditCard = !!evenCapital.accounts.find((a) => a.id === effectiveLendAccountId)?.is_credit_card;
+  const effectiveLendAccount = evenCapital.accounts.find((a) => a.id === effectiveLendAccountId);
+  const lendAccountIsCreditCard = !!effectiveLendAccount?.is_credit_card;
+  // La compensación también exige que esa tarjeta tenga "Cuenta de pago"
+  // configurada (evenGroupSync.js -- computeLendOffsetDesired no genera nada
+  // sin eso), pero el campo de acá arriba no lo sabe: si falta, se elige una
+  // cuenta igual y la transferencia nunca se genera, sin ningún aviso.
+  // Encontrado en auditoría, 2026-10-30.
+  const lendAccountMissingPaymentAccount = lendAccountIsCreditCard && !effectiveLendAccount?.payment_account_id;
 
   const handleToggle = (on) => {
     if (on || !activeLink) { onToggle(on); return; }
@@ -1272,6 +1279,11 @@ function EvenGroupCapitalLink({
                     groups={accountGroups}
                     placeholder="Sin compensación automática"
                   />
+                )}
+                {lendOffsetAccountId && lendAccountMissingPaymentAccount && (
+                  <p style={{ ...styles.muted, padding: 0, marginTop: -4, color: "#B0473A" }}>
+                    La cuenta de "Lo que prestas" no tiene "Cuenta de pago" configurada (Cuentas → esa tarjeta). Sin eso, esta compensación no se generará.
+                  </p>
                 )}
               </div>
             )}
@@ -2162,7 +2174,8 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
         {mmInvolved && (
           <Field error={touched.mmAccountId && !mmAccountId ? "Este campo es obligatorio." : ""}>
             <PickerField
-              rowLabel={<>Cuenta<span style={{ color: "#B0473A" }}>*</span><EvenGroupIcon size={13} style={{ marginLeft: 0, verticalAlign: "middle", position: "relative", top: "-1px" }} /></>}
+              rowLabel={<>Cuenta<span style={{ color: "#B0473A" }}>*</span></>}
+              badge={<EvenGroupIcon size={13} style={{ position: "relative", top: "-1px" }} />}
               value={mmAccountId}
               onChange={setMmAccountId}
               onBlur={() => touch("mmAccountId")}
@@ -2181,7 +2194,8 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
 
         {mmInvolved && (
           <PickerField
-            rowLabel={<>Cuenta de lo prestado <EvenGroupIcon size={13} style={{ marginLeft: 0, verticalAlign: "middle", position: "relative", top: "-1px" }} /></>}
+            rowLabel="Cuenta de lo prestado"
+            badge={<EvenGroupIcon size={13} style={{ position: "relative", top: "-1px" }} />}
             info="Para este gasto puntual: de dónde sale (o adónde entra) lo que prestás, si tu grupo tiene configurada una cuenta para eso. Dejalo vacío para usar 'Cuenta' de arriba, como siempre."
             value={mmLoanAccountId}
             onChange={setMmLoanAccountId}
@@ -2201,7 +2215,8 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
         {showMmCategory && (
           <Field>
             <PickerField
-              rowLabel={<>Categoría personal <EvenGroupIcon size={13} style={{ marginLeft: 0, verticalAlign: "middle", position: "relative", top: "-1px" }} /></>}
+              rowLabel="Categoría personal"
+              badge={<EvenGroupIcon size={13} style={{ position: "relative", top: "-1px" }} />}
               value={mmCategoryId}
               onChange={setMmCategoryId}
               onClear={() => setMmCategoryId("")}
@@ -2516,7 +2531,8 @@ function NewExpense({ group, groups, defaultGroupId, expenseId, onCancel, onSave
   const groupPicker = (
     <Field>
       <PickerField
-        rowLabel={isGroupLinked ? <>Grupo <EvenGroupIcon size={13} style={{ marginLeft: 0, verticalAlign: "middle", position: "relative", top: "-1px" }} /></> : "Grupo"}
+        rowLabel="Grupo"
+        badge={isGroupLinked ? <EvenGroupIcon size={13} style={{ position: "relative", top: "-1px" }} /> : null}
         value={pickedGroupId}
         onChange={setPickedGroupId}
         placeholder="Selecciona un grupo…"
@@ -2844,7 +2860,8 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
         {mmInvolved && (
           <Field error={touched.mmAccountId && !mmAccountId ? "Este campo es obligatorio." : ""}>
             <PickerField
-              rowLabel={<>Cuenta<span style={{ color: "#B0473A" }}>*</span><EvenGroupIcon size={13} style={{ marginLeft: 0, verticalAlign: "middle", position: "relative", top: "-1px" }} /></>}
+              rowLabel={<>Cuenta<span style={{ color: "#B0473A" }}>*</span></>}
+              badge={<EvenGroupIcon size={13} style={{ position: "relative", top: "-1px" }} />}
               value={mmAccountId}
               onChange={setMmAccountId}
               onBlur={() => touch("mmAccountId")}
@@ -2863,7 +2880,8 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
 
         {mmInvolved && (
           <PickerField
-            rowLabel={<>Cuenta de lo prestado <EvenGroupIcon size={13} style={{ marginLeft: 0, verticalAlign: "middle", position: "relative", top: "-1px" }} /></>}
+            rowLabel="Cuenta de lo prestado"
+            badge={<EvenGroupIcon size={13} style={{ position: "relative", top: "-1px" }} />}
             info="Para este pago puntual: de dónde sale (o adónde entra) lo que se salda, si tu grupo tiene configurada una cuenta para eso. Dejalo vacío para usar 'Cuenta' de arriba, como siempre."
             value={mmLoanAccountId}
             onChange={setMmLoanAccountId}

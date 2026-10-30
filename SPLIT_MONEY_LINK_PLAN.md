@@ -158,6 +158,31 @@ create policy sl_mm_expense_choices_own on public.sl_mm_expense_choices for all
   with check (link_id in (select id from public.sl_mm_links where user_id = auth.uid()));
 ```
 
+**Tabla de períodos de "Compensación de lo prestado" fijados** (agregada
+2026-10-30 — ver `src/lib/evenGroupSync.js:groupLendOffsetPeriods`/
+`computeLendOffsetDesired` y `PENDIENTES.md`). Un registro por (vínculo,
+cuenta que prestó, ciclo de tarjeta, moneda), creado UNA sola vez la
+primera vez que ese ciclo necesita compensarse — de ahí en más sus 2
+cuentas quedan fijas para siempre, sin importar qué cambie después en el
+vínculo o en la cuenta (mismo espíritu que `sl_mm_expense_choices` arriba):
+```sql
+create table public.sl_mm_lend_offset_periods (
+  id                      uuid primary key default gen_random_uuid(),
+  link_id                 uuid not null references public.sl_mm_links(id) on delete cascade,
+  lend_account_id         uuid not null references public.mm_accounts(id),
+  cycle_start             date not null,
+  currency                text not null,
+  lend_offset_account_id  uuid not null references public.mm_accounts(id),
+  payment_account_id      uuid not null references public.mm_accounts(id),
+  created_at              timestamptz not null default now(),
+  unique (link_id, lend_account_id, cycle_start, currency)
+);
+alter table public.sl_mm_lend_offset_periods enable row level security;
+create policy sl_mm_lend_offset_periods_own on public.sl_mm_lend_offset_periods for all
+  using (link_id in (select id from public.sl_mm_links where user_id = auth.uid()))
+  with check (link_id in (select id from public.sl_mm_links where user_id = auth.uid()));
+```
+
 **Marcado de origen en `mm_transactions`:**
 ```sql
 alter table public.mm_transactions

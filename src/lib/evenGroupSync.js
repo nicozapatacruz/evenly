@@ -32,7 +32,12 @@ function roundCents(n) {
 // Si el grupo ya no es visible, ya no sos miembro vinculado, o alguna cuenta
 // involucrada (propia/ajena/pseudo) fue borrada → se congela el vínculo, no
 // se escribe nada (mejor no tocar nada que borrar historial por error).
-async function loadLinkContext(link, userId) {
+// `accountsById` ya viene cargado por reconcileEvenGroup (todas las cuentas
+// del usuario, una sola consulta para todos sus vínculos) -- hace falta el
+// mapa completo, no solo las cuentas que ESTE vínculo señala hoy, porque
+// computeLendOffsetDesired necesita poder mirar cualquier cuenta que haya
+// prestado alguna vez en el historial, no solo "la actual" (ver PENDIENTES.md).
+async function loadLinkContext(link, userId, accountsById) {
   const { data: group } = await supabase
     .from("groups")
     .select("id, name, deleted")
@@ -50,19 +55,13 @@ async function loadLinkContext(link, userId) {
   // lend_account_id/loan_account_id/lend_offset_account_id son opcionales
   // (si nunca se configuraron, esa pata de la transferencia de préstamo
   // sigue usando "propios"/"ajenos" como siempre, o directamente no se
-  // genera ninguna compensación) -- por eso no entran en el .in(...) cuando
-  // son null, ni se exige que existan.
-  const { data: accounts } = await supabase
-    .from("mm_accounts")
-    .select("id, deleted, is_credit_card, statement_day, payment_account_id")
-    .in("id", [link.default_own_account_id, link.default_other_account_id, link.pseudo_account_id, link.lend_account_id, link.loan_account_id, link.lend_offset_account_id].filter(Boolean));
-  const byId = new Map((accounts || []).map((a) => [a.id, a]));
-  const own = byId.get(link.default_own_account_id);
-  const other = byId.get(link.default_other_account_id);
-  const pseudo = byId.get(link.pseudo_account_id);
-  const lend = link.lend_account_id ? byId.get(link.lend_account_id) : null;
-  const loan = link.loan_account_id ? byId.get(link.loan_account_id) : null;
-  const lendOffset = link.lend_offset_account_id ? byId.get(link.lend_offset_account_id) : null;
+  // genera ninguna compensación) -- por eso no se exige que existan.
+  const own = accountsById.get(link.default_own_account_id);
+  const other = accountsById.get(link.default_other_account_id);
+  const pseudo = accountsById.get(link.pseudo_account_id);
+  const lend = link.lend_account_id ? accountsById.get(link.lend_account_id) : null;
+  const loan = link.loan_account_id ? accountsById.get(link.loan_account_id) : null;
+  const lendOffset = link.lend_offset_account_id ? accountsById.get(link.lend_offset_account_id) : null;
   if (!own || own.deleted || !other || other.deleted || !pseudo || pseudo.deleted
     || (link.lend_account_id && (!lend || lend.deleted))
     || (link.loan_account_id && (!loan || loan.deleted))
@@ -88,13 +87,7 @@ async function loadLinkContext(link, userId) {
       .order("id", { ascending: true }).range(from, to)),
   ]);
 
-  // La cuenta que de verdad se usa para prestar (para saber si hace falta
-  // compensación por ciclo): "lo que prestás" si está configurada, si no
-  // "propios" -- mismo fallback que usa ensureExpenseChoices/el sync, y que
-  // ya corrige EvenGroupTab.jsx al decidir si mostrar el campo o no.
-  const lendAccountRow = lend || own;
-
-  return { groupName: group.name, memberId: member.id, expenses, payments, lendAccountRow };
+  return { groupName: group.name, memberId: member.id, expenses, payments, accountsById };
 }
 
 // ¿Tiene esta fila alguna parte para mí? La moneda ya NO decide si se
@@ -233,18 +226,6 @@ function computeDesiredTransactions(link, ctx, choicesBySourceKey) {
   return desired;
 }
 
-// UUID determinístico (no aleatorio) a partir de un ciclo de tarjeta +
-// moneda -- sl_source_id es `uuid` en la base, pero esto no identifica
-// ningún gasto real (el período ya es único de por sí dentro de un mismo
-// vínculo). Sin truncar nada (fecha y moneda entran completas, repartidas
-// en distintos grupos del uuid) para que dos períodos distintos nunca
-// puedan terminar generando el mismo id.
-function cycleStartUuid(cycleStartKey, currency) {
-  const digits = cycleStartKey.replaceAll("-", ""); // YYYYMMDD -- ya son dígitos hex válidos
-  const curHex = Array.from(currency.toUpperCase().padEnd(3, "0")).map((ch) => ch.charCodeAt(0).toString(16).padStart(2, "0")).join("").slice(0, 6);
-  return `${digits}-0000-4${curHex.slice(0, 3)}-8${curHex.slice(3, 6)}-000000000000`;
-}
-
 // Primer día del ciclo SIGUIENTE a `cycleStart` -- avanza de a un día hasta
 // que creditCardCycleStart deja de devolver el mismo ciclo. Más simple que
 // repetir el clampeo de meses cortos que ya hace creditCardCycleStart.
@@ -257,6 +238,35 @@ function nextCycleStart(statementDay, cycleStart) {
   return creditCardCycleStart(statementDay, probe);
 }
 
+// Agrupa los legs de préstamo (role:"loan", plata que salió hacia la cuenta
+// pseudo del grupo) por (cuenta real que prestó, ciclo, moneda) -- por SU
+// PROPIA cuenta (`d.account_id`, ya fijada por gasto en
+// computeDesiredTransactions/sl_mm_expense_choices), nunca por "cuál es la
+// cuenta configurada hoy en el vínculo". Así, si más adelante cambiás qué
+// tarjeta es "Lo que prestás", los ciclos viejos de la tarjeta anterior
+// siguen agrupándose bien (simplemente no les llegan legs nuevos) -- antes
+// se filtraba por una sola cuenta "actual", perdiendo de vista cualquier
+// cosa prestada con una tarjeta distinta a la de hoy.
+// Función PURA (sin Supabase) a propósito, para poder testearla sola --
+// ver src/lib/__tests__/evenGroupSync.test.js.
+export function groupLendOffsetPeriods(lendLegs, accountsById, now) {
+  const periods = new Map();
+  for (const d of lendLegs) {
+    const account = accountsById.get(d.account_id);
+    if (!account?.is_credit_card || !account?.statement_day) continue; // no es una tarjeta con ciclo -- no aplica
+    const statementDay = account.statement_day;
+    const currentCycleStart = creditCardCycleStart(statementDay, now);
+    const cycleStart = creditCardCycleStart(statementDay, new Date(d.date));
+    if (cycleStart.getTime() >= currentCycleStart.getTime()) continue; // ciclo todavía abierto, no se compensa todavía
+    const cycleStartKey = `${cycleStart.getFullYear()}-${String(cycleStart.getMonth() + 1).padStart(2, "0")}-${String(cycleStart.getDate()).padStart(2, "0")}`;
+    const groupKey = `${d.account_id}:${cycleStartKey}:${d.currency}`;
+    const entry = periods.get(groupKey) || { lendAccountId: d.account_id, statementDay, cycleStart, cycleStartKey, currency: d.currency, total: 0 };
+    entry.total = roundCents(entry.total + d.amount);
+    periods.set(groupKey, entry);
+  }
+  return [...periods.values()].filter((p) => p.total > EPSILON);
+}
+
 // Compensación por ciclo de tarjeta (ver TAREAS_ACTUALES.md, sección 1): si
 // "lo que prestás" es una tarjeta de crédito y hay una "cuenta de origen"
 // elegida, cada ciclo YA CERRADO de esa tarjeta genera UNA transferencia
@@ -265,47 +275,74 @@ function nextCycleStart(statementDay, cycleStart) {
 // rebajada al pagar la tarjeta completa) no queda baja por lo que en
 // realidad le toca devolver al grupo, sin ningún paso manual ni esperar a
 // pagar la tarjeta.
-// Antes esto iba hacia `default_other_account_id` ("ajenos") en vez de hacia
-// `payment_account_id` -- no tiene relación con qué cuenta de verdad paga la
-// tarjeta, solo "funcionaba" si esas dos cuentas coincidían de casualidad.
-// Bug encontrado por Nicolas, 2026-10-29 (ver PENDIENTES.md).
 //
-// Se calcula por PERÍODO (no por transacción individual), para que sea
-// imposible duplicar: la clave de cada fila es el propio ciclo (fecha de
-// corte + moneda), así que recalcular esto de nuevo con los mismos datos da
-// siempre la misma fila -- reconcileLink ya sabe actualizar en vez de
-// insertar si el total de ese ciclo cambia (ej. se borra un gasto viejo).
-function computeLendOffsetDesired(link, ctx, desired) {
-  if (!link.lend_offset_account_id || !ctx.lendAccountRow?.is_credit_card || !ctx.lendAccountRow?.statement_day || !ctx.lendAccountRow?.payment_account_id) return [];
-  const statementDay = ctx.lendAccountRow.statement_day;
-  const currentCycleStart = creditCardCycleStart(statementDay, new Date());
+// Cada ciclo ya compensado queda FIJO para siempre en `sl_mm_lend_offset_periods`
+// (igual que sl_mm_expense_choices fija la cuenta de cada gasto): la
+// primera vez que un ciclo necesita compensarse, se graba ahí qué cuenta
+// de origen/destino se usó -- de ahí en más, cambiar la configuración del
+// vínculo (otra tarjeta en "Lo que prestás", borrar la cuenta de pago) NUNCA
+// mueve ni borra una compensación ya generada, solo deja de generar
+// compensaciones NUEVAS hasta que se vuelva a configurar bien. Antes esto
+// se recalculaba entero desde la config actual en cada corrida -- cambiarla
+// más adelante borraba (soft-delete) compensaciones viejas reales. Bug de
+// diseño encontrado en auditoría, 2026-10-30 (ver PENDIENTES.md).
+async function computeLendOffsetDesired(link, ctx, desired) {
+  const lendLegs = desired.filter((d) => d.role === "loan" && d.to_account_id === link.pseudo_account_id);
+  const periods = groupLendOffsetPeriods(lendLegs, ctx.accountsById, new Date());
+  if (!periods.length) return [];
 
-  const lendLegs = desired.filter((d) => d.role === "loan" && d.to_account_id === link.pseudo_account_id && d.account_id === ctx.lendAccountRow.id);
+  const { data: existingPeriods } = await supabase
+    .from("sl_mm_lend_offset_periods")
+    .select("*")
+    .eq("link_id", link.id);
+  const periodByKey = new Map((existingPeriods || []).map((p) => [`${p.lend_account_id}:${p.cycle_start}:${p.currency}`, p]));
 
-  // Agrupado por (ciclo, moneda) -- un préstamo en una moneda distinta a la
-  // principal no se mezcla con los demás, misma precaución que ya tiene el
-  // resto de la reconciliación con `exchange_rate`.
-  const byPeriod = new Map();
-  for (const d of lendLegs) {
-    const cycleStart = creditCardCycleStart(statementDay, new Date(d.date));
-    if (cycleStart.getTime() >= currentCycleStart.getTime()) continue; // ciclo todavía abierto, no se compensa todavía
-    const cycleStartKey = `${cycleStart.getFullYear()}-${String(cycleStart.getMonth() + 1).padStart(2, "0")}-${String(cycleStart.getDate()).padStart(2, "0")}`;
-    const groupKey = `${cycleStartKey}:${d.currency}`;
-    const entry = byPeriod.get(groupKey) || { cycleStart, cycleStartKey, currency: d.currency, total: 0 };
-    entry.total = roundCents(entry.total + d.amount);
-    byPeriod.set(groupKey, entry);
+  // Un período YA FIJADO (en periodByKey) nunca pasa por acá de nuevo -- la
+  // config actual del vínculo (`link.lend_offset_account_id`) SOLO decide
+  // si se fija un período NUEVO, nunca toca uno que ya se fijó antes. Por
+  // eso este chequeo vive adentro del loop (por período), no al principio
+  // de toda la función -- borrar esta config más adelante no debe perder de
+  // vista lo ya fijado, solo frenar que se fije algo nuevo.
+  const toPin = [];
+  for (const period of periods) {
+    const key = `${period.lendAccountId}:${period.cycleStartKey}:${period.currency}`;
+    if (periodByKey.has(key)) continue;
+    if (!link.lend_offset_account_id) continue; // sin "Compensar lo prestado" configurado -- no se fija nada nuevo
+    const paymentAccountId = ctx.accountsById.get(period.lendAccountId)?.payment_account_id;
+    if (!paymentAccountId) continue; // sin cuenta de pago todavía -- no se fija nada, ver aviso en EvenGroupCapitalLink
+    toPin.push({
+      link_id: link.id, lend_account_id: period.lendAccountId,
+      cycle_start: period.cycleStartKey, currency: period.currency,
+      lend_offset_account_id: link.lend_offset_account_id, payment_account_id: paymentAccountId,
+    });
+  }
+  if (toPin.length) {
+    // upsert+ignoreDuplicates -- mismo motivo de concurrencia que ensureExpenseChoices
+    // (StrictMode/2 pestañas no deben poder fijar 2 veces el mismo período).
+    const { data: inserted } = await supabase
+      .from("sl_mm_lend_offset_periods")
+      .upsert(toPin, { onConflict: "link_id,lend_account_id,cycle_start,currency", ignoreDuplicates: true })
+      .select();
+    for (const p of inserted || []) periodByKey.set(`${p.lend_account_id}:${p.cycle_start}:${p.currency}`, p);
+    const stillMissing = toPin.filter((p) => !periodByKey.has(`${p.lend_account_id}:${p.cycle_start}:${p.currency}`));
+    if (stillMissing.length) {
+      const { data: rest } = await supabase.from("sl_mm_lend_offset_periods").select("*").eq("link_id", link.id);
+      for (const p of rest || []) periodByKey.set(`${p.lend_account_id}:${p.cycle_start}:${p.currency}`, p);
+    }
   }
 
   const offsetDesired = [];
-  for (const { cycleStart, cycleStartKey, currency, total } of byPeriod.values()) {
-    if (total <= EPSILON) continue;
-    const closeDate = nextCycleStart(statementDay, cycleStart);
+  for (const period of periods) {
+    const key = `${period.lendAccountId}:${period.cycleStartKey}:${period.currency}`;
+    const pinned = periodByKey.get(key);
+    if (!pinned) continue; // todavía sin cuenta de pago configurada -- no se genera nada
+    const closeDate = nextCycleStart(period.statementDay, period.cycleStart);
     offsetDesired.push({
-      key: `lend_offset:${cycleStartKey}:${currency}:lend_offset`,
-      source_kind: "lend_offset", source_id: cycleStartUuid(cycleStartKey, currency), role: "lend_offset", type: "transfer",
-      account_id: link.lend_offset_account_id, to_account_id: ctx.lendAccountRow.payment_account_id,
-      amount: total, currency, category_id: null,
-      title: "Compensación de lo prestado", memo: `Ciclo ${cycleStartKey}`, date: closeDate.getTime(),
+      key: `lend_offset:${pinned.id}:lend_offset`,
+      source_kind: "lend_offset", source_id: pinned.id, role: "lend_offset", type: "transfer",
+      account_id: pinned.lend_offset_account_id, to_account_id: pinned.payment_account_id,
+      amount: period.total, currency: period.currency, category_id: null,
+      title: "Compensación de lo prestado", memo: `Ciclo ${period.cycleStartKey}`, date: closeDate.getTime(),
     });
   }
   return offsetDesired;
@@ -460,8 +497,8 @@ async function updatePendienteTcNote(link, pendienteTcTxId) {
   if (error) console.error("updatePendienteTcNote: no se pudo actualizar la nota", error);
 }
 
-async function reconcileLink(link, userId, userEmail, mainCurrency) {
-  const ctx = await loadLinkContext(link, userId);
+async function reconcileLink(link, userId, userEmail, mainCurrency, accountsById) {
+  const ctx = await loadLinkContext(link, userId, accountsById);
   if (!ctx) return; // vínculo congelado, no se toca nada
 
   const { data: existingChoices } = await supabase.from("sl_mm_expense_choices").select("*").eq("link_id", link.id);
@@ -474,7 +511,7 @@ async function reconcileLink(link, userId, userEmail, mainCurrency) {
   await ensureExpenseChoices(link, ctx, involvedKeys, choicesBySourceKey);
 
   const desired = computeDesiredTransactions(link, ctx, choicesBySourceKey);
-  const lendOffsetDesired = computeLendOffsetDesired(link, ctx, desired);
+  const lendOffsetDesired = await computeLendOffsetDesired(link, ctx, desired);
   const desiredByKey = new Map([...desired, ...lendOffsetDesired].map((d) => [d.key, d]));
 
   const { data: existingTx } = await supabase.from("mm_transactions").select("*").eq("sl_link_id", link.id);
@@ -580,8 +617,18 @@ export async function reconcileEvenGroup(userId, userEmail) {
   const { data: settingsRow } = await supabase.from("mm_settings").select("main_currency").eq("user_id", userId).maybeSingle();
   const mainCurrency = settingsRow?.main_currency || "EUR";
 
+  // Una sola consulta para TODAS las cuentas del usuario (no una por
+  // vínculo, como antes) -- hace falta poder mirar cualquier cuenta que
+  // haya prestado alguna vez en el historial de un vínculo, no solo las que
+  // ese vínculo señala hoy (ver computeLendOffsetDesired/groupLendOffsetPeriods).
+  const { data: accounts } = await supabase
+    .from("mm_accounts")
+    .select("id, deleted, is_credit_card, statement_day, payment_account_id")
+    .eq("user_id", userId);
+  const accountsById = new Map((accounts || []).map((a) => [a.id, a]));
+
   for (const link of links) {
-    try { await reconcileLink(link, userId, userEmail, mainCurrency); }
+    try { await reconcileLink(link, userId, userEmail, mainCurrency, accountsById); }
     catch (e) { console.error("reconcileEvenGroup: falló el vínculo", link.id, e); }
   }
 }

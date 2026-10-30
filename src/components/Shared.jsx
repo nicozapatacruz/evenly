@@ -721,7 +721,7 @@ function textIconFontSize(icon, base) {
   return Math.round(base * scale);
 }
 
-export function PickerField({ value, onChange, groups, placeholder = "Elegir", title, note, onClear, onBlur, disabled = false, emptyMessage = "No hay opciones para elegir.", openSignal, compact = false, small = false, rowLabel, info, blockedReason, required = false, listStyle = false, lockedValue = false }) {
+export function PickerField({ value, onChange, groups, placeholder = "Elegir", title, note, onClear, onBlur, disabled = false, emptyMessage = "No hay opciones para elegir.", openSignal, compact = false, small = false, rowLabel, badge, info, blockedReason, required = false, listStyle = false, lockedValue = false }) {
   const [open, setOpen] = useState(false);
   const idRef = useRef(null);
   if (idRef.current === null) idRef.current = ++pickerInstanceCounter;
@@ -801,6 +801,13 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", t
           {rowLabel}
           {required && <span style={{ color: "#B0473A" }}>*</span>}
         </span>
+        {/* `badge` (ej. el ícono de EvenGroupIcon) es, por el mismo motivo que
+            el ⓘ de arriba, un hermano flex afuera del texto clampeado -- antes
+            se armaba a mano embebiéndolo DENTRO del propio `rowLabel` (ej.
+            `rowLabel={<>Cuenta<EvenGroupIcon/></>}`), que lo volvía a meter
+            adentro del clamp y reproducía la misma orfandad que esto ya
+            resolvió una vez para `info`. Encontrado en auditoría, 2026-10-30. */}
+        {badge}
         {/* Si está bloqueado, no tiene sentido TAMBIÉN explicar qué hace el
             campo en general -- lo único que importa ahí es por qué no se
             puede tocar ahora (el 🚫, del otro lado, junto al valor). */}

@@ -127,10 +127,12 @@ Revisión completa del diseño, los valores usados en los paddings y la UI en ge
 
 </details>
 
-- [ ] **Footer 1/3-2/3 en todos los formularios**
-<details open><summary>Ver detalle</summary>
+- [x] ~~Footer 1/3-2/3 en todos los formularios~~
+<details><summary>Ver detalle</summary>
 
-Footer de Cancelar/Guardar (y similares): cambiar de 50/50 (los dos con `flex:1`) a una proporción 1/3 (Cancelar) - 2/3 (acción principal) — le da más peso visual al botón que de verdad importa, sin perder el de cancelar. Encontrado explorando direcciones de rediseño visual con claude.ai (ver sesión 2026-10-22), le gustó a Nicolas de una de las propuestas. Aplica a TODOS los footers de la app, no solo a uno. Hecho en `TransactionForm.jsx` (2026-10-24, parte del rediseño de ese formulario); falta en el resto — ir aplicándolo a medida que se rediseña cada formulario de la lista.
+~~Footer de Cancelar/Guardar (y similares): cambiar de 50/50 (los dos con `flex:1`) a una proporción 1/3 (Cancelar) - 2/3 (acción principal) — le da más peso visual al botón que de verdad importa, sin perder el de cancelar. Encontrado explorando direcciones de rediseño visual con claude.ai (ver sesión 2026-10-22), le gustó a Nicolas de una de las propuestas. Aplica a TODOS los footers de la app, no solo a uno.~~ Resuelto 2026-10-30, como efecto colateral de terminar "Rediseño de formularios" (todos esos pasaron a `FormFooter`, ya 1/3-2/3 de por sí) — quedaba un solo lugar suelto, el modal "Comparar con" de `EstadisticasTab.jsx` (no usa `FormFooter`/`Footer` porque vive dentro de un `Modal` centrado, no de una pantalla con `styles.screen` — ahí el ratio se aplicó a mano, mismo `flex:1`/`flex:2`). Los otros 2 lugares con `flex:1, marginTop:0` que parecían sospechosos (`PhotoImportWizardScreen.jsx` "Listo", `Shared.jsx` "Usar este" del picker de ícono personalizado) son botones únicos, no pares Cancelar/Confirmar — no les aplica este ratio.
+
+También se revisaron (a pedido de Nicolas, que notó que la búsqueda inicial podía estar incompleta) los pares `btnGhostSmall`/`btnDangerSmall` de `ConfirmInline` (componente compartido, usado en 7 archivos para confirmar borrados) y los 2 modales de confirmación hechos a mano con el mismo estilo (`PhotoImportWizardScreen.jsx` "¿Salir del asistente?", `EvenGroupTab.jsx` "¿Borrar grupo?") — decidido con Nicolas 2026-10-30: esos quedan 50/50 a propósito, no se les aplica el ratio. Es una confirmación chica de una acción DESTRUCTIVA, no un formulario — no se le quiere dar más peso visual a "Eliminar"/"Salir" sobre "Cancelar".
 
 </details>
 

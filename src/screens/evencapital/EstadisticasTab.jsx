@@ -537,7 +537,7 @@ export default function EstadisticasTab({ userId, settings, accounts, categories
                 Quitar
               </button>
               <button
-                style={{ ...styles.btnPrimary, flex: 1, marginTop: 0 }}
+                style={{ ...styles.btnPrimary, flex: 2, marginTop: 0 }}
                 onClick={() => {
                   setCompareSpec((s) => (localMode === "average"
                     ? { ...s, mode: "average", months }

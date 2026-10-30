@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { offlineSupabase as supabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, ToggleField, Field } from "../../components/Shared.jsx";
+import { TopBar, FormFooter, ToggleField, PickerField } from "../../components/Shared.jsx";
 import { WEEKDAY_OPTIONS } from "../../lib/evenCapitalData.js";
 
 const STARTUP_TAB_OPTIONS = [
@@ -15,72 +15,101 @@ const STARTUP_TAB_OPTIONS = [
 /* =========================================================================
    DETALLES DEL PERÍODO — día de inicio del mes/semana, autocompletar notas
    (el toggle vive acá; la sugerencia en sí se arma en TransactionForm, con
-   useRecentNoteTitles) y la tab de inicio.
+   useRecentNoteTitles) y la tab de inicio. Formulario común (Guardar en el
+   footer), no autoguardado -- antes cada cambio se guardaba solo, único
+   formulario de la app con ese patrón.
    ========================================================================= */
 
-export default function PeriodSettingsScreen({ session, settings, reload, showError, showInfo, onBack }) {
+export default function PeriodSettingsScreen({ session, settings, reload, showError, onBack }) {
   const [monthStartDay, setMonthStartDay] = useState(settings.month_start_day);
+  const monthStartDayRef = useRef(settings.month_start_day);
   const [weekStartDay, setWeekStartDay] = useState(settings.week_start_day);
   const [autocomplete, setAutocomplete] = useState(settings.autocomplete_notes);
   const [startupTab, setStartupTab] = useState(settings.startup_tab || "");
   const [saving, setSaving] = useState(false);
 
-  // silent=true para el toggle (el switch ya se ve moverse solo — un toast
-  // ahí sería ruido); los <select> sin botón sí lo necesitan, no dan
-  // ninguna otra pista de que la elección llegó a guardarse.
-  const save = async (patch, { silent = false } = {}) => {
+  const isDirty = monthStartDay !== settings.month_start_day
+    || weekStartDay !== settings.week_start_day
+    || autocomplete !== settings.autocomplete_notes
+    || startupTab !== (settings.startup_tab || "");
+
+  const save = async () => {
     setSaving(true);
     try {
-      const { error } = await supabase.from("mm_settings").upsert({ user_id: session.userId, ...patch }, { onConflict: "user_id" });
+      const { error } = await supabase.from("mm_settings").upsert({
+        user_id: session.userId,
+        month_start_day: monthStartDay,
+        week_start_day: weekStartDay,
+        autocomplete_notes: autocomplete,
+        startup_tab: startupTab || null,
+      }, { onConflict: "user_id" });
       if (error) throw error;
       await reload();
-      if (!silent) showInfo("Guardado.");
+      onBack();
     } catch (e) { showError(`No se pudo guardar: ${e?.message || e}`); }
     setSaving(false);
   };
 
   return (
-    <div style={{ ...styles.screen, paddingBottom: 0 }}>
+    <div style={styles.screen}>
       <TopBar title="Detalles del período" onBack={onBack} />
-      <div style={{ ...styles.form, opacity: saving ? 0.6 : 1 }}>
-        <Field label="Día de inicio del mes">
-          <select
-            style={styles.input}
+      <div style={styles.form}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 40, borderBottom: "1px solid #ECE3D3", fontFamily: "system-ui, sans-serif" }}>
+          <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355" }}>Día de inicio del mes</span>
+          <input
+            className="row-input"
+            style={{ flex: 1, minWidth: 0, textAlign: "right", fontSize: 13.5, fontFamily: "system-ui, sans-serif", border: "none", background: "transparent", padding: 0, color: "#2B2620" }}
+            inputMode="numeric"
             value={monthStartDay}
-            onChange={(e) => { const v = parseInt(e.target.value, 10); setMonthStartDay(v); save({ month_start_day: v }); }}
-          >
-            {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{d}</option>)}
-          </select>
-        </Field>
+            onChange={(e) => {
+              const digits = e.target.value.replace(/\D/g, "");
+              setMonthStartDay(digits === "" ? "" : parseInt(digits, 10));
+            }}
+            onBlur={() => {
+              const n = Number(monthStartDay);
+              if (Number.isInteger(n) && n >= 1 && n <= 28) {
+                monthStartDayRef.current = n;
+                setMonthStartDay(n);
+              } else {
+                setMonthStartDay(monthStartDayRef.current);
+              }
+            }}
+          />
+        </div>
 
-        <Field label="Día de inicio de la semana">
-          <select
-            style={styles.input}
-            value={weekStartDay}
-            onChange={(e) => { setWeekStartDay(e.target.value); save({ week_start_day: e.target.value }); }}
-          >
-            {WEEKDAY_OPTIONS.map((w) => <option key={w.value} value={w.value}>{w.label}</option>)}
-          </select>
-        </Field>
+        <PickerField
+          rowLabel="Día de inicio de la semana"
+          listStyle
+          title="Día de inicio de la semana"
+          value={weekStartDay}
+          onChange={setWeekStartDay}
+          groups={[{ label: null, items: WEEKDAY_OPTIONS }]}
+        />
 
         <ToggleField
           label="Autocompletar notas"
           description="Sugerir notas anteriores al escribir"
           checked={autocomplete}
-          onChange={(v) => { setAutocomplete(v); save({ autocomplete_notes: v }, { silent: true }); }}
+          onChange={setAutocomplete}
         />
 
-        <Field label="Pantalla de inicio">
-          <select
-            style={styles.input}
-            value={startupTab}
-            onChange={(e) => { setStartupTab(e.target.value); save({ startup_tab: e.target.value || null }); }}
-          >
-            {STARTUP_TAB_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-        </Field>
+        <PickerField
+          rowLabel="Pantalla de inicio"
+          listStyle
+          title="Pantalla de inicio"
+          value={startupTab}
+          onChange={setStartupTab}
+          groups={[{ label: null, items: STARTUP_TAB_OPTIONS }]}
+        />
         <p style={{ ...styles.muted, padding: 0, marginTop: -8 }}>La app va a abrir siempre en esta pestaña, en vez de la que quedó abierta la última vez.</p>
       </div>
+      <FormFooter
+        onCancel={onBack}
+        onConfirm={save}
+        confirmLabel={saving ? "Guardando…" : "Guardar"}
+        confirmDisabled={saving || !isDirty}
+        confirmDim={!isDirty}
+      />
     </div>
   );
 }

@@ -124,20 +124,18 @@ Agregar feedback visual de "presionado" a todos los botones/elementos clickeable
 
 </details>
 
-- [ ] **Rediseño de formularios**
-<details open><summary>Ver detalle</summary>
+- [x] ~~Rediseño de formularios~~
+<details><summary>Ver detalle</summary>
 
-Fila label-izquierda/valor-derecha sin caja, hojas que suben desde abajo, `FormFooter` 1/3-2/3, etc. — ver mockup de claude.ai, sesión 2026-10-22 en adelante. Arrancado 2026-10-24, en curso, se va haciendo de a uno (cada uno como su propio commit `REDESIGN -- ...`). Orden acordado:
-
-  _(Checklist activa — se deja siempre abierta a propósito, es la que se actualiza en cada sesión.)_
+~~Fila label-izquierda/valor-derecha sin caja, hojas que suben desde abajo, `FormFooter` 1/3-2/3, etc. — ver mockup de claude.ai, sesión 2026-10-22 en adelante.~~ Arrancado 2026-10-24, resuelto 2026-10-30 (se fue haciendo de a uno, cada uno como su propio commit `REDESIGN -- ...`):
 
   - Gasto: [x] `TransactionForm.jsx` — [x] `PhotoImportEntryScreen.jsx` — [x] `PhotoImportWizardScreen.jsx` — [x] `ExpenseForm`/`NewExpense` (EvenGroup) — [x] `SettleUp` (EvenGroup)
   - Cuentas/Categorías: [x] `AccountDetailScreen.jsx` — [x] `ManageCategories` — [x] `CuentasTab.jsx` — [x] `CurrencySettingsScreen.jsx`
     - ~~`ManageCategories` (`TransactionForm.jsx`) quedó parcial 2026-10-29: el sub-formulario "Nueva categoría" ya pasa a la fila sin caja (ícono a la izquierda + nombre, mismo estilo que "Nombre" en `AccountDetailScreen.jsx`) + `FormFooter`. Queda pendiente, a propósito, la lista principal (`SortableCategoryManageRow`, filas arrastrables boxeadas `shareRow`) — mismo patrón de lista que usan las cuentas en `CuentasTab.jsx`, así que se resuelve una sola vez cuando le toque el turno a esa pantalla: dentro de cada card, el ícono+nombre debería pasar al mismo diseño que "Nueva categoría" (input sin borde, solo línea inferior, ícono a la izquierda).~~ Resuelto 2026-10-29, junto con `CuentasTab.jsx`: `SortableCategoryManageRow` pasó al mismo diseño (ícono `small` + input sin caja), con un ajuste encontrado probando en vivo — sin ningún borde se confundía con las filas de solo-lectura de otras listas (cuentas/grupos), así que el ícono quedó con borde y sin relleno, y el nombre con línea inferior, para que se note que son editables. `ManageAccounts` (Editar/Nuevo grupo de cuentas, mismo archivo) también pasó a la fila sin caja + `FormFooter`.
   - Grupos (EvenGroup): [x] `GroupForm` — [x] `InviteScreen` — [x] `EvenGroupCapitalLink`
-  - Modales/secciones sueltas (agregado 2026-10-29, a raíz de revisar `EvenGroupCapitalLink`): [ ] `Comparar con` (modal, Estadísticas) — [ ] `Elegir ícono` (modal, categorías de EvenGroup dentro de `GroupForm`) — [ ] `Categorías de gasto` (EvenGroup — NO es un modal, es la lista embebida en `GroupForm`, mismo patrón boxeado que ya se resolvió en `ManageCategories`/Money Manager, acá sigue sin tocar)
+  - Modales/secciones sueltas (agregado 2026-10-29, a raíz de revisar `EvenGroupCapitalLink`): [x] `Comparar con` (modal, Estadísticas) — [x] `Elegir ícono` (modal, categorías de EvenGroup dentro de `GroupForm`) — [x] `Categorías de gasto` (EvenGroup — lista embebida en `GroupForm`, mismo patrón boxeado que `ManageCategories`/Money Manager)
   - Filtros/Ajustes: [x] `FiltersPanel.jsx` — [x] `PeriodSettingsScreen.jsx`
-  - Cuenta de usuario (siguiente): [ ] `ProfileScreen` — [ ] `ChangePasswordScreen` — [ ] `AuthScreen` — [ ] `RecoverPasswordScreen`
+  - Cuenta de usuario: [x] `ProfileScreen` — [x] `ChangePasswordScreen` — [ ] ~~`AuthScreen`~~ — [ ] ~~`RecoverPasswordScreen`~~ (decidido con Nicolas 2026-10-30: quedan afuera a propósito — son una tarjeta de login centrada, sin `TopBar`/`styles.screen`, contexto distinto al resto de los formularios navegados; no se les aplica el lenguaje de filas sin caja)
 
   De paso ya quedaron armados varios componentes/helpers compartidos reusables para el resto de la lista: `PickerField` (modos `rowLabel`/`compact`/`listStyle`), `DateRow`, `TextRow`, `FormFooter`, `PhotoLightbox`, `Hint`, `useTouched()`.
 

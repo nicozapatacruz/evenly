@@ -6,7 +6,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { offlineSupabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, RootHeader, ConfirmInline, Footer, PhotoPicker, ToggleField, Field, PasswordInput, SegmentedControl } from "../../components/Shared.jsx";
+import { TopBar, RootHeader, ConfirmInline, Footer, FormFooter, PhotoPicker, ToggleField, Field, PasswordInput, SegmentedControl } from "../../components/Shared.jsx";
 import { useImageUpload, resolvePhotoUrl, colorFor, initials, useScrollToTopOnChange } from "../../lib/helpers.jsx";
 import RecurringScreen from "../evencapital/RecurringScreen.jsx";
 import TransactionForm, { ManageCategories } from "../evencapital/TransactionForm.jsx";
@@ -405,12 +405,12 @@ function ProfileScreen({ session, onBack, onLogout, onChangePassword, onSave, is
           )}
         </Footer>
       ) : (
-        <Footer>
-          <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onBack}>Cancelar</button>
-          <button style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !isOnline) ? 0.5 : 1 }} onClick={handleSave} disabled={saving || !isOnline}>
-            {saving ? "Guardando…" : "Guardar"}
-          </button>
-        </Footer>
+        <FormFooter
+          onCancel={onBack}
+          onConfirm={handleSave}
+          confirmLabel={saving ? "Guardando…" : "Guardar"}
+          confirmDisabled={saving || !isOnline}
+        />
       )}
     </div>
   );
@@ -449,39 +449,79 @@ function ChangePasswordScreen({ session, onBack, onSave, isOnline = true, showEr
     <div style={styles.screen}>
       <TopBar title="Cambiar contraseña" onBack={onBack} />
       <div style={styles.form}>
-        <Field label="Contraseña actual" required error={touched.currentPassword && !currentPassword ? "Este campo es obligatorio." : ""}>
-          <PasswordInput style={styles.input} value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} onBlur={() => touch("currentPassword")} placeholder="Contraseña actual" />
-        </Field>
-        <Field
-          label="Nueva contraseña"
-          required
-          error={touched.newPassword
-            ? (newPassword.length < 4 ? "Debe tener al menos 4 caracteres." : (newPassword === currentPassword && currentPassword ? "Debe ser diferente a la actual." : ""))
-            : ""}
-        >
-          <PasswordInput style={styles.input} value={newPassword} onChange={e => setNewPassword(e.target.value)} onBlur={() => touch("newPassword")} placeholder="Nueva contraseña" visible={pwVisible} onToggleVisible={() => setPwVisible(v => !v)} />
-        </Field>
-        <Field
-          label="Confirmar nueva contraseña"
-          required
-          error={touched.confirmPassword
-            ? (!confirmPassword ? "Este campo es obligatorio." : (newPassword !== confirmPassword ? "Las contraseñas no coinciden." : ""))
-            : ""}
-        >
-          <PasswordInput style={styles.input} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} onBlur={() => touch("confirmPassword")} placeholder="Confirmar nueva contraseña" visible={pwVisible} onToggleVisible={() => setPwVisible(v => !v)} />
-        </Field>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 40, borderBottom: "1px solid #ECE3D3", fontFamily: "system-ui, sans-serif" }}>
+          <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355" }}>
+            Contraseña actual<span style={{ color: "#B0473A" }}>*</span>
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <PasswordInput
+              className="row-input"
+              style={{ width: "100%", textAlign: "right", fontSize: 13.5, fontFamily: "system-ui, sans-serif", border: "none", background: "transparent", padding: 0, color: "#2B2620" }}
+              value={currentPassword}
+              onChange={e => setCurrentPassword(e.target.value)}
+              onBlur={() => touch("currentPassword")}
+              placeholder="Contraseña actual"
+            />
+          </div>
+        </div>
+        {touched.currentPassword && !currentPassword && (
+          <p style={{ margin: "-8px 0 0", fontSize: 12, fontFamily: "system-ui, sans-serif", color: "#B0473A" }}>Este campo es obligatorio.</p>
+        )}
+
+        <div style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 40, borderBottom: "1px solid #ECE3D3", fontFamily: "system-ui, sans-serif" }}>
+          <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355" }}>
+            Nueva contraseña<span style={{ color: "#B0473A" }}>*</span>
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <PasswordInput
+              className="row-input"
+              style={{ width: "100%", textAlign: "right", fontSize: 13.5, fontFamily: "system-ui, sans-serif", border: "none", background: "transparent", padding: 0, color: "#2B2620" }}
+              value={newPassword}
+              onChange={e => setNewPassword(e.target.value)}
+              onBlur={() => touch("newPassword")}
+              placeholder="Nueva contraseña"
+              visible={pwVisible}
+              onToggleVisible={() => setPwVisible(v => !v)}
+            />
+          </div>
+        </div>
+        {touched.newPassword && (newPassword.length < 4 ? (
+          <p style={{ margin: "-8px 0 0", fontSize: 12, fontFamily: "system-ui, sans-serif", color: "#B0473A" }}>Debe tener al menos 4 caracteres.</p>
+        ) : (newPassword === currentPassword && currentPassword) ? (
+          <p style={{ margin: "-8px 0 0", fontSize: 12, fontFamily: "system-ui, sans-serif", color: "#B0473A" }}>Debe ser diferente a la actual.</p>
+        ) : null)}
+
+        <div style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 40, borderBottom: "1px solid #ECE3D3", fontFamily: "system-ui, sans-serif" }}>
+          <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355" }}>
+            Confirmar nueva contraseña<span style={{ color: "#B0473A" }}>*</span>
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <PasswordInput
+              className="row-input"
+              style={{ width: "100%", textAlign: "right", fontSize: 13.5, fontFamily: "system-ui, sans-serif", border: "none", background: "transparent", padding: 0, color: "#2B2620" }}
+              value={confirmPassword}
+              onChange={e => setConfirmPassword(e.target.value)}
+              onBlur={() => touch("confirmPassword")}
+              placeholder="Confirmar nueva contraseña"
+              visible={pwVisible}
+              onToggleVisible={() => setPwVisible(v => !v)}
+            />
+          </div>
+        </div>
+        {touched.confirmPassword && (!confirmPassword ? (
+          <p style={{ margin: "-8px 0 0", fontSize: 12, fontFamily: "system-ui, sans-serif", color: "#B0473A" }}>Este campo es obligatorio.</p>
+        ) : newPassword !== confirmPassword ? (
+          <p style={{ margin: "-8px 0 0", fontSize: 12, fontFamily: "system-ui, sans-serif", color: "#B0473A" }}>Las contraseñas no coinciden.</p>
+        ) : null)}
+
         {err && <p style={styles.errText}>{err}</p>}
       </div>
-      <Footer>
-        <button style={{ ...styles.btnSecondary, flex: 1, marginTop: 0 }} onClick={onBack}>Cancelar</button>
-        <button
-          style={{ ...styles.btnPrimary, flex: 1, marginTop: 0, opacity: (saving || !canSave || !isOnline) ? 0.5 : 1 }}
-          onClick={handleSave}
-          disabled={saving || !isOnline}
-        >
-          {saving ? "Actualizando…" : "Actualizar contraseña"}
-        </button>
-      </Footer>
+      <FormFooter
+        onCancel={onBack}
+        onConfirm={handleSave}
+        confirmLabel={saving ? "Actualizando…" : "Actualizar contraseña"}
+        confirmDisabled={saving || !isOnline}
+      />
     </div>
   );
 }

@@ -159,16 +159,20 @@ function useAuth() {
     return () => { cancelled = true; sub.subscription.unsubscribe(); };
   }, []);
 
-  const register = useCallback(async (email, username, password, displayName) => {
+  const register = useCallback(async (email, username, password) => {
     const uname = username.trim().toLowerCase();
     if (!uname || uname.length < 3) throw new Error("El usuario debe tener al menos 3 caracteres.");
     if (!password || password.length < 4) throw new Error("La contraseña debe tener al menos 4 caracteres.");
-    if (!displayName.trim()) throw new Error("Ponle un nombre a tu perfil.");
+    // "Nombre visible" (el que ve el resto en EvenGroup) arranca igual al
+    // usuario -- antes era un campo propio en el registro ("Nombre que
+    // verán los demás"), pero confundía a quien se registra solo para
+    // EvenCapital (sin ningún grupo todavía). Se puede cambiar después en
+    // Configuración → EvenGroup.
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
       options: {
-        data: { username: uname, display_name: displayName.trim() },
+        data: { username: uname, display_name: uname },
         emailRedirectTo: window.location.origin + window.location.pathname,
       },
     });
@@ -431,7 +435,6 @@ function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [pwVisible, setPwVisible] = useState(false);
-  const [displayName, setDisplayName] = useState("");
   const [err, setErr] = useState("");
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
@@ -443,7 +446,7 @@ function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
     ? !!email.trim() && !!password
     : mode === "forgot"
       ? !!email.trim()
-      : !!displayName.trim() && !!username.trim() && !!email.trim() && !!password && !!confirmPassword;
+      : !!username.trim() && !!email.trim() && !!password && !!confirmPassword;
 
   const switchMode = (next) => {
     setMode(next); setErr(""); setInfo(""); setPassword(""); setConfirmPassword(""); setSent(false); setTouched({});
@@ -452,7 +455,7 @@ function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
   const handle = async () => {
     if (loading) return;
     if (!canSubmit) {
-      setTouched({ displayName: true, username: true, email: true, password: true, confirmPassword: true });
+      setTouched({ username: true, email: true, password: true, confirmPassword: true });
       return;
     }
     setErr(""); setInfo(""); setLoading(true);
@@ -465,7 +468,7 @@ function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
       } else if (mode === "login") {
         await onLogin(email, password);
       } else {
-        const { needsEmailConfirmation } = await onRegister(email, username, password, displayName);
+        const { needsEmailConfirmation } = await onRegister(email, username, password);
         if (needsEmailConfirmation) {
           setInfo("Te enviamos un correo para confirmar tu cuenta. Confírmalo y vuelve a entrar.");
           setMode("login");
@@ -519,11 +522,6 @@ function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
             Safari clasifique esto como login o registro — sin <form>, cae en su
             heurística genérica y sugiere crear contraseña nueva incluso en login. */}
         <form style={{ display: "flex", flexDirection: "column", gap: 12 }} onSubmit={e => { e.preventDefault(); if (!loading) handle(); }}>
-          {mode === "register" && (
-            <Field label="Nombre que verán los demás" required error={touched.displayName && !displayName.trim() ? "Este campo es obligatorio." : ""}>
-              <input style={styles.input} name="name" value={displayName} onChange={e => setDisplayName(e.target.value)} onBlur={() => touch("displayName")} placeholder="Tu nombre" autoComplete="name" />
-            </Field>
-          )}
           {mode === "register" && (
             <Field label="Usuario" required error={touched.username && !username.trim() ? "Este campo es obligatorio." : ""}>
               <input style={styles.input} name="new-username" value={username} onChange={e => setUsername(e.target.value)} onBlur={() => touch("username")} placeholder="nombre_de_usuario" autoCapitalize="none" autoComplete="username" />

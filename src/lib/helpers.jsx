@@ -232,9 +232,12 @@ export function fairSplit(amount, ratios, seed = 0) {
 // siempre al usuario actual primero (ver toClientGroup en EvenlyApp.jsx),
 // así que un reparto empatado reeditado por otro miembro del grupo le daba
 // el centavo de más a OTRA persona, y así cada vez que alguien reeditaba.
-// Ordenar acá por id (fijo, no depende de quién mira) hace que la posición
-// de cada persona en el reparto sea siempre la misma, sin importar quién
-// edite el gasto. Bug encontrado por Nicolas, 2026-10-31.
+// `canonicalIds` (orden fijo por id, no por quién mira) es SOLO para decidir
+// los valores -- el objeto `shares` en sí se arma igual que siempre, en el
+// orden de `participantIds`, para no cambiar sin querer el orden en que se
+// ve "Cómo se divide" (que sí depende, a propósito, de quién mira -- eso es
+// una decisión de diseño aparte, no el bug). Encontrado por Nicolas,
+// 2026-10-31.
 export function computeShares({ splitMode, amount, participantIds, exactAmounts, percentages, shareUnits, seed = 0 }) {
   const shares = {};
   const canonicalIds = [...participantIds].sort();
@@ -242,7 +245,8 @@ export function computeShares({ splitMode, amount, participantIds, exactAmounts,
 
   if (splitMode === "equal") {
     const vals = fairSplit(amount, Array(n).fill(1), seed);
-    canonicalIds.forEach((id, i) => { shares[id] = vals[i]; });
+    const valById = Object.fromEntries(canonicalIds.map((id, i) => [id, vals[i]]));
+    participantIds.forEach((id) => { shares[id] = valById[id]; });
 
   } else if (splitMode === "exact") {
     participantIds.forEach((id) => { shares[id] = exactAmounts[id] || 0; });
@@ -250,12 +254,14 @@ export function computeShares({ splitMode, amount, participantIds, exactAmounts,
   } else if (splitMode === "percent") {
     const ratios = canonicalIds.map((id) => percentages[id] || 0);
     const vals = fairSplit(amount, ratios, seed);
-    canonicalIds.forEach((id, i) => { shares[id] = vals[i]; });
+    const valById = Object.fromEntries(canonicalIds.map((id, i) => [id, vals[i]]));
+    participantIds.forEach((id) => { shares[id] = valById[id]; });
 
   } else if (splitMode === "shares") {
     const ratios = canonicalIds.map((id) => shareUnits[id] || 0);
     const vals = fairSplit(amount, ratios, seed);
-    canonicalIds.forEach((id, i) => { shares[id] = vals[i]; });
+    const valById = Object.fromEntries(canonicalIds.map((id, i) => [id, vals[i]]));
+    participantIds.forEach((id) => { shares[id] = valById[id]; });
   }
 
   return shares;

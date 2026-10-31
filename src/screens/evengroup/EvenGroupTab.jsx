@@ -143,6 +143,7 @@ export default function EvenGroupTab({
       {view.screen === "expenseDetail" && activeGroup && (
         <ExpenseDetail
           group={activeGroup}
+          session={session}
           expenseId={view.expenseId}
           onBack={onBackOverride || (() => setView({ screen: "group", groupId: activeGroup.id }))}
           onEdit={(expenseId) => setView({ screen: "newExpense", groupId: activeGroup.id, expenseId })}
@@ -875,10 +876,10 @@ function GroupForm({ group = null, session, evenCapital, onCancel, onCreate, onS
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {members.map((m) => (
                 <div key={m.id} style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-                  <div style={{ ...styles.shareRow, borderRadius: confirmRemoveMemberId === m.id ? "10px 10px 0 0" : 10 }}>
+                  <div style={{ ...styles.shareRow, background: m.linkedUserId === session?.userId ? "#F3EFE5" : "#fff", borderRadius: confirmRemoveMemberId === m.id ? "10px 10px 0 0" : 10 }}>
                     <span style={{ ...styles.avatar, background: colorFor(m.id) }}>{initials(m.name)}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ display: "block" }}>{m.name}</span>
+                      <span style={{ display: "block", fontWeight: m.linkedUserId === session?.userId ? 700 : 400 }}>{m.name}</span>
                       {m.linkedUserId && linkedUsernames[m.linkedUserId] ? (
                         // Distingue a simple vista un miembro vinculado a una
                         // cuenta real de uno que es solo un nombre suelto (sin
@@ -1408,6 +1409,7 @@ function GroupView({ group, session, onRefresh, onBack, onAddExpense, onOpenExpe
   }, [onRefresh]);
   const [selectedMember, setSelectedMember] = useState(group.members.find((m) => !m.deleted)?.id || null);
   const { members, expenses, payments = [] } = group;
+  const myMemberId = members.find((m) => m.linkedUserId === session?.userId)?.id;
 
   // Un balance (y su lista de deudas simplificada) por cada moneda usada en el grupo —
   // sin conversión entre ellas, para no depender de tasas de cambio.
@@ -1654,6 +1656,13 @@ function GroupView({ group, session, onRefresh, onBack, onAddExpense, onOpenExpe
               if (row.kind === "expense") {
                 const e = row.data;
                 const cat = catInfo(e.category, group);
+                // El número grande siempre es TU parte del gasto (lo que de
+                // verdad te cuesta, sin importar quién pagó), no el préstamo
+                // -- sin tu parte (prestaste el 100%, no es tuyo) el número
+                // grande es un guión. Diseño de Nicolas, 2026-10-31.
+                const myShare = Number(e.shares?.[myMemberId] || 0);
+                const myPaid = Number(e.payers?.[myMemberId] || 0);
+                const participated = myShare > 0.005 || myPaid > 0.005;
                 return (
                   <button key={e.id} style={styles.expenseCard} onClick={() => onOpenExpense(e.id)}>
                     {/* Fecha a la izquierda */}
@@ -1674,16 +1683,22 @@ function GroupView({ group, session, onRefresh, onBack, onAddExpense, onOpenExpe
                         <span>{e.description}</span>
                       </p>
                       <p style={styles.expenseSub}>
-                        {(() => {
+                        {participated ? (() => {
                           const payers = e.payers || { [e.paidBy]: e.amount };
-                          const payerNames = Object.keys(payers).map(id => shortName(nameOf(members, id)));
-                          const payerStr = payerNames.length === 1
-                            ? `${payerNames[0]} pagó`
+                          const payerIds = Object.keys(payers);
+                          const payerNames = payerIds.map(id => shortName(nameOf(members, id)));
+                          const payerStr = payerIds.length === 1
+                            ? (payerIds[0] === myMemberId ? "Pagaste" : `${payerNames[0]} pagó`)
                             : `${payerNames.slice(0, -1).join(", ")} y ${payerNames.at(-1)} pagaron`;
                           return `${payerStr} ${money(e.amount, e.currency)}`;
-                        })()}
+                        })() : "No participaste"}
                       </p>
                     </div>
+                    {participated && (
+                      <span style={{ fontWeight: 700, fontSize: 15, color: myShare > 0.005 ? "#B0473A" : "#C9BBA0", fontFamily: "system-ui, sans-serif", flexShrink: 0 }}>
+                        {myShare > 0.005 ? money(myShare, e.currency) : "—"}
+                      </span>
+                    )}
                     <ChevronRight size={16} color="#C9BBA0" />
                   </button>
                 );
@@ -1728,7 +1743,7 @@ function GroupView({ group, session, onRefresh, onBack, onAddExpense, onOpenExpe
    EXPENSE DETAIL (solo lectura — se abre al tocar la tarjeta de un gasto)
    ========================================================================= */
 
-function ExpenseDetail({ group, expenseId, onBack, onEdit, isOnline = true, showError }) {
+function ExpenseDetail({ group, expenseId, onBack, onEdit, isOnline = true, showError, session }) {
   const { members } = group;
   const e = group.expenses.find((x) => x.id === expenseId);
   const [showFullPhoto, setShowFullPhoto] = useState(false);
@@ -1746,6 +1761,16 @@ function ExpenseDetail({ group, expenseId, onBack, onEdit, isOnline = true, show
   const payers = e.payers || (e.paidBy ? { [e.paidBy]: e.amount } : {});
   const payerIds = Object.keys(payers);
   const shareIds = Object.keys(e.shares || {});
+
+  // Resumen de "prestaste/pediste" para ESTE gasto -- solo con más de 2
+  // personas involucradas, con 2 ya se ve a simple vista comparando "Quién
+  // pagó" contra "Cómo se divide" más abajo. Pedido de Nicolas, 2026-10-31.
+  const myMemberId = group.members.find((m) => m.linkedUserId === session?.userId)?.id;
+  const participantCount = new Set([...payerIds, ...shareIds]).size;
+  const myShare = Number(e.shares?.[myMemberId] || 0);
+  const myPaid = Number(payers[myMemberId] || 0);
+  const loanDiff = myPaid - myShare;
+  const showLoanSummary = participantCount > 2 && Math.abs(loanDiff) > 0.005;
 
   return (
     <div style={styles.screen}>
@@ -1779,20 +1804,33 @@ function ExpenseDetail({ group, expenseId, onBack, onEdit, isOnline = true, show
         </div>
 
         {/* Monto total */}
-        <p style={{ margin: 0, fontSize: 32, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#2B2620" }}>
-          {money(e.amount, e.currency)}
-        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <p style={{ margin: 0, fontSize: 32, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#2B2620" }}>
+            {money(e.amount, e.currency)}
+          </p>
+          {showLoanSummary && (
+            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: loanDiff > 0 ? "#3B6E62" : "#B0473A" }}>
+              {loanDiff > 0 ? "Prestaste" : "Te prestaron"} {money(Math.abs(loanDiff), e.currency)}
+            </span>
+          )}
+        </div>
 
-        {/* Quién pagó */}
+        {/* Quién pagó -- una sola tarjeta compartida (no una por persona) con
+            filas separadas por línea fina, para que no parezca clickeable
+            (antes usaba `shareRow`, igual que las tarjetas SÍ clickeables de
+            la lista de Actividad -- mismo aspecto, nada pasaba al tocarlas).
+            Mismo patrón que los grupos de cuentas en CuentasTab.jsx. Pedido
+            de Nicolas, 2026-10-31 -- mismo problema en
+            PhotoImportWizardScreen.jsx, se resuelve aparte. */}
         <div>
           <p style={{ ...styles.label, marginBottom: 6 }}>{payerIds.length > 1 ? "Quiénes pagaron" : "Quién pagó"}</p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {payerIds.map((id) => (
-              <div key={id} style={styles.shareRow}>
+          <div style={{ borderRadius: 12, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
+            {payerIds.map((id, i) => (
+              <div key={id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", fontSize: 14, fontFamily: "system-ui, sans-serif", background: id === myMemberId ? "#F3EFE5" : "transparent", borderBottom: i < payerIds.length - 1 ? "1px solid #F0EBE2" : "none" }}>
                 <span style={{ ...styles.avatar, background: colorFor(id), width: 30, height: 30, minWidth: 30, fontSize: 11 }}>
                   {initials(nameOf(members, id))}
                 </span>
-                <span style={{ flex: 1 }}>{nameOf(members, id)}</span>
+                <span style={{ flex: 1, fontWeight: id === myMemberId ? 700 : 400 }}>{nameOf(members, id)}</span>
                 <span style={styles.shareAmount}>{money(payers[id], e.currency)}</span>
               </div>
             ))}
@@ -1802,13 +1840,13 @@ function ExpenseDetail({ group, expenseId, onBack, onEdit, isOnline = true, show
         {/* Cómo se divide */}
         <div>
           <p style={{ ...styles.label, marginBottom: 6 }}>Cómo se divide</p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {shareIds.map((id) => (
-              <div key={id} style={styles.shareRow}>
+          <div style={{ borderRadius: 12, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
+            {shareIds.map((id, i) => (
+              <div key={id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", fontSize: 14, fontFamily: "system-ui, sans-serif", background: id === myMemberId ? "#F3EFE5" : "transparent", borderBottom: i < shareIds.length - 1 ? "1px solid #F0EBE2" : "none" }}>
                 <span style={{ ...styles.avatar, background: colorFor(id), width: 30, height: 30, minWidth: 30, fontSize: 11 }}>
                   {initials(nameOf(members, id))}
                 </span>
-                <span style={{ flex: 1 }}>{nameOf(members, id)}</span>
+                <span style={{ flex: 1, fontWeight: id === myMemberId ? 700 : 400 }}>{nameOf(members, id)}</span>
                 <span style={styles.shareAmount}>{money(e.shares[id], e.currency)}</span>
               </div>
             ))}

@@ -267,6 +267,17 @@ export function computeShares({ splitMode, amount, participantIds, exactAmounts,
   return shares;
 }
 
+// Una transacción marcada "futura" (campo `is_future`, ver TransactionForm.jsx)
+// deja de serlo SOLA en cuanto su fecha llega -- no hay ningún paso manual
+// ("ya se cobró") ni proceso de fondo: cada vez que se calcula un saldo o un
+// total se vuelve a evaluar esto con la hora real de ese momento. El flag en
+// sí nunca se borra ni se apaga solo (queda como historial de que se cargó
+// a propósito con fecha futura), pero deja de tener efecto práctico apenas
+// `date` ya no es mayor a `now`.
+export function isFuturePending(t, now = new Date()) {
+  return !!t.is_future && new Date(t.date).getTime() > now.getTime();
+}
+
 export function fmtDate(ms) {
   return new Date(ms).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
 }

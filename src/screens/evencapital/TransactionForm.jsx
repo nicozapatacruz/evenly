@@ -5,7 +5,7 @@ import { SortableContext, verticalListSortingStrategy, arrayMove, useSortable } 
 import { CSS } from "@dnd-kit/utilities";
 import { offlineSupabase as supabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, FormFooter, ConfirmInline, IconInput, PickerField, Field, Modal, CalculatorAmountInput, CurrencyConversionField, SegmentedControl, DateRow, TextRow, Hint } from "../../components/Shared.jsx";
+import { TopBar, FormFooter, ConfirmInline, IconInput, PickerField, Field, Modal, CalculatorAmountInput, CurrencyConversionField, SegmentedControl, DateRow, TextRow, Hint, ToggleField } from "../../components/Shared.jsx";
 import { parseAmountInput, todayInputValue, dateInputValue, dateInputValueInZone, money, fmtDate, useScrollToTopOnChange, useScrollIntoViewOnChange, normalizeForSearch, CURRENCIES, useTouched } from "../../lib/helpers.jsx";
 import { RECURRING_FREQUENCIES, nextOccurrence, computeAmountMain, useRecentNoteTitles } from "../../lib/evenCapitalData.js";
 
@@ -88,6 +88,7 @@ export default function TransactionForm({
     : editingRecurring ? dateInputValue(new Date(editingRecurring.start_date).getTime())
     : (defaultDate || todayInputValue())
   );
+  const [isFuture, setIsFuture] = useState(!!editingTransaction?.is_future);
   const [amount, setAmount] = useState(editingTransaction ? String(editingTransaction.amount) : editingRecurring ? String(editingRecurring.amount) : (prefillBookmark ? String(prefillBookmark.amount) : ""));
   const [currency, setCurrency] = useState(
     editingTransaction?.currency || editingRecurring?.currency || prefillBookmark?.currency
@@ -287,6 +288,7 @@ export default function TransactionForm({
     || toAccountId !== (editingTransaction.to_account_id || "")
     || note !== (editingTransaction.title || "")
     || description !== (editingTransaction.memo || "")
+    || isFuture !== !!editingTransaction.is_future
     || recurringOpen
   );
 
@@ -353,6 +355,7 @@ export default function TransactionForm({
         date: txDate.getTime(),
         title: note.trim() || null,
         memo: description.trim() || null,
+        is_future: isFuture,
         recurring,
       });
     } finally {
@@ -611,6 +614,15 @@ export default function TransactionForm({
             bien el mensaje de "se repite los días X". */}
         {!editingRecurring && (
           <DateRow label="Fecha" value={date} onChange={setDate} disabled={isSynced} lockedValue={isSynced} />
+        )}
+
+        {!editingRecurring && date && new Date(date + "T12:00:00").getTime() > new Date(todayInputValue() + "T23:59:59").getTime() && (
+          <ToggleField
+            label="Transacción futura"
+            description="No se va a reflejar en tu saldo ni en Estadísticas hasta que llegue esta fecha."
+            checked={isFuture}
+            onChange={setIsFuture}
+          />
         )}
 
         <Field error={touched.accountId && !accountId ? "Este campo es obligatorio." : ""}>

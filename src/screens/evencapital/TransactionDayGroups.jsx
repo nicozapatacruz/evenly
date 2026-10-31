@@ -1,7 +1,8 @@
 import React, { useMemo } from "react";
-import { Trash2, Divide, ArrowLeftRight, AlertCircle } from "lucide-react";
-import { money, measureTextWidth, dateInputValueInZone } from "../../lib/helpers.jsx";
+import { Trash2, Divide, ArrowLeftRight, AlertCircle, Hourglass } from "lucide-react";
+import { money, measureTextWidth, dateInputValueInZone, isFuturePending } from "../../lib/helpers.jsx";
 import { isRatePending } from "../../lib/evenCapitalData.js";
+import { InfoTooltip } from "../../components/Shared.jsx";
 
 const DAY_AMOUNTS_FONT = "12.5px system-ui, sans-serif";
 const DAY_LABEL = (d) => d.toLocaleDateString("es-ES", { weekday: "short" }).replace(".", "");
@@ -96,12 +97,15 @@ export function TransactionDayGroups({ transactions, settings, accounts, categor
         // igual en DiarioTab.jsx — solo suma cuentas de tu moneda principal,
         // para no blendear monedas distintas en un solo número. Con
         // perspectiva (extracto de UNA cuenta) no aplica, ya es una sola.
+        // Pendientes ("futuras") no suman al total del día -- pero la fila
+        // sigue en `txs` sin tocar, para que se siga viendo en la lista.
+        const countedTxs = txs.filter((t) => !isFuturePending(t));
         const dayIncome = perspectiveAccountId
-          ? txs.reduce((s, t) => { const c = contribution(t); return c > 0 ? s + c : s; }, 0)
-          : txs.filter((t) => t.type === "income" && accountCurrency(t.account_id) === settings.main_currency).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+          ? countedTxs.reduce((s, t) => { const c = contribution(t); return c > 0 ? s + c : s; }, 0)
+          : countedTxs.filter((t) => t.type === "income" && accountCurrency(t.account_id) === settings.main_currency).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
         const dayExpense = perspectiveAccountId
-          ? txs.reduce((s, t) => { const c = contribution(t); return c < 0 ? s - c : s; }, 0)
-          : txs.filter((t) => t.type === "expense" && accountCurrency(t.account_id) === settings.main_currency).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+          ? countedTxs.reduce((s, t) => { const c = contribution(t); return c < 0 ? s - c : s; }, 0)
+          : countedTxs.filter((t) => t.type === "expense" && accountCurrency(t.account_id) === settings.main_currency).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
         return (
           <div key={dayKey} data-daykey={dayKey} style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
             <div
@@ -175,6 +179,9 @@ export function TransactionDayGroups({ transactions, settings, accounts, categor
                     </div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                    {!pending && isFuturePending(t) && (
+                      <InfoTooltip icon={Hourglass} color="#A8754A" size={13} text="Transacción futura: no cuenta todavía para tu saldo ni Estadísticas." />
+                    )}
                     {!pending && badge && (
                       <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "#A8754A", maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={badge.name}>
                         <Divide size={12} color="#A8754A" style={{ flexShrink: 0 }} />

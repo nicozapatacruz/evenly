@@ -2,7 +2,7 @@ import React, { useLayoutEffect, useRef, useState } from "react";
 import { Plus, Search, SlidersHorizontal, Star, Camera } from "lucide-react";
 import { styles } from "../../lib/styles.js";
 import { RootHeader, MonthNav, TodayButton, FiltersActiveBanner, PendingRateBanner, HeaderMenu, EmptyState, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
-import { money, todayInputValue } from "../../lib/helpers.jsx";
+import { money, todayInputValue, isFuturePending } from "../../lib/helpers.jsx";
 import { useMonthTransactions, usePendingRateTransactions, currenciesInUse } from "../../lib/evenCapitalData.js";
 import { hasActiveFilters, matchesFilters } from "../../lib/filterHelpers.js";
 import { TransactionDayGroups } from "./TransactionDayGroups.jsx";
@@ -34,8 +34,8 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
   const [currency, setCurrency] = useState(settings.main_currency);
   const currencies = currenciesInUse(accounts, settings);
   const isSelectedCurrencyTx = (t) => (accounts.find((a) => a.id === t.account_id)?.currency || settings.main_currency) === currency;
-  const monthIncome = filtered.filter((t) => t.type === "income" && isSelectedCurrencyTx(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
-  const monthExpense = filtered.filter((t) => t.type === "expense" && isSelectedCurrencyTx(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+  const monthIncome = filtered.filter((t) => t.type === "income" && isSelectedCurrencyTx(t) && !isFuturePending(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+  const monthExpense = filtered.filter((t) => t.type === "expense" && isSelectedCurrencyTx(t) && !isFuturePending(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
 
   // Por defecto (y para meses que no son el actual) alcanza con el orden
   // descendente de TransactionDayGroups: el día más reciente queda primero

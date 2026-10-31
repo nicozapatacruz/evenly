@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowLeft, Ban, Camera, Check, ChevronLeft, ChevronRight, Eye, EyeOff, Info, Lock, Trash2, User, X } from "lucide-react";
 import { styles } from "../lib/styles.js";
 import { ICON_OPTIONS } from "../lib/evenCapitalData.js";
@@ -107,8 +108,14 @@ let infoTooltipInstanceCounter = 0;
 // `blocked`: para texto que explica por qué algo está deshabilitado (no un
 // dato de más), usa el ícono de "prohibido" en vez del de información, para
 // no confundir "esto es un dato" con "esto no se puede hacer".
-export function InfoTooltip({ text, blocked }) {
+// `icon`/`color`: para reusar este mismo tap-to-explain (sin esto, un
+// `title` nativo no sirve en mobile) en badges de otro ícono, ej. el
+// reloj de arena de "transacción futura" en TransactionDayGroups/
+// SearchScreen — sin esto habría que duplicar toda la lógica de
+// posición/cierre de acá solo para cambiar qué ícono se ve.
+export function InfoTooltip({ text, blocked, icon, color, size = 14 }) {
   const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState(null);
   const [openUpward, setOpenUpward] = useState(false);
   const [horizontalShift, setHorizontalShift] = useState(0);
   const ref = useRef(null);
@@ -116,6 +123,15 @@ export function InfoTooltip({ text, blocked }) {
   const idRef = useRef(null);
   if (idRef.current === null) idRef.current = ++infoTooltipInstanceCounter;
 
+  // El popover se porta a document.body (ver el createPortal más abajo) en
+  // vez de quedar como hijo normal del ícono: varios usos de este badge
+  // terminan adentro de un contenedor con `overflow:hidden` (ej. la card
+  // de un día en TransactionDayGroups.jsx, ahí para recortar las esquinas
+  // redondeadas de sus filas) — un `position:absolute` ahí adentro se
+  // recorta junto con todo lo demás, se vio en vivo con el badge de
+  // "transacción futura". Portado afuera, se posiciona en `fixed` a partir
+  // del rect real del ícono (`anchor`), sin depender de qué contenedor lo
+  // use.
   // Se ancla desde la derecha del ícono por defecto (ver más abajo), lo que
   // asume que el ícono está cerca del borde derecho — cierto con labels
   // largos ("Cuenta por defecto en gastos ajenos"), pero con uno corto
@@ -126,14 +142,20 @@ export function InfoTooltip({ text, blocked }) {
   // useLayoutEffect (no useEffect): mide ANTES de que el navegador pinte ese
   // frame, así que si hay que corregirlo no se alcanza a ver el salto.
   useLayoutEffect(() => {
-    if (!open) { setOpenUpward(false); setHorizontalShift(0); return; }
+    if (!open) { setAnchor(null); setOpenUpward(false); setHorizontalShift(0); return; }
+    const iconRect = ref.current?.getBoundingClientRect();
+    if (iconRect) setAnchor({ top: iconRect.bottom + 6, bottom: window.innerHeight - iconRect.top + 6, right: window.innerWidth - iconRect.right });
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open || !anchor) return;
     const rect = boxRef.current?.getBoundingClientRect();
     if (!rect) return;
     if (rect.bottom > window.innerHeight) setOpenUpward(true);
     const PADDING = 8;
     if (rect.left < PADDING) setHorizontalShift(PADDING - rect.left);
     else if (rect.right > window.innerWidth - PADDING) setHorizontalShift(window.innerWidth - PADDING - rect.right);
-  }, [open]);
+  }, [open, anchor]);
 
   // Si se abre OTRO tooltip, este se cierra solo — mismo mecanismo que
   // PickerField (nunca hay dos abiertos a la vez).
@@ -148,11 +170,31 @@ export function InfoTooltip({ text, blocked }) {
 
   useEffect(() => {
     if (!open) return;
+    // El popover ahora es un portal (ver más abajo), no un descendiente DOM
+    // de `ref` -- sin chequear también `boxRef`, tocar el texto del popover
+    // se contaba como "afuera" y se cerraba solo al instante.
     const onClickOutside = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+      if (ref.current?.contains(e.target)) return;
+      if (boxRef.current?.contains(e.target)) return;
+      setOpen(false);
     };
     document.addEventListener("click", onClickOutside);
     return () => document.removeEventListener("click", onClickOutside);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    // `anchor` se calcula UNA vez al abrir (ver arriba) a partir de
+    // getBoundingClientRect, que es siempre en coordenadas de viewport -- el
+    // resto de la app scrollea de a página completa (ver styles.js), así que
+    // si se scrollea con esto abierto el ícono se mueve pero el popover
+    // `fixed` se queda clavado donde estaba, quedando desalineado. Más simple
+    // (y consistente con que ya se cierra solo si se abre otro, o si se toca
+    // afuera) cerrarlo apenas se detecta cualquier scroll, en vez de
+    // recalcular `anchor` en cada evento.
+    const onScroll = () => setOpen(false);
+    window.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    return () => window.removeEventListener("scroll", onScroll, { capture: true });
   }, [open]);
 
   return (
@@ -166,19 +208,22 @@ export function InfoTooltip({ text, blocked }) {
       <span
         role="button"
         onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
-        style={{ display: "flex", color: blocked ? "#B0473A" : "#4A6FA5", cursor: "pointer" }}
+        style={{ display: "flex", color: color || (blocked ? "#B0473A" : "#4A6FA5"), cursor: "pointer" }}
         aria-label={blocked ? "Por qué está deshabilitado" : "Más información"}
       >
-        {blocked ? <Ban size={14} /> : <Info size={14} />}
+        {icon ? React.createElement(icon, { size }) : blocked ? <Ban size={size} /> : <Info size={size} />}
       </span>
-      {open && (
+      {open && anchor && createPortal(
         // Anclado desde la derecha del ícono (no desde la izquierda): en los
         // campos con label largo (ej. "Cuenta por defecto en gastos ajenos")
         // el ícono queda cerca del borde derecho de la pantalla, y un ancho
         // fijo creciendo hacia la derecha se salía del viewport en mobile.
-        <div ref={boxRef} style={{ position: "absolute", ...(openUpward ? { bottom: "calc(100% + 6px)" } : { top: "calc(100% + 6px)" }), right: 0, transform: horizontalShift ? `translateX(${horizontalShift}px)` : undefined, width: "min(210px, calc(100vw - 40px))", background: "#2B2620", color: "#fff", fontSize: 12, fontWeight: 400, fontFamily: "system-ui, sans-serif", padding: "8px 10px", borderRadius: 8, lineHeight: 1.4, whiteSpace: "pre-line", zIndex: 20 }}>
+        // `fixed` + coordenadas de `anchor` (no `absolute` relativo al
+        // ícono): portado a document.body, ver comentario arriba.
+        <div ref={boxRef} style={{ position: "fixed", ...(openUpward ? { bottom: anchor.bottom } : { top: anchor.top }), right: anchor.right, transform: horizontalShift ? `translateX(${horizontalShift}px)` : undefined, width: "min(210px, calc(100vw - 40px))", background: "#2B2620", color: "#fff", fontSize: 12, fontWeight: 400, fontFamily: "system-ui, sans-serif", padding: "8px 10px", borderRadius: 8, lineHeight: 1.4, whiteSpace: "pre-line", zIndex: 1000 }}>
           {text}
-        </div>
+        </div>,
+        document.body
       )}
     </span>
   );

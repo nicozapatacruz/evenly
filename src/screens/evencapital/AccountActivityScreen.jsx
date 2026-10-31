@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { styles } from "../../lib/styles.js";
 import { TopBar, MonthNav, EmptyState, SegmentedControl, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
-import { money, measureTextWidth } from "../../lib/helpers.jsx";
+import { money, measureTextWidth, isFuturePending } from "../../lib/helpers.jsx";
 import { useAccountMonthTransactions, useAccountMonthTotals } from "../../lib/evenCapitalData.js";
 import { TransactionDayGroups } from "./TransactionDayGroups.jsx";
 
@@ -105,22 +105,29 @@ function DiarioSubTab({ userId, settings, accounts, categories, slLinks, account
     let running = balanceBefore(totals, year, month);
     const map = new Map();
     for (const t of chronological) {
-      const isDeposit = (t.type === "income" && t.account_id === accountId)
-        || (t.type === "transfer" && t.to_account_id === accountId);
-      const isWithdrawal = (t.type === "expense" && t.account_id === accountId)
-        || (t.type === "transfer" && t.account_id === accountId);
-      if (isDeposit) running += t.amount_main;
-      else if (isWithdrawal) running -= t.amount_main;
+      // Pendiente ("futura") -- no mueve el saldo corriente todavía, pero la
+      // fila igual muestra el saldo de ESE momento (el que tenías sin
+      // contarla), no se la salta de la lista.
+      if (!isFuturePending(t)) {
+        const isDeposit = (t.type === "income" && t.account_id === accountId)
+          || (t.type === "transfer" && t.to_account_id === accountId);
+        const isWithdrawal = (t.type === "expense" && t.account_id === accountId)
+          || (t.type === "transfer" && t.account_id === accountId);
+        if (isDeposit) running += t.amount_main;
+        else if (isWithdrawal) running -= t.amount_main;
+      }
       map.set(t.id, running);
     }
     return map;
   }, [monthTx, totals, year, month, accountId]);
 
   const monthDeposit = monthTx.reduce((s, t) => {
+    if (isFuturePending(t)) return s;
     if ((t.type === "income" && t.account_id === accountId) || (t.type === "transfer" && t.to_account_id === accountId)) return s + t.amount_main;
     return s;
   }, 0);
   const monthWithdrawal = monthTx.reduce((s, t) => {
+    if (isFuturePending(t)) return s;
     if ((t.type === "expense" && t.account_id === accountId) || (t.type === "transfer" && t.account_id === accountId)) return s + t.amount_main;
     return s;
   }, 0);

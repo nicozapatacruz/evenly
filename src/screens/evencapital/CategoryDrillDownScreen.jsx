@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { styles } from "../../lib/styles.js";
 import { TopBar, MonthNav, HeaderMenu, EmptyState, useMonthSwipe, useMonthSlide } from "../../components/Shared.jsx";
-import { money, CURRENCIES } from "../../lib/helpers.jsx";
+import { money, CURRENCIES, isFuturePending } from "../../lib/helpers.jsx";
 import { useMonthTransactions, useCategoryTimeline, currenciesInUse } from "../../lib/evenCapitalData.js";
 import { TransactionDayGroups } from "./TransactionDayGroups.jsx";
 
@@ -90,7 +90,7 @@ export default function CategoryDrillDownScreen({ userId, settings, accounts, ca
   const categoryTx = monthTx.filter((t) => t.type === type && (categoryId ? t.category_id === categoryId : !t.category_id));
   const color = type === "income" ? "#3B6E62" : "#B0473A";
   const monthTotal = categoryTx
-    .filter((t) => (accounts.find((a) => a.id === t.account_id)?.currency || settings.main_currency) === currency)
+    .filter((t) => (accounts.find((a) => a.id === t.account_id)?.currency || settings.main_currency) === currency && !isFuturePending(t))
     .reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
 
   return (

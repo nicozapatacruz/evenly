@@ -2,7 +2,7 @@ import { useCallback, useMemo } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { supabase } from "./supabaseClient.js";
 import { db } from "./localDb.js";
-import { dateInputValueInZone, parseAmountInput, daysInMonth, monthsBefore, normalizeForSearch, creditCardCycleStart } from "./helpers.jsx";
+import { dateInputValueInZone, parseAmountInput, daysInMonth, monthsBefore, normalizeForSearch, creditCardCycleStart, isFuturePending } from "./helpers.jsx";
 import { hasActiveFilters, matchesFilters } from "./filterHelpers.js";
 import { computeAccountTotals, computeCategoryMonthTotals, computeAccountMonthTotals } from "./localAggregates.js";
 import { offlineSupabase } from "./offlineSupabase.js";
@@ -179,6 +179,7 @@ export function computeCreditCardBalance(accountId, transactions, statementDay, 
   let pasado = 0;
   let actual = 0;
   for (const t of transactions) {
+    if (isFuturePending(t, now)) continue;
     // Una transferencia de préstamo de EvenGroup (Presté/Me prestaron)
     // que llega a esta tarjeta NO es un pago real de la tarjeta — es solo la
     // otra mitad de un gasto que ya se contó acá mismo este ciclo (el gasto
@@ -352,7 +353,7 @@ function buildComparisons(allTotals, viewMonth, compareSpec) {
 function aggregateByCategory(transactions, type, accounts, mainCurrency) {
   const map = new Map();
   for (const t of transactions) {
-    if (t.type !== type) continue;
+    if (t.type !== type || isFuturePending(t)) continue;
     if (accounts.find((a) => a.id === t.account_id)?.currency !== mainCurrency) continue;
     const amount = t.amount_main ?? t.amount;
     map.set(t.category_id, (map.get(t.category_id) || 0) + amount);

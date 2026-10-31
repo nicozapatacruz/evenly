@@ -1,4 +1,4 @@
-import { dateInputValueInZone } from "./helpers.jsx";
+import { dateInputValueInZone, isFuturePending } from "./helpers.jsx";
 
 // Espejo en JS de las vistas de Postgres mm_account_totals/
 // mm_category_month_totals/mm_account_month_totals — ahora que la lectura
@@ -21,7 +21,7 @@ export function computeAccountTotals(transactions) {
   const map = new Map();
   const add = (accountId, amount) => map.set(accountId, (map.get(accountId) || 0) + amount);
   for (const t of transactions) {
-    if (t.deleted) continue;
+    if (t.deleted || isFuturePending(t)) continue;
     if (t.type === "income" && t.account_id) add(t.account_id, t.amount_main);
     else if ((t.type === "expense" || t.type === "transfer") && t.account_id) add(t.account_id, -t.amount_main);
     if (t.type === "transfer" && t.to_account_id) add(t.to_account_id, t.amount_main);
@@ -38,7 +38,7 @@ export function computeAccountTotals(transactions) {
 export function computeCategoryMonthTotals(transactions, accounts, type, mainCurrency) {
   const map = new Map();
   for (const t of transactions) {
-    if (t.deleted || t.type !== type) continue;
+    if (t.deleted || t.type !== type || isFuturePending(t)) continue;
     if (accounts.find((a) => a.id === t.account_id)?.currency !== mainCurrency) continue;
     const { year, month } = monthKeyOf(t);
     const categoryId = t.category_id ?? null;
@@ -55,7 +55,7 @@ export function computeCategoryMonthTotals(transactions, accounts, type, mainCur
 export function computeAccountMonthTotals(transactions, accountId) {
   const map = new Map();
   for (const t of transactions) {
-    if (t.deleted) continue;
+    if (t.deleted || isFuturePending(t)) continue;
     let contribution;
     if (t.type === "income" && t.account_id === accountId) contribution = t.amount_main;
     else if ((t.type === "expense" || t.type === "transfer") && t.account_id === accountId) contribution = -t.amount_main;

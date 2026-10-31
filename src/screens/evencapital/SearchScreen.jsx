@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Search as SearchIcon, SlidersHorizontal, Trash2, Divide, AlertCircle } from "lucide-react";
+import { Search as SearchIcon, SlidersHorizontal, Trash2, Divide, AlertCircle, Hourglass } from "lucide-react";
 import { styles } from "../../lib/styles.js";
-import { TopBar, HeaderMenu, EmptyState } from "../../components/Shared.jsx";
-import { money, dateInputValueInZone, measureTextWidth, useScrollToTopOnChange, normalizeForSearch } from "../../lib/helpers.jsx";
+import { TopBar, HeaderMenu, EmptyState, InfoTooltip } from "../../components/Shared.jsx";
+import { money, dateInputValueInZone, measureTextWidth, useScrollToTopOnChange, normalizeForSearch, isFuturePending } from "../../lib/helpers.jsx";
 import { useRecentNoteTitles, searchTransactions, isRatePending, currenciesInUse } from "../../lib/evenCapitalData.js";
 import { EMPTY_FILTERS, hasActiveFilters } from "../../lib/filterHelpers.js";
 import { FiltersPanel } from "./FiltersPanel.jsx";
@@ -85,6 +85,9 @@ function SearchResultRow({ t, accounts, categories, slLinks, settings, dateColWi
         </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+        {!pending && isFuturePending(t) && (
+          <InfoTooltip icon={Hourglass} color="#A8754A" size={13} text="Transacción futura: no cuenta todavía para tu saldo ni Estadísticas." />
+        )}
         {!pending && badge && (
           <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, color: "#A8754A", maxWidth: 80, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={badge.name}>
             <Divide size={12} color="#A8754A" style={{ flexShrink: 0 }} />
@@ -112,9 +115,9 @@ function SearchResults({ results, settings, accounts, categories, slLinks, onEdi
   // solo suman la moneda elegida en el selector — `settings` ya viene
   // "pisado" con esa moneda desde SearchScreen, como settings.main_currency.
   const isSelectedCurrencyTx = (t) => (accounts.find((a) => a.id === t.account_id)?.currency || settings.main_currency) === settings.main_currency;
-  const income = results.filter((t) => t.type === "income" && isSelectedCurrencyTx(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
-  const expense = results.filter((t) => t.type === "expense" && isSelectedCurrencyTx(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
-  const transfer = results.filter((t) => t.type === "transfer" && isSelectedCurrencyTx(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+  const income = results.filter((t) => t.type === "income" && isSelectedCurrencyTx(t) && !isFuturePending(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+  const expense = results.filter((t) => t.type === "expense" && isSelectedCurrencyTx(t) && !isFuturePending(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
+  const transfer = results.filter((t) => t.type === "transfer" && isSelectedCurrencyTx(t) && !isFuturePending(t)).reduce((s, t) => s + (t.amount_main ?? t.amount), 0);
   // Ancho fijo = el de la fecha (siempre "dd/mm/yyyy", mismo ancho) — la
   // categoría se achica con elipsis si no entra, nunca empuja la columna.
   const dateColWidth = useMemo(() => Math.ceil(measureTextWidth("00/00/0000", DATE_COL_FONT)), []);

@@ -2426,10 +2426,14 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
               {splitMode === "equal" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {(() => {
-                    const preview = validAmount ? fairSplit(numericAmount, participantIds.map(() => 1), shareSeed) : [];
+                    // Mismo orden canónico (por id, no por `participantIds`
+                    // tal cual) que usa computeShares -- si no, esta vista
+                    // previa no coincidiría con lo que de verdad se guarda.
+                    const canonicalIds = [...participantIds].sort();
+                    const preview = validAmount ? fairSplit(numericAmount, canonicalIds.map(() => 1), shareSeed) : [];
                     return members.map((m) => {
                       const isIn = participants.has(m.id);
-                      const previewIdx = participantIds.indexOf(m.id);
+                      const previewIdx = canonicalIds.indexOf(m.id);
                       const myAmt = isIn && validAmount && previewIdx >= 0 ? preview[previewIdx] : null;
                       return (
                         <button key={m.id} onClick={() => toggleParticipant(m.id)} style={{ ...styles.shareRow, opacity: isIn ? 1 : 0.45 }}>

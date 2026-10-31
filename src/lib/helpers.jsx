@@ -227,26 +227,35 @@ export function fairSplit(amount, ratios, seed = 0) {
   return floorCents.map((c) => c / 100);
 }
 
+// `fairSplit`'s seed-based tie-break only works if "posición 0" siempre es
+// la misma persona -- pero `participantIds` (y `members`, del que sale) trae
+// siempre al usuario actual primero (ver toClientGroup en EvenlyApp.jsx),
+// así que un reparto empatado reeditado por otro miembro del grupo le daba
+// el centavo de más a OTRA persona, y así cada vez que alguien reeditaba.
+// Ordenar acá por id (fijo, no depende de quién mira) hace que la posición
+// de cada persona en el reparto sea siempre la misma, sin importar quién
+// edite el gasto. Bug encontrado por Nicolas, 2026-10-31.
 export function computeShares({ splitMode, amount, participantIds, exactAmounts, percentages, shareUnits, seed = 0 }) {
   const shares = {};
-  const n = participantIds.length || 1;
+  const canonicalIds = [...participantIds].sort();
+  const n = canonicalIds.length || 1;
 
   if (splitMode === "equal") {
     const vals = fairSplit(amount, Array(n).fill(1), seed);
-    participantIds.forEach((id, i) => { shares[id] = vals[i]; });
+    canonicalIds.forEach((id, i) => { shares[id] = vals[i]; });
 
   } else if (splitMode === "exact") {
     participantIds.forEach((id) => { shares[id] = exactAmounts[id] || 0; });
 
   } else if (splitMode === "percent") {
-    const ratios = participantIds.map((id) => percentages[id] || 0);
+    const ratios = canonicalIds.map((id) => percentages[id] || 0);
     const vals = fairSplit(amount, ratios, seed);
-    participantIds.forEach((id, i) => { shares[id] = vals[i]; });
+    canonicalIds.forEach((id, i) => { shares[id] = vals[i]; });
 
   } else if (splitMode === "shares") {
-    const ratios = participantIds.map((id) => shareUnits[id] || 0);
+    const ratios = canonicalIds.map((id) => shareUnits[id] || 0);
     const vals = fairSplit(amount, ratios, seed);
-    participantIds.forEach((id, i) => { shares[id] = vals[i]; });
+    canonicalIds.forEach((id, i) => { shares[id] = vals[i]; });
   }
 
   return shares;

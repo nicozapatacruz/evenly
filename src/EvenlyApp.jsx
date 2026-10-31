@@ -658,7 +658,7 @@ const TABS = [
 
 function AppShell({ session, onLogout, refreshProfile, patchSession }) {
   const { groups, loading, reloadGroup, deleteGroup, reload: reloadGroups } = useGroups(session.userId);
-  const evenCapital = useEvenCapital(session.userId, session.email);
+  const evenCapital = useEvenCapital(session.userId);
   const isOnline = useConnectivity();
   // Banner de sincronización (no bloqueante, ver ReconnectSyncGate) — al
   // arrancar (si hay señal) y en toda transición offline→online. El efecto
@@ -685,7 +685,7 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
     (async () => {
       setSyncing(true);
       try {
-        await runFullSync(session.userId, session.email);
+        await runFullSync(session.userId);
         await reloadGroups();
       } finally {
         if (syncTokenRef.current === myToken) setSyncing(false);
@@ -1225,8 +1225,6 @@ function AppShell({ session, onLogout, refreshProfile, patchSession }) {
           filters={diarioFilters}
           onOpenFilters={() => setLedgerView({ screen: "filters" })}
           onClearFilters={() => setDiarioFilters(EMPTY_FILTERS)}
-          pendienteTcReview={evenCapital.pendienteTcReview}
-          onAcknowledgePendienteTcReview={evenCapital.acknowledgePendienteTcReview}
         />
       )}
 

@@ -17,15 +17,6 @@ export const CUSTOM_USER_CONFIG = {
     // tarjeta (deuda) + la cuenta pseudo del grupo de EvenGroup vinculado
     // (groupName, el nombre real del grupo -- esa cuenta se llama igual).
     realBalance: { group: "Santander", saldoName: "Saldo", tcName: "TC Santander", pendienteName: "Pendiente", groupName: "Nottinghill" },
-    // Auto-suma a "Pendiente TC" (evenGroupSync.js): cuando creás un gasto
-    // en el grupo de EvenGroup indicado, pagado con la cuenta indicada,
-    // y prestás una parte, esa parte se suma sola a la transacción manual
-    // "Pendiente TC" (transferencia de esa cuenta a la cuenta de "lo
-    // prestado" de ESE gasto puntual) que ya manejás vos mismo mes a mes, en
-    // vez de tener que sumarla a mano. No hay un "pendienteAccountName" fijo
-    // a propósito: hay más de una cuenta "Pendiente" (una por grupo de
-    // cuentas), así que la cuenta real se resuelve por gasto, nunca por nombre.
-    pendienteTcAutoSum: { splitGroupName: "Nottinghill", tcAccountName: "TC Santander", pendienteTcTitle: "Pendiente TC" },
   },
   "paulina.sanchezbt@gmail.com": {
     realBalance: { group: "Santander", saldoName: "Saldo", tcName: "Tarjeta", pendienteName: "Pendiente" },

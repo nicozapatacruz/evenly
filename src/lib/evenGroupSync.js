@@ -1,6 +1,5 @@
 import { supabase } from "./supabaseClient.js";
 import { fetchAllRows } from "./evenCapitalData.js";
-import { CUSTOM_USER_CONFIG } from "./customUserConfig.js";
 import { creditCardCycleStart } from "./helpers.jsx";
 
 /* =========================================================================
@@ -348,156 +347,7 @@ async function computeLendOffsetDesired(link, ctx, desired) {
   return offsetDesired;
 }
 
-// Hecho a medida para un usuario puntual (ver customUserConfig.js) -- no es
-// parte de la sincronización genérica, vive aparte a propósito para no
-// contaminar la lógica de todos con un hábito personal de uno solo. Cuando
-// ese usuario crea un gasto en el grupo de EvenGroup indicado, pagado con
-// la cuenta indicada, y presta una parte, esa parte se suma a la
-// transacción manual "Pendiente TC" que ya maneja él mismo mes a mes (en vez
-// de que tenga que sumarla a mano cada vez).
-//
-// Nunca resta ni resetea nada sola, y nunca crea la fila "Pendiente TC" si
-// no existe todavía (la maneja el usuario) -- solo suma, una vez por gasto
-// (ver sl_mm_pendiente_tc_contributions, evita sumar dos veces si esto
-// corre de nuevo para el mismo gasto). Si el gasto se borra después de ya
-// haber sumado, NO se resta solo (podría ya haber movido/reseteado esa fila
-// a un mes nuevo) -- ver la pantalla que avisa de esto para que lo corrija
-// a mano.
-async function applyPendienteTcAutoSum(link, userId, userEmail, ctx, choicesBySourceKey) {
-  const config = CUSTOM_USER_CONFIG[userEmail]?.pendienteTcAutoSum;
-  if (!config || ctx.groupName !== config.splitGroupName) return;
-
-  // Ojo: buscar la cuenta "Pendiente" por NOMBRE (como se hacía antes) se
-  // rompe en cuanto hay más de una cuenta con ese nombre (ej. una por cada
-  // grupo de cuentas) -- `.find()` puede agarrar cualquiera, no
-  // necesariamente la de este vínculo, y entonces la búsqueda de la
-  // transacción "Pendiente TC" de más abajo no encuentra nada (se salta en
-  // silencio, sin ningún error, bug real encontrado en vivo 2026-10-20). En
-  // vez de eso, "tcAccount" solo sirve para el nombre (asumido único) y la
-  // cuenta de "lo prestado" se resuelve IGUAL que en computeDesiredTransactions:
-  // por gasto (choice.loan_account_id), nunca por nombre.
-  const { data: accounts } = await supabase
-    .from("mm_accounts")
-    .select("id, name")
-    .eq("user_id", userId)
-    .eq("deleted", false)
-    .eq("name", config.tcAccountName);
-  const tcAccount = (accounts || [])[0];
-  if (!tcAccount) return;
-
-  // Traído una sola vez antes del loop: evita reintentar el insert (y su
-  // 409 esperado, ver más abajo) para cada gasto que esta misma función ya
-  // aplicó en una corrida anterior -- sin esto, cada sincronización volvía a
-  // intentarlo para TODOS los gastos ya sumados desde siempre, no solo los
-  // nuevos. El insert liso sigue siendo lo que de verdad protege contra una
-  // doble suma (dos corridas casi simultáneas sobre un gasto recién
-  // aplicado) -- este chequeo solo recorta el caso ya resuelto hace rato.
-  const { data: existingContribs } = await supabase
-    .from("sl_mm_pendiente_tc_contributions")
-    .select("source_id")
-    .eq("link_id", link.id)
-    .eq("source_kind", "expense");
-  const appliedExpenseIds = new Set((existingContribs || []).map((c) => c.source_id));
-
-  for (const e of ctx.expenses) {
-    if (e.deleted || !expenseInvolvesMe(e, ctx.memberId)) continue;
-    if (appliedExpenseIds.has(e.id)) continue;
-    const shareAmt = Number(e.shares?.[ctx.memberId] || 0);
-    const paidAmt = Number(e.payers?.[ctx.memberId] || 0);
-    const diff = roundCents(paidAmt - shareAmt);
-    if (diff <= EPSILON) continue; // solo cuando presto (pago de más), no cuando me prestan
-
-    const choice = choicesBySourceKey.get(`expense:${e.id}`);
-    const accountId = choice?.account_id || link.default_other_account_id;
-    if (accountId !== tcAccount.id) continue; // este gasto puntual no se pagó con esa cuenta
-    const loanAccountId = choice?.loan_account_id || accountId;
-
-    const { data: pendienteTcTx } = await supabase
-      .from("mm_transactions")
-      .select("id, amount, amount_main")
-      .eq("user_id", userId).eq("account_id", tcAccount.id).eq("to_account_id", loanAccountId)
-      .eq("title", config.pendienteTcTitle).eq("deleted", false)
-      .maybeSingle();
-    if (!pendienteTcTx) continue; // no existe todavía esa fila -- la maneja el usuario, no se auto-crea
-
-    // Primero RESERVAR el registro (insert liso, no upsert -- si ya existe,
-    // la restricción unique lo rechaza) y recién DESPUÉS sumar el monto. Al
-    // revés (como estaba antes) dos corridas casi al mismo tiempo podían
-    // sumar las dos antes de que ninguna llegara a guardar el registro,
-    // duplicando la suma sin que quedara ningún rastro de que pasó.
-    const { error: insertError } = await supabase
-      .from("sl_mm_pendiente_tc_contributions")
-      .insert({ link_id: link.id, source_kind: "expense", source_id: e.id, amount: diff });
-    if (insertError) {
-      if (insertError.code !== "23505") console.error("applyPendienteTcAutoSum: no se pudo registrar el aporte", insertError);
-      continue; // 23505 = unique violation: ya se aplicó (esta misma corrida u otra), no sumar de nuevo
-    }
-
-    // amount_main (no solo amount) es lo que usa el saldo corriente de la
-    // cuenta (AccountActivityScreen.jsx) -- quedarse corto acá hace que la
-    // fila muestre el monto nuevo pero el saldo arrastrado siga el viejo.
-    const { error: updateError } = await supabase
-      .from("mm_transactions")
-      .update({
-        amount: Number(pendienteTcTx.amount) + diff,
-        amount_main: Number(pendienteTcTx.amount_main) + diff,
-      })
-      .eq("id", pendienteTcTx.id);
-    if (updateError) { console.error("applyPendienteTcAutoSum: no se pudo sumar", updateError); continue; }
-
-    await updatePendienteTcNote(link, pendienteTcTx.id);
-  }
-}
-
-// Nota de "Pendiente TC" con los últimos 5 aportes automáticos (fecha +
-// monto) -- se regenera entera desde sl_mm_pendiente_tc_contributions cada
-// vez (nunca se parsea/edita el texto anterior), así nunca se puede romper
-// el formato ni duplicar una línea.
-async function updatePendienteTcNote(link, pendienteTcTxId) {
-  // Más de 5 a propósito: un gasto de prueba borrado después (ver el aviso
-  // de "Pendiente TC" en Transacciones) no debería seguir ocupando un lugar
-  // en "los últimos 5" solo porque su aporte sigue registrado -- se trae de
-  // más y se filtra, para quedarse con los últimos 5 de verdad vigentes.
-  const { data: recent } = await supabase
-    .from("sl_mm_pendiente_tc_contributions")
-    .select("source_kind, source_id, amount, created_at")
-    .eq("link_id", link.id)
-    .order("created_at", { ascending: false })
-    .limit(20);
-  if (!recent?.length) return;
-
-  // Descripción del gasto de origen, para que la nota diga de qué fue cada
-  // aporte -- se lee al vuelo (no se guarda duplicada en la tabla de
-  // aportes), así que si el gasto se renombra después, la nota sigue la
-  // descripción actual, no la de cuando se aplicó.
-  const expenseIds = recent.filter((c) => c.source_kind === "expense").map((c) => c.source_id);
-  const { data: expenses } = expenseIds.length
-    ? await supabase.from("expenses").select("id, description, deleted").in("id", expenseIds)
-    : { data: [] };
-  const expenseById = new Map((expenses || []).map((e) => [e.id, e]));
-
-  // Un gasto borrado FÍSICAMENTE (DELETE directo, no `deleted:true`) no
-  // aparece acá -- expenseById.get(...) da undefined, y "¿no está borrado?"
-  // sobre undefined da true por error, dejando pasar un aporte que ya no
-  // corresponde a nada real. Hace falta que el gasto EXISTA y no esté
-  // borrado, no alcanza con "no está marcado como borrado".
-  const active = recent.filter((c) => {
-    const e = expenseById.get(c.source_id);
-    return e && !e.deleted;
-  }).slice(0, 5);
-  if (!active.length) return;
-
-  const lines = active.map((c) => {
-    const date = new Date(c.created_at).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
-    const description = expenseById.get(c.source_id)?.description;
-    return `${date}: +€${Number(c.amount).toFixed(2)}${description ? ` ${description}` : ""}`;
-  });
-  const memo = "Últimos aportes automáticos:\n" + lines.join("\n");
-  const { error } = await supabase.from("mm_transactions").update({ memo }).eq("id", pendienteTcTxId);
-  if (error) console.error("updatePendienteTcNote: no se pudo actualizar la nota", error);
-}
-
-async function reconcileLink(link, userId, userEmail, mainCurrency, accountsById) {
+async function reconcileLink(link, userId, mainCurrency, accountsById) {
   const ctx = await loadLinkContext(link, userId, accountsById);
   if (!ctx) return; // vínculo congelado, no se toca nada
 
@@ -605,11 +455,9 @@ async function reconcileLink(link, userId, userEmail, mainCurrency, accountsById
     const { error } = await supabase.from("mm_transactions").update({ deleted: true }).in("id", toDelete);
     if (error) console.error("reconcileEvenGroup: no se pudo borrar", error);
   }
-
-  await applyPendienteTcAutoSum(link, userId, userEmail, ctx, choicesBySourceKey);
 }
 
-export async function reconcileEvenGroup(userId, userEmail) {
+export async function reconcileEvenGroup(userId) {
   if (!userId) return;
   const { data: links } = await supabase.from("sl_mm_links").select("*").eq("user_id", userId).eq("active", true);
   if (!links?.length) return;
@@ -628,43 +476,7 @@ export async function reconcileEvenGroup(userId, userEmail) {
   const accountsById = new Map((accounts || []).map((a) => [a.id, a]));
 
   for (const link of links) {
-    try { await reconcileLink(link, userId, userEmail, mainCurrency, accountsById); }
+    try { await reconcileLink(link, userId, mainCurrency, accountsById); }
     catch (e) { console.error("reconcileEvenGroup: falló el vínculo", link.id, e); }
   }
-}
-
-// Aportes a "Pendiente TC" (ver applyPendienteTcAutoSum) cuyo gasto de
-// origen ya fue borrado en EvenGroup -- como esa suma nunca se revierte
-// sola, esto es lo que alimenta el aviso para que el usuario la corrija a
-// mano. `acknowledged` los saca de la lista sin borrar el historial.
-export async function getPendienteTcReviewItems(userId, userEmail) {
-  const config = CUSTOM_USER_CONFIG[userEmail]?.pendienteTcAutoSum;
-  if (!config) return [];
-
-  const { data: links } = await supabase.from("sl_mm_links").select("id").eq("user_id", userId);
-  const linkIds = (links || []).map((l) => l.id);
-  if (!linkIds.length) return [];
-
-  const { data: contributions } = await supabase
-    .from("sl_mm_pendiente_tc_contributions")
-    .select("id, source_kind, source_id, amount, created_at")
-    .in("link_id", linkIds)
-    .eq("acknowledged", false);
-  if (!contributions?.length) return [];
-
-  const expenseIds = contributions.filter((c) => c.source_kind === "expense").map((c) => c.source_id);
-  const { data: expenses } = await supabase.from("expenses").select("id, deleted, description").in("id", expenseIds);
-  const expenseById = new Map((expenses || []).map((e) => [e.id, e]));
-
-  return contributions
-    .filter((c) => {
-      const e = expenseById.get(c.source_id);
-      return !e || e.deleted;
-    })
-    .map((c) => ({ ...c, expenseDescription: expenseById.get(c.source_id)?.description || null }));
-}
-
-export async function acknowledgePendienteTcReviewItem(id) {
-  const { error } = await supabase.from("sl_mm_pendiente_tc_contributions").update({ acknowledged: true }).eq("id", id);
-  if (error) throw error;
 }

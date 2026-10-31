@@ -4,7 +4,6 @@ import { supabase } from "./supabaseClient.js";
 import { db } from "./localDb.js";
 import { dateInputValueInZone, parseAmountInput, daysInMonth, monthsBefore, normalizeForSearch, creditCardCycleStart } from "./helpers.jsx";
 import { hasActiveFilters, matchesFilters } from "./filterHelpers.js";
-import { reconcileEvenGroup, getPendienteTcReviewItems, acknowledgePendienteTcReviewItem } from "./evenGroupSync.js";
 import { computeAccountTotals, computeCategoryMonthTotals, computeAccountMonthTotals } from "./localAggregates.js";
 import { offlineSupabase } from "./offlineSupabase.js";
 import { getIsOnline } from "./connectivity.js";
@@ -226,7 +225,7 @@ function useLocalTable(table, userId, sortKey) {
   return result === LOADING ? { rows: [], loading: true } : { rows: result, loading: false };
 }
 
-export function useEvenCapital(userId, userEmail) {
+export function useEvenCapital(userId) {
   const settingsRow = useLiveQuery(() => (userId ? db.mm_settings.get(userId) : undefined), [userId], LOADING);
   const { rows: groups } = useLocalTable("mm_account_groups", userId, "sort_order");
   const { rows: accounts } = useLocalTable("mm_accounts", userId, "sort_order");
@@ -234,12 +233,10 @@ export function useEvenCapital(userId, userEmail) {
   const { rows: recurring } = useLocalTable("mm_recurring", userId, "next_date");
   const { rows: slLinks } = useLocalTable("sl_mm_links", userId);
   const { rows: allTransactions } = useLocalTable("mm_transactions", userId);
-  const reviewMeta = useLiveQuery(() => db.sync_meta.get("pendienteTcReview"), [], undefined);
 
   const loading = settingsRow === LOADING;
   const settings = loading || !settingsRow ? DEFAULT_SETTINGS : settingsRow;
   const accountTotals = useMemo(() => computeAccountTotals(allTransactions), [allTransactions]);
-  const pendienteTcReview = reviewMeta?.value || [];
 
   // Dispara un sync completo contra el servidor (drena la cola offline,
   // corre mantenimiento, trae todo fresco) — no hace nada si no hay señal,
@@ -254,26 +251,11 @@ export function useEvenCapital(userId, userEmail) {
   const reload = useCallback(async () => {
     if (!userId || !getIsOnline()) return;
     const { runFullSync } = await import("./syncEngine.js");
-    await runFullSync(userId, userEmail);
-  }, [userId, userEmail]);
-
-  // Online-only (toca una tabla de EvenGroup, no de EvenCapital) — sin
-  // señal falla en silencio (el aviso del banner se queda tal cual, sin
-  // romper nada) en vez de quedar como una promesa rechazada sin atrapar,
-  // mismo criterio que ya usa handleRejectInvite en EvenlyApp.jsx.
-  const acknowledgePendienteTcReview = useCallback(async (id) => {
-    try {
-      await acknowledgePendienteTcReviewItem(id);
-      const current = (await db.sync_meta.get("pendienteTcReview"))?.value || [];
-      await db.sync_meta.put({ key: "pendienteTcReview", value: current.filter((item) => item.id !== id) });
-    } catch (e) {
-      console.error("acknowledgePendienteTcReview: no se pudo confirmar (sin señal?)", e);
-    }
-  }, []);
+    await runFullSync(userId);
+  }, [userId]);
 
   return {
     settings, groups, accounts, categories, accountTotals, recurring, slLinks, loading, reload,
-    pendienteTcReview, acknowledgePendienteTcReview,
   };
 }
 

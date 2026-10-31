@@ -4,7 +4,7 @@ import { drainQueue } from "./writeQueue.js";
 import {
   generateDueRecurring, runCreditCardAutoPay, seedDefaults, fetchAllRows, DEFAULT_SETTINGS,
 } from "./evenCapitalData.js";
-import { reconcileEvenGroup, getPendienteTcReviewItems } from "./evenGroupSync.js";
+import { reconcileEvenGroup } from "./evenGroupSync.js";
 import { probeOnline } from "./connectivity.js";
 
 const MM_TABLES = [
@@ -61,7 +61,7 @@ async function pullEvenCapitalIntoLocal(userId) {
 // EvenGroup → auto-pago de tarjetas, el auto-pago necesita ver primero
 // cualquier transferencia que el reconcile recién insertó) y vuelve a traer
 // todo fresco.
-export async function runFullSync(userId, userEmail) {
+export async function runFullSync(userId) {
   // Re-chequeo rápido y acotado antes de lanzar toda la cascada de
   // mantenimiento de abajo -- el `isOnline` de React que dispara esto puede
   // estar un render atrasado (ej. el primer render de AppShell, antes de
@@ -79,10 +79,8 @@ export async function runFullSync(userId, userEmail) {
     return;
   }
   await generateDueRecurring(userId);
-  await reconcileEvenGroup(userId, userEmail);
+  await reconcileEvenGroup(userId);
   await runCreditCardAutoPay(userId);
   await pullEvenCapitalIntoLocal(userId);
-  const review = await getPendienteTcReviewItems(userId, userEmail);
-  await db.sync_meta.put({ key: "pendienteTcReview", value: review });
   await db.sync_meta.put({ key: "lastSyncAt", value: Date.now() });
 }

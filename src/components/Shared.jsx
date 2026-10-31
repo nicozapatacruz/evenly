@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowLeft, Ban, Camera, Check, ChevronLeft, ChevronRight, Eye, EyeOff, Info, Lock, Trash2, User, X } from "lucide-react";
 import { styles } from "../lib/styles.js";
 import { ICON_OPTIONS } from "../lib/evenCapitalData.js";
-import { money, parseAmountInput, todayInputValue } from "../lib/helpers.jsx";
+import { parseAmountInput, todayInputValue } from "../lib/helpers.jsx";
 
 const MONTH_LABEL = (d) => d.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
 
@@ -409,21 +409,6 @@ export function PendingRateBanner({ count, onOpen }) {
   return (
     <button type="button" onClick={onOpen} style={{ display: "flex", width: "100%", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 20, background: "#FBEDE7", border: "1px solid #EBC9BA", textAlign: "left", fontSize: 13, fontWeight: 600, fontFamily: "system-ui, sans-serif", color: "#C75D3B", cursor: "pointer" }}>
       {count === 1 ? "1 transacción pendiente de tasa de cambio" : `${count} transacciones pendientes de tasa de cambio`}
-    </button>
-  );
-}
-
-// Aviso de "Pendiente TC" (ver applyPendienteTcAutoSum en evenGroupSync.js,
-// solo le sale a quien tiene esa automatización custom): un gasto de Split
-// Ledger que ya había sumado algo ahí se borró después, y esa suma nunca se
-// revierte sola (podría ya estar mezclada con otro mes). Un solo tap marca
-// todo como revisado, no hay sub-pantalla: el usuario va a corregir el
-// monto él mismo en Pendiente TC, esto solo es el recordatorio.
-export function PendienteTcReviewBanner({ items, onAcknowledgeAll }) {
-  const total = items.reduce((s, item) => s + Number(item.amount), 0);
-  return (
-    <button type="button" onClick={onAcknowledgeAll} style={{ display: "flex", width: "100%", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 20, background: "#FBEDE7", border: "1px solid #EBC9BA", textAlign: "left", fontSize: 13, fontWeight: 600, fontFamily: "system-ui, sans-serif", color: "#C75D3B", cursor: "pointer" }}>
-      Revisá Pendiente TC: se borró {items.length === 1 ? "un gasto" : `${items.length} gastos`} que ya le había sumado {money(total, "EUR")} (toca para marcar como revisado)
     </button>
   );
 }

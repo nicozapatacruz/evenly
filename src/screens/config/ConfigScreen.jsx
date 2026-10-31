@@ -12,6 +12,8 @@ import RecurringScreen from "../evencapital/RecurringScreen.jsx";
 import TransactionForm, { ManageCategories } from "../evencapital/TransactionForm.jsx";
 import { ManageGroups, ManageAccounts, ManageAllAccounts } from "../evencapital/CuentasTab.jsx";
 import PeriodSettingsScreen from "../evencapital/PeriodSettingsScreen.jsx";
+import DefaultsSettingsScreen from "../evencapital/DefaultsSettingsScreen.jsx";
+import PreferencesScreen from "../evencapital/PreferencesScreen.jsx";
 import CurrencySettingsScreen from "../evencapital/CurrencySettingsScreen.jsx";
 
 /* =========================================================================
@@ -94,6 +96,33 @@ export default function ConfigScreen({
         reload={evenCapital.reload}
         showError={showError}
         showInfo={showInfo}
+        onBack={() => setEvenCapitalScreen(null)}
+      />
+    );
+  }
+
+  if (evenCapitalScreen === "defaults") {
+    return (
+      <DefaultsSettingsScreen
+        session={session}
+        settings={evenCapital.settings}
+        groups={evenCapital.groups}
+        accounts={evenCapital.accounts}
+        categories={evenCapital.categories}
+        reload={evenCapital.reload}
+        showError={showError}
+        onBack={() => setEvenCapitalScreen(null)}
+      />
+    );
+  }
+
+  if (evenCapitalScreen === "preferences") {
+    return (
+      <PreferencesScreen
+        session={session}
+        settings={evenCapital.settings}
+        reload={evenCapital.reload}
+        showError={showError}
         onBack={() => setEvenCapitalScreen(null)}
       />
     );
@@ -238,17 +267,18 @@ export default function ConfigScreen({
           <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
             <p style={{ ...styles.label, marginBottom: 12 }}>Transacciones</p>
             <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
-              <MenuRow label="Detalles del período" onClick={() => setEvenCapitalScreen("period")} />
-              <MenuRow label="Transacciones recurrentes" onClick={() => setEvenCapitalScreen("recurring")} last />
+              <MenuRow label="Valores por defecto" onClick={() => setEvenCapitalScreen("defaults")} />
+              <MenuRow label="Transacciones recurrentes" onClick={() => setEvenCapitalScreen("recurring")} />
+              <MenuRow label="Detalles del período" onClick={() => setEvenCapitalScreen("period")} last />
             </div>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
             <p style={{ ...styles.label, marginBottom: 12 }}>Ajustes</p>
             <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
+              <MenuRow label="Preferencias" onClick={() => setEvenCapitalScreen("preferences")} />
               <MenuRow label="Ajustes de moneda" onClick={() => setEvenCapitalScreen("currency")} />
-              <MenuRow label="Respaldo" badge="Próximamente" />
-              <MenuRow label="Apariencia" badge="Próximamente" last />
+              <MenuRow label="Respaldo" badge="Próximamente" last />
             </div>
           </div>
         </div>

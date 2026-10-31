@@ -21,6 +21,7 @@ import { getIsOnline } from "./connectivity.js";
 export const DEFAULT_SETTINGS = {
   main_currency: "EUR", other_currencies: [],
   month_start_day: 1, week_start_day: "sunday", autocomplete_notes: true, startup_tab: null,
+  default_account_id: null, default_expense_category_id: null, default_income_category_id: null, default_future_transactions: false,
 };
 
 export const WEEKDAY_OPTIONS = [

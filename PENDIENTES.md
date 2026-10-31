@@ -113,10 +113,10 @@ Resuelto 2026-10-30 con la solución robusta (elegida por Nicolas sobre una alte
 
 </details>
 
-- [ ] **Gastos futuros, todavía no cobrados en la cuenta**
-<details open><summary>Ver detalle</summary>
+- [x] ~~Gastos futuros, todavía no cobrados en la cuenta~~
+<details><summary>Ver detalle</summary>
 
-Migrado desde `TAREAS_ACTUALES.md` (borrado 2026-10-29). Poder cargar un gasto que ya se sabe que va a pasar en una fecha futura (ej. un viaje que se va a cobrar tal día) pero que todavía no impactó el saldo real de la cuenta — para tenerlo anotado/planeado sin que ya reste del balance como si hubiera pasado. Pensar cómo se distingue esto de un gasto normal (¿un estado "pendiente de cobro" aparte, una fecha futura que no cuenta para el saldo corriente hasta que llega, algo manual que se marca como "ya se cobró"?) y cómo interactúa con lo demás (recurrentes, estadísticas, Saldo Real).
+~~Migrado desde `TAREAS_ACTUALES.md` (borrado 2026-10-29). Poder cargar un gasto que ya se sabe que va a pasar en una fecha futura (ej. un viaje que se va a cobrar tal día) pero que todavía no impactó el saldo real de la cuenta — para tenerlo anotado/planeado sin que ya reste del balance como si hubiera pasado. Pensar cómo se distingue esto de un gasto normal (¿un estado "pendiente de cobro" aparte, una fecha futura que no cuenta para el saldo corriente hasta que llega, algo manual que se marca como "ya se cobró"?) y cómo interactúa con lo demás (recurrentes, estadísticas, Saldo Real).~~ Resuelto 2026-10-31: columna `is_future` en `mm_transactions` + `isFuturePending(t, now)` (`src/lib/helpers.jsx`) como criterio central — `is_future && date > ahora`, se "activa" sola en el momento en que la fecha pasa, sin ninguna acción manual ni job de fondo. Excluida de saldos/Estadísticas en los 4 agregadores compartidos (`localAggregates.js`, `computeCreditCardBalance`/`aggregateByCategory` en `evenCapitalData.js`) y en las sumas sueltas de cada pantalla (`TransactionDayGroups`, `DiarioTab`, `SearchScreen`, `CategoryDrillDownScreen`, `AccountActivityScreen`), sin dejar de mostrarse en los listados (ícono de reloj de arena). Toggle "Transacción futura" en `TransactionForm.jsx`, filtro "Solo transacciones futuras" en Filtros, y página nueva "Valores por defecto" en Config para activar esto por defecto según la fecha.
 
 </details>
 

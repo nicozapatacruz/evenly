@@ -88,7 +88,10 @@ export default function TransactionForm({
     : editingRecurring ? dateInputValue(new Date(editingRecurring.start_date).getTime())
     : (defaultDate || todayInputValue())
   );
-  const [isFuture, setIsFuture] = useState(!!editingTransaction?.is_future);
+  const [isFuture, setIsFuture] = useState(
+    !!editingTransaction?.is_future
+    || (!editingTransaction && !editingRecurring && !!settings.default_future_transactions && new Date(date + "T12:00:00").getTime() > new Date(todayInputValue() + "T23:59:59").getTime())
+  );
   const [amount, setAmount] = useState(editingTransaction ? String(editingTransaction.amount) : editingRecurring ? String(editingRecurring.amount) : (prefillBookmark ? String(prefillBookmark.amount) : ""));
   const [currency, setCurrency] = useState(
     editingTransaction?.currency || editingRecurring?.currency || prefillBookmark?.currency
@@ -103,7 +106,11 @@ export default function TransactionForm({
     (editingTransaction?.exchange_rate || editingRecurring?.exchange_rate || prefillBookmark?.exchange_rate)
       ? String(editingTransaction?.exchange_rate || editingRecurring?.exchange_rate || prefillBookmark?.exchange_rate) : ""
   );
-  const [categoryId, setCategoryId] = useState(editingTransaction?.category_id || editingRecurring?.category_id || prefillBookmark?.category_id || "");
+  const [categoryId, setCategoryId] = useState(
+    editingTransaction?.category_id || editingRecurring?.category_id || prefillBookmark?.category_id
+    || (!editingTransaction && !editingRecurring && (type === "income" ? settings.default_income_category_id : settings.default_expense_category_id))
+    || ""
+  );
   // Sube cada vez que el botón "Ok" del teclado de Importe confirma el monto
   // y pide saltar directo a elegir cuenta (ver CalculatorAmountInput) — el
   // campo que sigue a Importe desde que Cuenta pasó a ir antes que Categoría.
@@ -111,7 +118,10 @@ export default function TransactionForm({
   // Sube cada vez que la moneda cambia a una distinta de la cuenta, para que
   // CurrencyConversionField se abra solo (ver abajo, cerca del campo Importe).
   const [openConversionSignal, setOpenConversionSignal] = useState(0);
-  const [accountId, setAccountId] = useState(editingTransaction?.account_id || editingRecurring?.account_id || prefillBookmark?.account_id || defaultAccountId || "");
+  const [accountId, setAccountId] = useState(
+    editingTransaction?.account_id || editingRecurring?.account_id || prefillBookmark?.account_id || defaultAccountId
+    || (!editingTransaction && !editingRecurring && settings.default_account_id) || ""
+  );
   const [toAccountId, setToAccountId] = useState(editingTransaction?.to_account_id || editingRecurring?.to_account_id || prefillBookmark?.to_account_id || "");
   const [note, setNote] = useState(editingTransaction?.title || editingRecurring?.title || prefillBookmark?.title || "");
   // Separado en dos banderas a propósito: "noteFocused" sigue al foco real,
@@ -613,7 +623,22 @@ export default function TransactionForm({
             start_date original) para que RecurringFields siga mostrando
             bien el mensaje de "se repite los días X". */}
         {!editingRecurring && (
-          <DateRow label="Fecha" value={date} onChange={setDate} disabled={isSynced} lockedValue={isSynced} />
+          <DateRow
+            label="Fecha"
+            value={date}
+            onChange={(v) => {
+              setDate(v);
+              // Re-aplica "Transacciones futuras por defecto" (Config) cada
+              // vez que se cambia la fecha de una transacción nueva -- si no,
+              // solo se habría tenido en cuenta la fecha con la que abrió el
+              // formulario (hoy, casi siempre), nunca una elegida después.
+              if (!editingTransaction && !editingRecurring && settings.default_future_transactions) {
+                setIsFuture(new Date(v + "T12:00:00").getTime() > new Date(todayInputValue() + "T23:59:59").getTime());
+              }
+            }}
+            disabled={isSynced}
+            lockedValue={isSynced}
+          />
         )}
 
         {!editingRecurring && date && new Date(date + "T12:00:00").getTime() > new Date(todayInputValue() + "T23:59:59").getTime() && (

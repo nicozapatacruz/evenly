@@ -1824,7 +1824,7 @@ function ExpenseDetail({ group, expenseId, onBack, onEdit, isOnline = true, show
             PhotoImportWizardScreen.jsx, se resuelve aparte. */}
         <div>
           <p style={{ ...styles.label, marginBottom: 6 }}>{payerIds.length > 1 ? "Quiénes pagaron" : "Quién pagó"}</p>
-          <div style={{ borderRadius: 12, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
+          <div style={{ borderRadius: 12, border: "1px solid #ECE3D3", background: "#FAF7F2", overflow: "hidden" }}>
             {payerIds.map((id, i) => (
               <div key={id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", fontSize: 14, fontFamily: "system-ui, sans-serif", background: id === myMemberId ? "#F3EFE5" : "transparent", borderBottom: i < payerIds.length - 1 ? "1px solid #F0EBE2" : "none" }}>
                 <span style={{ ...styles.avatar, background: colorFor(id), width: 30, height: 30, minWidth: 30, fontSize: 11 }}>
@@ -1840,7 +1840,7 @@ function ExpenseDetail({ group, expenseId, onBack, onEdit, isOnline = true, show
         {/* Cómo se divide */}
         <div>
           <p style={{ ...styles.label, marginBottom: 6 }}>Cómo se divide</p>
-          <div style={{ borderRadius: 12, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
+          <div style={{ borderRadius: 12, border: "1px solid #ECE3D3", background: "#FAF7F2", overflow: "hidden" }}>
             {shareIds.map((id, i) => (
               <div key={id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", fontSize: 14, fontFamily: "system-ui, sans-serif", background: id === myMemberId ? "#F3EFE5" : "transparent", borderBottom: i < shareIds.length - 1 ? "1px solid #F0EBE2" : "none" }}>
                 <span style={{ ...styles.avatar, background: colorFor(id), width: 30, height: 30, minWidth: 30, fontSize: 11 }}>

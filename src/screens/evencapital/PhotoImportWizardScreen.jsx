@@ -136,10 +136,15 @@ export default function PhotoImportWizardScreen({ userId, settings, accounts, ca
                 Se guardaron {results.length} transaccion{results.length === 1 ? "" : "es"}
                 {skipped > 0 ? `, se omitieron ${skipped}.` : "."}
               </p>
+              {/* Una sola tarjeta compartida por sección, filas separadas por
+                  línea fina -- antes cada fila era su propia tarjeta
+                  `shareRow`, idéntica a las SÍ clickeables de otras
+                  pantallas (ver EvenGroupTab.jsx/ExpenseDetail, mismo
+                  arreglo). Pedido de Nicolas, 2026-10-31. */}
               {results.length > 0 && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ borderRadius: 12, border: "1px solid #ECE3D3", background: "#FAF7F2", overflow: "hidden" }}>
                   {results.map((tx, i) => (
-                    <div key={i} style={{ ...styles.shareRow }}>
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", fontSize: 14, fontFamily: "system-ui, sans-serif", borderBottom: i < results.length - 1 ? "1px solid #F0EBE2" : "none" }}>
                       <span style={{ ...styles.avatar, background: tx.type === "income" ? "#3B6E62" : "#C75D3B" }}>
                         <Check size={16} color="#fff" />
                       </span>
@@ -155,8 +160,9 @@ export default function PhotoImportWizardScreen({ userId, settings, accounts, ca
               {skipped > 0 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   <p style={{ ...styles.muted, padding: 0, margin: 0 }}>Omitidas</p>
+                  <div style={{ borderRadius: 12, border: "1px solid #ECE3D3", background: "#FAF7F2", overflow: "hidden" }}>
                   {skippedEntries.map((entry, i) => (
-                    <div key={i} style={{ ...styles.shareRow }}>
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", fontSize: 14, fontFamily: "system-ui, sans-serif", borderBottom: i < skippedEntries.length - 1 ? "1px solid #F0EBE2" : "none" }}>
                       <span style={{ ...styles.avatar, background: "#A89A87" }}>
                         <X size={16} color="#fff" />
                       </span>
@@ -168,6 +174,7 @@ export default function PhotoImportWizardScreen({ userId, settings, accounts, ca
                       )}
                     </div>
                   ))}
+                  </div>
                 </div>
               )}
             </>

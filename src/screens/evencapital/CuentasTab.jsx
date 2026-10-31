@@ -33,32 +33,27 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
 
   // "Saldo Real" — solo para quienes usan este patrón puntual de reconciliar
   // a mano (Nico y Paulina, cada uno con sus propios nombres de cuenta, ver
-  // customUserConfig.js). Fórmula: el balance de "Saldo" más el de la
-  // tarjeta (ya negativo, es deuda) más lo que de esa deuda en realidad no
-  // es suyo — las transferencias puntuales que hacen a fin de mes de la
-  // tarjeta a "Pendiente" para separar gastos compartidos (ej. pagarle algo
-  // a alguien o un gasto de EvenGroup). "Pendiente" como CUENTA no sirve
-  // para esto (mezcla esas transferencias con otras cosas sueltas, como un
-  // regalo o efectivo por sacar) — por eso se suma la transferencia
-  // puntual, no el balance de la cuenta entera.
+  // customUserConfig.js). Fórmula: suma directa de los saldos de "Saldo",
+  // "Pendiente" (completo, no solo una transferencia puntual) y la tarjeta
+  // (ya negativa, es deuda), más el saldo de la cuenta pseudo del grupo de
+  // EvenGroup vinculado (ej. "Nottinghill") -- esa cuenta ya refleja en
+  // tiempo real, por cada gasto/pago sincronizado, cuánto le debés al grupo
+  // o el grupo te debe a vos, sin esperar a que cierre ningún ciclo de
+  // tarjeta ni depender de ninguna transacción manual puntual.
+  //
+  // ANTES (hasta 2026-10-31) sumaba solo las transferencias tituladas
+  // "Pendiente TC" en vez del saldo completo de "Pendiente", para no mezclar
+  // ahí otras cosas sueltas (un regalo, efectivo por sacar) -- pero esa
+  // automatización (`pendienteTcAutoSum`, evenGroupSync.js) dejó de
+  // encontrar la transacción a la que sumar en cuanto "Lo que prestás" pasó
+  // a ser la tarjeta misma (la transferencia que buscaba, tarjeta→tarjeta,
+  // ya no existe), así que el aporte de gastos nuevos se perdía en silencio
+  // y "Saldo Real" quedaba desfasado exactamente por lo prestado en esos
+  // gastos. Encontrado por Nicolas, 2026-10-31 (ver PENDIENTES.md) --
+  // reemplazado por esta suma directa, que no depende de ningún título de
+  // transacción ni de que cierre ningún ciclo: lo prestado/pedido ya está
+  // reflejado al toque en la cuenta pseudo del grupo.
   const realBalanceConfig = CUSTOM_USER_CONFIG[session.email]?.realBalance;
-  const realBalanceTcId = accounts.find((a) => a.name === realBalanceConfig?.tcName && !a.deleted)?.id;
-  const realBalancePendienteId = accounts.find((a) => a.name === realBalanceConfig?.pendienteName && !a.deleted)?.id;
-  // Local-first (lee de Dexie, no de red) — antes esto era una consulta
-  // directa a Supabase; se quedaba pegada para siempre offline (y de hecho
-  // rota incluso con señal: terminó pasando sin querer por offlineSupabase,
-  // que solo sabe de escrituras, no de un SELECT liso como este). Arranca
-  // en null (no en 0) a propósito: mientras no se sabe el valor real
-  // todavía, mejor no mostrar la fila "Saldo Real" que mostrar un número de
-  // entrada que es incompleto y después salta solo.
-  const pendienteTcSum = useLiveQuery(async () => {
-    if (!realBalanceTcId || !realBalancePendienteId) return null;
-    const rows = await db.mm_transactions.where("account_id").equals(realBalanceTcId).toArray();
-    return rows
-      .filter((t) => !t.deleted && t.type === "transfer" && t.to_account_id === realBalancePendienteId && t.title === "Pendiente TC")
-      .reduce((s, t) => s + t.amount, 0);
-  }, [realBalanceTcId, realBalancePendienteId], null);
-  const pendienteTcLoaded = pendienteTcSum !== null;
 
   // Transacción que se está editando, releída en vivo de Dexie por id (no la
   // que quedó congelada en view.transaction al momento del click en la
@@ -248,14 +243,19 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
               {realBalanceConfig && g.name === realBalanceConfig.group && (() => {
                 const saldoAcc = accounts.find((a) => a.name === realBalanceConfig.saldoName && !a.deleted);
                 const tcAcc = accounts.find((a) => a.name === realBalanceConfig.tcName && !a.deleted);
-                if (!saldoAcc || !tcAcc) return null;
-                const saldoReal = accountBalance(saldoAcc.id, accountTotals) + accountBalance(tcAcc.id, accountTotals) + pendienteTcSum;
+                const pendienteAcc = accounts.find((a) => a.name === realBalanceConfig.pendienteName && !a.deleted);
+                // Cuenta pseudo del grupo de EvenGroup vinculado -- vive en el
+                // grupo de cuentas "EvenGroup" auto-creado (system_key
+                // "split_ledger"), con el mismo nombre que el grupo (ver
+                // linkGroupToAccount en evenGroupLink.js).
+                const evenGroupSystemGroup = activeGroups.find((ag) => ag.system_key === "split_ledger");
+                const groupAcc = evenGroupSystemGroup && accounts.find((a) => a.group_id === evenGroupSystemGroup.id && a.name === realBalanceConfig.groupName && !a.deleted);
+                if (!saldoAcc || !tcAcc || !pendienteAcc || !groupAcc) return null;
+                const saldoReal = accountBalance(saldoAcc.id, accountTotals) + accountBalance(tcAcc.id, accountTotals) + accountBalance(pendienteAcc.id, accountTotals) + accountBalance(groupAcc.id, accountTotals);
                 return (
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif", fontSize: 14, background: "#FDFBF9", fontWeight: 700 }}>
                     <span>Saldo Real</span>
-                    {pendienteTcLoaded
-                      ? <span style={{ color: balanceColor(saldoReal) }}>{money(saldoReal, saldoAcc.currency)}</span>
-                      : <span style={{ color: "#A89A87" }}>—</span>}
+                    <span style={{ color: balanceColor(saldoReal) }}>{money(saldoReal, saldoAcc.currency)}</span>
                   </div>
                 );
               })()}

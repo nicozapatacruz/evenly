@@ -128,6 +128,12 @@ Migrado desde `TAREAS_ACTUALES.md` (borrado 2026-10-29, ya resuelto el resto de 
 2. Vaciar `pendienteTcAutoSum` del bloque de Nico en `src/lib/customUserConfig.js`: esa automatización sumaba cada préstamo nuevo a mano a "Pendiente TC", comportamiento viejo que el mecanismo nuevo (TC→pseudo-cuenta directo) ya no necesita. Se borra una vez confirmado que el sistema nuevo funciona bien un ciclo completo (ver punto 3).
 3. Probar con un ciclo real completo: prestar algo nuevo vía la tarjeta, esperar a que cierre el ciclo de facturación, y confirmar que "Compensación de lo prestado" se genera sola, con el monto correcto, al destino correcto (la cuenta de pago de la tarjeta, recién corregido 2026-10-29 — ver el bug ya resuelto arriba en esta misma sección). Plan de Nicolas: probarlo con su cuenta real el mes que viene.
 
+**Encontrado y resuelto 2026-10-31** (antes de llegar a probar un ciclo real): Nicolas notó que "Saldo Real" (`CuentasTab.jsx`) estaba desfasado exactamente por lo prestado en 2 gastos nuevos. Causa: desde que "Lo que prestás" pasó a ser la tarjeta misma, `pendienteTcAutoSum` busca una transferencia tarjeta→tarjeta (que no existe) para sumarle el préstamo — nunca la encuentra, y el aporte se pierde en silencio, sin ningún error. O sea, el paso 2 de arriba (vaciar `pendienteTcAutoSum`) en la práctica ya pasó solo, sin querer: quedó inerte para cualquier gasto nuevo, aunque el código todavía esté ahí (no se borró, ver abajo).
+
+Reemplazada la fórmula entera, propuesta por Nicolas: en vez de sumar una transferencia puntual por título (`"Pendiente TC"`), ahora suma directo los saldos de "Saldo" + "Pendiente" (completo, ya no solo esa transferencia) + la tarjeta + la cuenta pseudo del grupo de EvenGroup vinculado (ej. "Nottinghill", vía `groupName` nuevo en `realBalance`, `customUserConfig.js`) — esa cuenta pseudo ya refleja en tiempo real, por cada gasto/pago sincronizado, cuánto le debés al grupo o el grupo te debe a vos, sin depender de que cierre ningún ciclo de tarjeta ni de ninguna transacción manual. Con esto ya no hace falta la consulta local a `mm_transactions` que traía `pendienteTcSum` (se borró del todo).
+
+`pendienteTcAutoSum` queda tal cual en el código, sin usarse (inerte, no rompe nada) — se borra cuando a Nicolas le cierre un ciclo real de tarjeta y confirme que "Compensación de lo prestado" también anda bien (paso 3, sigue pendiente).
+
 </details>
 
 - [ ] **Unificar `TransactionForm.jsx` y `PhotoImportWizardScreen.jsx`**

@@ -13,9 +13,10 @@
 // desde acá.
 export const CUSTOM_USER_CONFIG = {
   "nicozapatacruz@gmail.com": {
-    // "Saldo Real" (CuentasTab.jsx): balance real = Saldo + la tarjeta
-    // (deuda) + lo pendiente de cobro por tarjeta (ver pendienteTcAutoSum).
-    realBalance: { group: "Santander", saldoName: "Saldo", tcName: "TC Santander", pendienteName: "Pendiente" },
+    // "Saldo Real" (CuentasTab.jsx): balance real = Saldo + Pendiente + la
+    // tarjeta (deuda) + la cuenta pseudo del grupo de EvenGroup vinculado
+    // (groupName, el nombre real del grupo -- esa cuenta se llama igual).
+    realBalance: { group: "Santander", saldoName: "Saldo", tcName: "TC Santander", pendienteName: "Pendiente", groupName: "Nottinghill" },
     // Auto-suma a "Pendiente TC" (evenGroupSync.js): cuando creás un gasto
     // en el grupo de EvenGroup indicado, pagado con la cuenta indicada,
     // y prestás una parte, esa parte se suma sola a la transacción manual

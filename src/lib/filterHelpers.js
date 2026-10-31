@@ -1,14 +1,14 @@
-import { parseAmountInput } from "./helpers.jsx";
+import { parseAmountInput, isFuturePending } from "./helpers.jsx";
 
 // Forma compartida de los filtros — usada tanto por el Buscador (filtros
 // server-side, ver searchTransactions en evenCapitalData.js) como por el
 // filtro persistente de Transacciones/Estadísticas (filtra en el cliente
 // sobre datos ya traídos, ver matchesFilters acá abajo). Mismo shape en los
 // dos casos para no mantener dos definiciones de "qué es un filtro".
-export const EMPTY_FILTERS = { accountIds: [], categoryIds: [], dateFrom: "", dateTo: "", amountMin: "", amountMax: "" };
+export const EMPTY_FILTERS = { accountIds: [], categoryIds: [], dateFrom: "", dateTo: "", amountMin: "", amountMax: "", futureOnly: false };
 
 export function hasActiveFilters(f) {
-  return f.accountIds.length > 0 || f.categoryIds.length > 0 || f.dateFrom || f.dateTo || f.amountMin || f.amountMax;
+  return f.accountIds.length > 0 || f.categoryIds.length > 0 || f.dateFrom || f.dateTo || f.amountMin || f.amountMax || f.futureOnly;
 }
 
 // Ordena los arrays antes de comparar — togglear cuenta/categoría en otro
@@ -18,13 +18,19 @@ export function filtersEqual(a, b) {
   return [...a.accountIds].sort().join(",") === [...b.accountIds].sort().join(",")
     && [...a.categoryIds].sort().join(",") === [...b.categoryIds].sort().join(",")
     && a.dateFrom === b.dateFrom && a.dateTo === b.dateTo
-    && a.amountMin === b.amountMin && a.amountMax === b.amountMax;
+    && a.amountMin === b.amountMin && a.amountMax === b.amountMax
+    && !!a.futureOnly === !!b.futureOnly;
 }
 
 // Mismo criterio que searchTransactions (server-side), pero como predicado
 // JS sobre una transacción ya traída — para el filtro persistente de
 // Transacciones/Estadísticas, que filtra sobre datos ya cargados en vez de
 // pedirle al servidor una consulta nueva.
+// `futureOnly`: en Estadísticas esto siempre va a dar un total vacío (las
+// pendientes de futuro ya se excluyen ahí aparte, ver aggregateByCategory en
+// evenCapitalData.js) -- es un resultado correcto, no un bug: Estadísticas
+// nunca cuenta una transacción futura todavía, filtrar "solo futuras" ahí
+// solo confirma que no hay nada que mostrar.
 export function matchesFilters(t, f) {
   if (f.accountIds.length && !(f.accountIds.includes(t.account_id) || f.accountIds.includes(t.to_account_id))) return false;
   if (f.categoryIds.length && !f.categoryIds.includes(t.category_id)) return false;
@@ -37,5 +43,6 @@ export function matchesFilters(t, f) {
   const amount = t.amount_main ?? t.amount;
   if (f.amountMin && amount < parseAmountInput(f.amountMin)) return false;
   if (f.amountMax && amount > parseAmountInput(f.amountMax)) return false;
+  if (f.futureOnly && !isFuturePending(t)) return false;
   return true;
 }

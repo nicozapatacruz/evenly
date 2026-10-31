@@ -453,8 +453,13 @@ export async function searchTransactions(userId, filters) {
   }
   if (filters.amountMin) { const min = parseAmountInput(filters.amountMin); rows = rows.filter((t) => t.amount_main >= min); }
   if (filters.amountMax) { const max = parseAmountInput(filters.amountMax); rows = rows.filter((t) => t.amount_main <= max); }
+  if (filters.futureOnly) rows = rows.filter((t) => isFuturePending(t));
 
-  rows.sort((a, b) => (new Date(b.date) - new Date(a.date)) || (new Date(b.created_at) - new Date(a.created_at)));
+  // "Solo futuras" las quiere ver en orden de "qué se viene primero", no de
+  // "lo más reciente primero" (que acá significaría la más lejana a futuro).
+  rows.sort(filters.futureOnly
+    ? (a, b) => new Date(a.date) - new Date(b.date)
+    : (a, b) => (new Date(b.date) - new Date(a.date)) || (new Date(b.created_at) - new Date(a.created_at)));
   return rows.slice(0, 500);
 }
 

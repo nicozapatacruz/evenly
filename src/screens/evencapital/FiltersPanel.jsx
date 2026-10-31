@@ -1,6 +1,6 @@
 import React from "react";
 import { styles } from "../../lib/styles.js";
-import { TopBar, FormFooter, MultiPickerField, DateRow } from "../../components/Shared.jsx";
+import { TopBar, FormFooter, MultiPickerField, DateRow, ToggleField } from "../../components/Shared.jsx";
 import { EMPTY_FILTERS, filtersEqual } from "../../lib/filterHelpers.js";
 
 // Compartido entre el Buscador y el filtro persistente de Transacciones/
@@ -82,6 +82,13 @@ export function FiltersPanel({ draft, setDraft, filters, accountGroups, categori
           onChange={(v) => setDraft((d) => ({ ...d, categoryIds: [...selectedExpenseIds, ...v] }))}
           groups={[{ label: null, items: incomeCategoryItems }]}
           placeholder="Todas"
+        />
+
+        <ToggleField
+          label="Solo transacciones futuras"
+          description="Muestra únicamente las marcadas como futuras que todavía no llegaron a su fecha."
+          checked={draft.futureOnly}
+          onChange={(v) => setDraft((d) => ({ ...d, futureOnly: v }))}
         />
       </div>
       <FormFooter

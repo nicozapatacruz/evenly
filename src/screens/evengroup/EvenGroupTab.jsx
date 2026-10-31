@@ -1685,7 +1685,15 @@ function GroupView({ group, session, onRefresh, onBack, onAddExpense, onOpenExpe
                       <p style={styles.expenseSub}>
                         {participated ? (() => {
                           const payers = e.payers || { [e.paidBy]: e.amount };
-                          const payerIds = Object.keys(payers);
+                          // Orden por `members` (no por Object.keys del jsonb
+                          // guardado, que Postgres puede reordenar solo) --
+                          // mismo motivo que en ExpenseDetail más abajo. Por
+                          // id, no `.filter` sobre `members`: un pagador cuyo
+                          // member ya no exista (borrado físico, no soft-
+                          // delete) no debe desaparecer de la frase, solo
+                          // quedar al final.
+                          const memberOrderIdx = new Map(members.map((m, i) => [m.id, i]));
+                          const payerIds = Object.keys(payers).sort((a, b) => (memberOrderIdx.get(a) ?? Infinity) - (memberOrderIdx.get(b) ?? Infinity));
                           const payerNames = payerIds.map(id => shortName(nameOf(members, id)));
                           const payerStr = payerIds.length === 1
                             ? (payerIds[0] === myMemberId ? "Pagaste" : `${payerNames[0]} pagó`)
@@ -1759,8 +1767,17 @@ function ExpenseDetail({ group, expenseId, onBack, onEdit, isOnline = true, show
 
   const cat = catInfo(e.category, group);
   const payers = e.payers || (e.paidBy ? { [e.paidBy]: e.amount } : {});
-  const payerIds = Object.keys(payers);
-  const shareIds = Object.keys(e.shares || {});
+  // Orden de "Quién pagó"/"Cómo se divide" -- por `members` (vos siempre
+  // primero), NO por `Object.keys(...)` del objeto guardado: `shares`/
+  // `payers` se guardan en una columna `jsonb`, y Postgres NO conserva el
+  // orden en que se insertaron las claves ahí (las reordena solo, por
+  // longitud y después alfabético) -- así que ni arreglando el orden en JS
+  // antes de guardar alcanza, hay que ordenar siempre al mostrar. Encontrado
+  // por Nicolas, 2026-10-31.
+  const memberOrder = new Map(members.map((m, i) => [m.id, i]));
+  const sortByMemberOrder = (ids) => [...ids].sort((a, b) => (memberOrder.get(a) ?? Infinity) - (memberOrder.get(b) ?? Infinity));
+  const payerIds = sortByMemberOrder(Object.keys(payers));
+  const shareIds = sortByMemberOrder(Object.keys(e.shares || {}));
 
   // Resumen de "prestaste/pediste" para ESTE gasto -- solo con más de 2
   // personas involucradas, con 2 ya se ve a simple vista comparando "Quién

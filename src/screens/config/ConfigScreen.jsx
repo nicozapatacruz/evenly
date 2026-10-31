@@ -6,7 +6,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { offlineSupabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, RootHeader, ConfirmInline, Footer, FormFooter, PhotoPicker, ToggleField, Field, PasswordInput, SegmentedControl } from "../../components/Shared.jsx";
+import { TopBar, RootHeader, ConfirmInline, Footer, FormFooter, PhotoPicker, ToggleField, PickerField, PasswordInput, SegmentedControl, InfoTooltip } from "../../components/Shared.jsx";
 import { useImageUpload, resolvePhotoUrl, colorFor, initials, useScrollToTopOnChange } from "../../lib/helpers.jsx";
 import RecurringScreen from "../evencapital/RecurringScreen.jsx";
 import TransactionForm, { ManageCategories } from "../evencapital/TransactionForm.jsx";
@@ -571,6 +571,10 @@ function EvenGroupSettings({ session, groups, reloadGroups, onCreateGroup, onOpe
   // rechazar son mutuamente excluyentes para una misma invitación).
   const [processingInvite, setProcessingInvite] = useState(null);
   const nameDirty = displayName.trim() !== (session.displayName || "");
+  // Con un solo grupo no hay nada que elegir -- queda fijo como el único
+  // candidato posible, el campo se bloquea en vez de dejar "elegir" algo
+  // que de todas formas no tiene otra opción.
+  const onlyGroupId = (groups || []).length === 1 ? groups[0].id : null;
 
   // Orden local de "tus grupos" (dnd-kit necesita el array de ids ya en el
   // orden visible). Se resincroniza con `groups` cada vez que cambian desde
@@ -660,9 +664,16 @@ function EvenGroupSettings({ session, groups, reloadGroups, onCreateGroup, onOpe
       />
 
       <div>
-        <Field label="Nombre visible">
-          <input style={{ ...styles.input, borderRadius: nameDirty ? "10px 10px 0 0" : 10 }} value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Tu nombre" />
-        </Field>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 40, borderBottom: "1px solid #ECE3D3", fontFamily: "system-ui, sans-serif" }}>
+          <span style={{ flexShrink: 0, whiteSpace: "nowrap", fontSize: 13, color: "#6B6355" }}>Nombre visible</span>
+          <input
+            className="row-input"
+            style={{ flex: 1, minWidth: 0, textAlign: "right", fontSize: 13.5, fontFamily: "system-ui, sans-serif", border: "none", background: "transparent", padding: 0, color: "#2B2620" }}
+            value={displayName}
+            onChange={e => setDisplayName(e.target.value)}
+            placeholder="Tu nombre"
+          />
+        </div>
         {nameDirty && (
           <ConfirmInline
             danger={false}
@@ -670,28 +681,39 @@ function EvenGroupSettings({ session, groups, reloadGroups, onCreateGroup, onOpe
             confirmDisabled={savingName}
             onCancel={() => setDisplayName(session.displayName || "")}
             onConfirm={handleSaveName}
+            style={{ borderRadius: 12, borderTop: "1px solid #EBC9BA" }}
           />
         )}
       </div>
 
-      <Field label="Grupo por defecto">
-        <select style={styles.input} value={session.defaultGroupId || ""} onChange={handleDefaultGroupChange} disabled={savingDefault}>
-          <option value="">Ninguno</option>
-          {(groups || []).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-        </select>
-      </Field>
-      <p style={{ ...styles.muted, padding: 0, marginTop: -8 }}>
-        El botón de "+" en EvenGroup crea el gasto directo en este grupo.
-      </p>
+      <PickerField
+        rowLabel="Grupo por defecto"
+        info='El botón de "+" en EvenGroup crea el gasto directo en este grupo.'
+        value={onlyGroupId || session.defaultGroupId || ""}
+        onChange={(v) => handleDefaultGroupChange({ target: { value: v } })}
+        onClear={() => handleDefaultGroupChange({ target: { value: "" } })}
+        placeholder="Ninguno"
+        title="Elegí un grupo por defecto"
+        disabled={savingDefault || !!onlyGroupId}
+        blockedReason={onlyGroupId ? "Solo tienes un grupo, así que ese queda fijo como por defecto." : undefined}
+        groups={[{ label: null, items: (groups || []).map((g) => ({ value: g.id, label: g.name })) }]}
+      />
 
+      {/* Invitaciones + lista de grupos en una sola columna (mismo gap:6 en
+          toda ella) -- antes eran 2 divs de nivel superior separados, que
+          se veían con el gap grande de styles.form entre ellos en vez del
+          mismo ritmo que el resto de esta lista. */}
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <p style={styles.label}>Tus grupos ({(groups || []).length})</p>
 
         {/* Invitaciones pendientes */}
         <div style={{ borderRadius: 14, border: "1px solid #ECE3D3", background: "#fff", overflow: "hidden" }}>
-          <p style={{ margin: 0, padding: "12px 16px 8px", fontSize: 13, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#544A3C", borderBottom: invites.length ? "1px solid #F0EBE2" : "none", display: "flex", alignItems: "center", gap: 8 }}>
-            <Bell size={15} /> Invitaciones ({invites.length})
-          </p>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: invites.length ? "1px solid #F0EBE2" : "none" }}>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, fontFamily: "system-ui, sans-serif", color: "#544A3C", display: "flex", alignItems: "center", gap: 8 }}>
+              <Bell size={15} /> Invitaciones ({invites.length})
+            </p>
+            <InfoTooltip text="Acá van a aparecer las invitaciones cuando alguien te invite a participar en un grupo." />
+          </div>
           {invites.map((inv) => (
             <div key={inv.inviteId} style={{ padding: "10px 16px", borderBottom: "1px solid #F0EBE2", display: "flex", flexDirection: "column", gap: 6 }}>
               <p style={{ margin: 0, fontSize: 13.5, fontFamily: "system-ui, sans-serif" }}>
@@ -724,19 +746,19 @@ function EvenGroupSettings({ session, groups, reloadGroups, onCreateGroup, onOpe
             </div>
           ))}
         </div>
-      </div>
 
-      <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleGroupDragEnd}>
-        <SortableContext items={groupOrder} strategy={verticalListSortingStrategy}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {groupOrder.map((groupId) => {
-              const g = groups.find((x) => x.id === groupId);
-              if (!g) return null;
-              return <SortableGroupRow key={g.id} group={g} onOpen={() => onOpenGroup(g.id)} draggable={groupOrder.length > 1} />;
-            })}
-          </div>
-        </SortableContext>
-      </DndContext>
+        <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleGroupDragEnd}>
+          <SortableContext items={groupOrder} strategy={verticalListSortingStrategy}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {groupOrder.map((groupId) => {
+                const g = groups.find((x) => x.id === groupId);
+                if (!g) return null;
+                return <SortableGroupRow key={g.id} group={g} onOpen={() => onOpenGroup(g.id)} draggable={groupOrder.length > 1} />;
+              })}
+            </div>
+          </SortableContext>
+        </DndContext>
+      </div>
       <button
         style={{ ...styles.btnDashed, opacity: isOnline ? 1 : 0.5 }}
         onClick={() => { if (!isOnline) { showError("Estás offline, no podés crear un grupo ahora."); return; } onCreateGroup(); }}

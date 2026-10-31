@@ -197,6 +197,8 @@ También se revisaron (a pedido de Nicolas, que notó que la búsqueda inicial p
 
   De paso ya quedaron armados varios componentes/helpers compartidos reusables para el resto de la lista: `PickerField` (modos `rowLabel`/`compact`/`listStyle`), `DateRow`, `TextRow`, `FormFooter`, `PhotoLightbox`, `Hint`, `useTouched()`.
 
+  **`EvenGroupSettings` (`ConfigScreen.jsx`, sección EvenGroup de Config) se había quedado afuera de esta lista por completo** — ni hecha ni excluida a propósito, se pasó por alto al armarla. Encontrado por Nicolas 2026-10-31 al notar que "Nombre visible" y "Grupo por defecto" seguían con el diseño viejo (`<Field><input style={styles.input}>` y un `<select>` nativo) mientras el toggle "EvenGroup" de la misma pantalla ya se veía nuevo (por ser un componente compartido, se actualizó solo). Resuelto el mismo día: "Nombre visible" pasó a fila sin caja (mismo patrón que "Nombre del grupo" en `GroupForm`), "Grupo por defecto" pasó de `<select>` a `PickerField`. De paso se revisó el resto de la app por si quedaba algún otro `styles.input` boxeado sin convertir — los demás que aparecen son casos ya decididos aparte, no gaps: `AuthScreen`/`RecoverPasswordScreen` (excluidos arriba), la barra de búsqueda de `SearchScreen.jsx` (no es un campo de formulario con label), los inputs de agregar/editar integrante en `GroupForm` (fila de lista editable, mismo criterio que las categorías) y el campo de "escribí Confirmar" del modal de borrar grupo (confirmación destructiva, mismo criterio que los `ConfirmInline`/modales que se decidió dejar sin tocar).
+
 </details>
 
 - [x] ~~Scroll automático al contenido recién revelado~~

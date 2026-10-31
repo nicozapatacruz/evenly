@@ -838,10 +838,13 @@ export function PickerField({ value, onChange, groups, placeholder = "Elegir", t
             adentro del clamp y reproducía la misma orfandad que esto ya
             resolvió una vez para `info`. Encontrado en auditoría, 2026-10-30. */}
         {badge}
-        {/* Si está bloqueado, no tiene sentido TAMBIÉN explicar qué hace el
-            campo en general -- lo único que importa ahí es por qué no se
-            puede tocar ahora (el 🚫, del otro lado, junto al valor). */}
-        {info && !(disabled && blockedReason) && <InfoTooltip text={info} />}
+        {/* A diferencia de ToggleField, acá SÍ pueden convivir los dos a la
+            vez: `info` explica qué hace el campo en general (ej. "el + crea
+            el gasto en este grupo"), `blockedReason` (del otro lado, junto
+            al valor) por qué no se puede tocar AHORA -- son cosas distintas,
+            no una versión más específica de la otra. Decidido con Nicolas
+            2026-10-31 para "Grupo por defecto" (EvenGroupSettings). */}
+        {info && <InfoTooltip text={info} />}
       </span>
       <span style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, flex: 1, fontSize: 13.5, minWidth: 0 }}>
         {/* `blockedReason` va del lado del VALOR (no del label, como `info`)

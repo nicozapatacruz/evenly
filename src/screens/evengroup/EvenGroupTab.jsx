@@ -2597,7 +2597,11 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
 // grupo arriba del formulario; ExpenseForm recién se monta cuando hay un
 // grupo elegido, con key={group.id} para arrancar limpio si lo cambian.
 function NewExpense({ group, groups, defaultGroupId, expenseId, onCancel, onSave, onDelete, session, evenCapital }) {
-  const [pickedGroupId, setPickedGroupId] = useState(group?.id ?? defaultGroupId ?? "");
+  // Con un solo grupo, ESE es el grupo por defecto sí o sí, aunque
+  // `defaultGroupId` nunca se haya guardado a mano (ver "Grupo por defecto"
+  // en Config, que ahora se bloquea justo en este mismo caso) -- no hay
+  // ninguna otra opción real entre la cual elegir.
+  const [pickedGroupId, setPickedGroupId] = useState(group?.id ?? (groups?.length === 1 ? groups[0].id : defaultGroupId) ?? "");
 
   if (group) {
     return (

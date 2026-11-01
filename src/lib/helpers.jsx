@@ -273,9 +273,17 @@ export function computeShares({ splitMode, amount, participantIds, exactAmounts,
 // total se vuelve a evaluar esto con la hora real de ese momento. El flag en
 // sí nunca se borra ni se apaga solo (queda como historial de que se cargó
 // a propósito con fecha futura), pero deja de tener efecto práctico apenas
-// `date` ya no es mayor a `now`.
+// llega el DÍA de `date` -- comparar por día calendario (zona horaria de la
+// transacción, no la de quien mira ahora, mismo criterio que
+// dateInputValueInZone) en vez de por instante exacto: `date` siempre guarda
+// la hora fija en mediodía (ver TransactionForm.jsx, por el cambio de
+// horario), así que comparar el instante crudo dejaba esto "pendiente" hasta
+// el mediodía del día en cuestión, no desde que ese día arrancaba.
 export function isFuturePending(t, now = new Date()) {
-  return !!t.is_future && new Date(t.date).getTime() > now.getTime();
+  if (!t.is_future) return false;
+  const todayKey = dateInputValueInZone(now.getTime(), t.timezone);
+  const dateKey = dateInputValueInZone(new Date(t.date).getTime(), t.timezone);
+  return dateKey > todayKey;
 }
 
 export function fmtDate(ms) {

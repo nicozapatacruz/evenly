@@ -136,6 +136,29 @@ Reemplazada la fórmula entera, propuesta por Nicolas: en vez de sumar una trans
 
 </details>
 
+- [ ] **Escrituras siempre optimistas + blindar la sincronización contra carreras**
+<details open><summary>Ver detalle</summary>
+
+Encontrado el 2026-11-01, charlando sobre el bug (ya resuelto, ver "Marcadores" en el historial de commits) de que `mm_bookmarks` no estaba en la sincronización completa. Dos quejas de Nicolas quedaron sin resolver, relacionadas entre sí:
+
+1. **Los guardados se sienten lentos pese a ser "local-first"**: revisado `offlineSupabase.js` — con señal, CADA escritura (`insert`/`update`/`delete`) espera la ida y vuelta real a Supabase (hasta 1800ms de margen) antes de devolverle el control a la pantalla. El camino instantáneo (escribir en Dexie y seguir de una, sin esperar nada) hoy solo existe para cuando NO hay señal. O sea, local-first solo se *siente* así estando offline.
+2. **Riesgo de que una sincronización pise un guardado en curso**: si en algún momento se agrega un sync silencioso al volver a la pestaña/app (ver pendiente aparte, no decidido todavía), se vuelve más probable que un guardado reciente y una sincronización en segundo plano se crucen en el tiempo. `pullEvenCapitalIntoLocal` reemplaza TODA la tabla local (`delete` + `bulkPut`), no hace merge fila por fila — si ese reemplazo corre justo después de que algo se guardó pero antes de que el fetch de "traer todo fresco" lo haya podido ver, ese guardado desaparece de la pantalla un instante (no se pierde de verdad, el próximo sync lo vuelve a traer, pero es un parpadeo confuso y real).
+
+Plan acordado con Nicolas (sin empezar, pendiente de dar el visto bueno final para implementar):
+
+1. **Escritura siempre optimista** (`offlineSupabase.js`): que `_execute()` ya no espere nunca la red — con señal o sin ella, escribe en Dexie + encola, y le devuelve el control a la pantalla de inmediato. La subida real a Supabase pasa a ser 100% en segundo plano, vía la misma cola (`writeQueue.js`) que hoy solo se usa offline.
+2. **Doble chequeo de cola en `runFullSync`** (`syncEngine.js`): hoy ya chequea que la cola esté vacía ANTES de ir a buscar datos frescos del servidor, pero queda abierta la ventana mientras ese fetch está en curso. Agregar un segundo chequeo justo antes de ejecutar el `delete`+`bulkPut` que reemplaza lo local — si algo se encoló mientras tanto, abortar el reemplazo y reintentarlo en el próximo ciclo, en vez de pisar un guardado reciente.
+3. **Chequeo de "ya existe" de Marcadores, local en vez de contra el servidor**: ahora que `mm_bookmarks` sí sincroniza bien entre dispositivos, hacer esa validación de duplicado contra la copia local (Dexie) antes de guardar, no contra la respuesta de Supabase — mismo aviso instantáneo que hoy, pero sin depender de la red. El índice único del servidor (`mm_bookmarks_unique`) queda como red de seguridad silenciosa para el caso raro de que 2 dispositivos creen el mismo marcador casi al mismo tiempo.
+4. **Cartel de reintentar/descartar para fallos permanentes de la cola**: hoy `writeQueue.js` (`drainQueue`) traga cualquier error con solo un `console.error` — queda "pendiente" reintentándose en silencio para siempre, sin avisar nunca al usuario. Si se generaliza la cola a TODA escritura (punto 1), un rechazo real y permanente (no de red) del servidor se perdería de la misma forma — justo el tipo de error que hoy SÍ se nota al toque porque la pantalla espera la respuesta. Agregar un aviso visible ("N cambios no se pudieron guardar") con dos acciones por ítem: **Reintentar** (por si la causa ya se resolvió) o **Descartar** (abandonar ese cambio puntual). Mostrar también el mensaje de error real como texto chico, para cubrir cualquier caso no previsto. Ejemplo concreto de un fallo permanente real (donde reintentar nunca serviría): 2 dispositivos crean el mismo marcador casi a la vez, el primero en sincronizar gana, el segundo choca contra el índice único para siempre — ahí la resolución correcta es Descartar (el marcador que se quería ya existe, no hay nada que "arreglar").
+
+**Decidido NO construir**: resolución de conflictos estilo "git merge" (elegir cuál de 2 ediciones simultáneas del MISMO registro, desde 2 dispositivos, se queda) — es data personal de un solo usuario, no edición colaborativa, así que no hay un "combinar los dos cambios" sensato (ej. ¿$50 o $45?). Si un registro se edita en 2 dispositivos antes de que ninguno sincronice con el otro, gana el que sincroniza último (comportamiento ya implícito hoy, no empeora con este plan). Caso hermano, también aceptado sin resolver: si un registro se BORRA en un dispositivo mientras en otro (offline) se está editando, esa edición desaparece en silencio al sincronizar (un `update` sobre 0 filas no es un error para Supabase) — rarísimo, no amerita UI de conflicto.
+
+**Ya descartado como riesgo real** (confirmado revisando el código, no hace falta ningún flujo de "esto cambió, corregilo"): el caso de "un gasto no se puede guardar porque se borró su categoría/cuenta" no puede pasar en Evenly — absolutamente todo acá se borra con soft-delete (`deleted:true`), nunca con un `DELETE` real, así que la fila referenciada nunca desaparece de verdad. Los únicos 2 lugares con borrado real (`mm_bookmarks`, `invites`) son tablas hoja que nada más referencia, así que tampoco pueden romper una escritura ajena.
+
+Aparte, sin decidir todavía: la idea de disparar un sync silencioso (sin el cartel de "Sincronizando") cada vez que se vuelve a la pestaña/app — hoy esto solo refresca invitaciones de EvenGroup (`EvenlyApp.jsx`, `visibilitychange`/`focus`), nunca el resto de EvenCapital. Resolvería que lo creado en otro dispositivo tarde en verse sin tener que refrescar la página entera, pero es una mejora aparte de este plan, no un requisito para él.
+
+</details>
+
 - [ ] **Unificar `TransactionForm.jsx` y `PhotoImportWizardScreen.jsx`**
 <details open><summary>Ver detalle</summary>
 

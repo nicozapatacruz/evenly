@@ -1211,7 +1211,7 @@ export function TextRow({ label, value, onChange, onFocus, onBlur, placeholder, 
   );
 }
 
-// Agrupa acciones del header (Filtros/Favoritos/etc.) + el selector de
+// Agrupa acciones del header (Filtros/Marcadores/etc.) + el selector de
 // moneda (Fase 2 de multi-moneda, ver MULTI_CURRENCY_PLAN.md) en un solo
 // ícono con popover, en vez de un ícono por acción — un header mobile no
 // tiene lugar para 5 íconos sueltos. `trigger` es el contenido del botón

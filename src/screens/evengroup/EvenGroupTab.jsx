@@ -1339,8 +1339,9 @@ function SortableCategoryRow({ cat, onEditIcon, onChangeLabel, onRemove, draggab
       {/* Handle — ícono SVG (se centra bien, a diferencia del glifo de texto) a todo el alto
           de la fila para que el área de agarre sea más grande. touchAction:"none" es necesario
           para que el drag responda al dedo en vez de disparar el scroll. Sin ícono si hay un
-          solo ítem — no hay con qué reordenar. */}
-      {draggable ? (
+          solo ítem — no hay con qué reordenar. Lista aislada (categorías de UN grupo, nada más
+          al lado con qué alinearse), así que sin draggable tampoco se reserva el espacio. */}
+      {draggable && (
         <span
           {...attributes}
           {...listeners}
@@ -1357,8 +1358,6 @@ function SortableCategoryRow({ cat, onEditIcon, onChangeLabel, onRemove, draggab
         >
           <Menu size={18} />
         </span>
-      ) : (
-        <span style={{ width: 28, flexShrink: 0 }} />
       )}
       {/* gap:6 acá adentro (no en la fila entera) — el handle solo necesita
           4px hasta lo siguiente, pero el botón de ícono/input/botón de

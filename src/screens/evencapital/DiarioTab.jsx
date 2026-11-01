@@ -84,7 +84,7 @@ export default function DiarioTab({ userId, settings, groups, accounts, categori
                 trigger={<><SlidersHorizontal size={19} />{hasActiveFilters(filters) && <span style={{ position: "absolute", top: 4, right: 4, width: 7, height: 7, borderRadius: "50%", background: "#C75D3B" }} />}</>}
                 items={[
                   { icon: <SlidersHorizontal size={16} color="#6B6355" />, label: "Filtros", onClick: onOpenFilters, badge: hasActiveFilters(filters) },
-                  { icon: <Star size={16} color="#6B6355" />, label: "Favoritos", onClick: onOpenBookmarks },
+                  { icon: <Star size={16} color="#6B6355" />, label: "Marcadores", onClick: onOpenBookmarks },
                   { icon: <Camera size={16} color="#6B6355" />, label: "Importar gastos", onClick: onOpenPhotoImport },
                 ]}
                 currencies={currencies}

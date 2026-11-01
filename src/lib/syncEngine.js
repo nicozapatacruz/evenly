@@ -9,7 +9,7 @@ import { probeOnline } from "./connectivity.js";
 
 const MM_TABLES = [
   "mm_account_groups", "mm_accounts", "mm_categories", "mm_recurring",
-  "sl_mm_links", "mm_transactions", "mm_description_rules",
+  "sl_mm_links", "mm_transactions", "mm_description_rules", "mm_bookmarks",
 ];
 
 // Trae todo fresco de Supabase y reemplaza la copia local entera de este
@@ -17,7 +17,7 @@ const MM_TABLES = [
 // para no pisar con un pull viejo una escritura offline que todavía no
 // llegó a subir.
 async function pullEvenCapitalIntoLocal(userId) {
-  const [s, g, a, c, r, sl, tx, dr] = await Promise.all([
+  const [s, g, a, c, r, sl, tx, dr, bm] = await Promise.all([
     supabase.from("mm_settings").select("*").eq("user_id", userId).maybeSingle(),
     supabase.from("mm_account_groups").select("*").eq("user_id", userId),
     supabase.from("mm_accounts").select("*").eq("user_id", userId),
@@ -26,6 +26,7 @@ async function pullEvenCapitalIntoLocal(userId) {
     supabase.from("sl_mm_links").select("*").eq("user_id", userId),
     fetchAllRows((from, to) => supabase.from("mm_transactions").select("*").eq("user_id", userId).order("id", { ascending: true }).range(from, to)),
     supabase.from("mm_description_rules").select("*").eq("user_id", userId),
+    supabase.from("mm_bookmarks").select("*").eq("user_id", userId),
   ]);
 
   // Cuenta recién creada, nunca usada — mismo criterio que antes tenía
@@ -52,6 +53,8 @@ async function pullEvenCapitalIntoLocal(userId) {
     await db.mm_transactions.bulkPut(tx);
     await db.mm_description_rules.where("user_id").equals(userId).delete();
     await db.mm_description_rules.bulkPut(dr.data || []);
+    await db.mm_bookmarks.where("user_id").equals(userId).delete();
+    await db.mm_bookmarks.bulkPut(bm.data || []);
   });
 }
 

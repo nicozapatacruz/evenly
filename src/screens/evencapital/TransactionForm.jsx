@@ -1111,13 +1111,14 @@ function SortableCategoryManageRow({ id, name, icon, onChangeName, onBlur, onCha
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   return (
     <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 8, padding: "10px 14px", borderRadius: isConfirming ? "10px 10px 0 0" : 10 }}>
-      {/* Sin ícono de arrastrar si hay un solo ítem — no hay con qué reordenar. */}
-      {draggable ? (
+      {/* Sin ícono de arrastrar si hay un solo ítem — no hay con qué reordenar.
+          Esta lista vive sola en su propia pantalla (sin otra al lado con la
+          que alinearse), así que sin draggable tampoco se reserva el espacio:
+          sacarlo del todo, no solo ocultar el ícono. */}
+      {draggable && (
         <span {...attributes} {...listeners} style={{ display: "flex", alignItems: "center", justifyContent: "center", alignSelf: "stretch", width: 28, color: "#C9BBA0", cursor: "grab", touchAction: "none" }}>
           <Menu size={18} />
         </span>
-      ) : (
-        <span style={{ width: 28, flexShrink: 0 }} />
       )}
       {/* gap:6 acá adentro (no en la fila entera) — el handle solo necesita
           4px hasta lo siguiente, pero IconInput/input/botón sí son cajas

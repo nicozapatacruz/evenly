@@ -414,13 +414,14 @@ function SortableGroupRow({ group, onOpen, draggable }) {
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   return (
     <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 4, padding: "10px 14px", borderRadius: 10 }}>
-      {/* Sin ícono de arrastrar si hay un solo ítem — no hay con qué reordenar. */}
-      {draggable ? (
+      {/* Sin ícono de arrastrar si hay un solo ítem — no hay con qué reordenar.
+          Lista aislada en su propia pantalla (ManageGroups), así que sin
+          draggable tampoco se reserva el espacio: sacarlo del todo, no solo
+          ocultar el ícono. */}
+      {draggable && (
         <span {...attributes} {...listeners} style={{ display: "flex", alignItems: "center", justifyContent: "center", alignSelf: "stretch", width: 28, color: "#C9BBA0", cursor: "grab", touchAction: "none" }}>
           <Menu size={18} />
         </span>
-      ) : (
-        <span style={{ width: 28, flexShrink: 0 }} />
       )}
       {/* gap:0 acá adentro — los dos botones ya tienen su propio padding,
           no hace falta espacio extra entre ellos. Solo el handle necesita
@@ -690,6 +691,13 @@ export function ManageAllAccounts({ session, groups, accounts, accountTotals, se
     setViewingAccountId(null);
   }
 
+  // Varios grupos se muestran juntos en esta pantalla -- si CUALQUIERA tiene
+  // más de 1 cuenta (y por lo tanto va a mostrar el ícono de arrastrar), los
+  // demás (aunque tengan 1 sola) reservan igual el espacio del ícono, para
+  // que todas las filas de todos los grupos queden alineadas entre sí.
+  const visibleGroups = groups.filter((g) => !g.deleted && g.system_key !== "split_ledger" && accounts.some((a) => a.group_id === g.id && !a.deleted));
+  const anyGroupHasMultiple = visibleGroups.some((g) => accounts.filter((a) => a.group_id === g.id && !a.deleted).length > 1);
+
   return (
     <div style={{ ...styles.screen, paddingBottom: 0 }}>
       <TopBar
@@ -701,7 +709,7 @@ export function ManageAllAccounts({ session, groups, accounts, accountTotals, se
         {/* El grupo "EvenGroup" es informativo (lo gestiona el programa
             solo al vincular un grupo compartido) — no tiene nada para editar
             acá, se maneja desde EvenGroup. */}
-        {groups.filter((g) => !g.deleted && g.system_key !== "split_ledger" && accounts.some((a) => a.group_id === g.id && !a.deleted)).map((g) => (
+        {visibleGroups.map((g) => (
           <div key={g.id}>
             <p style={{ ...styles.label, marginBottom: 12 }}>{g.name}</p>
             <AccountGroupEditor
@@ -710,6 +718,7 @@ export function ManageAllAccounts({ session, groups, accounts, accountTotals, se
               reload={reload}
               showError={showError}
               onOpenAccount={(id) => openAccountOrEvenGroup(g, id, slLinks, onOpenEvenGroup, setViewingAccountId, isOnline, showError)}
+              keepIndent={anyGroupHasMultiple}
             />
           </div>
         ))}
@@ -744,7 +753,7 @@ function openAccountOrEvenGroup(group, accountId, slLinks, onOpenEvenGroup, onOp
 // por grupo en "Gestor de cuentas" (todos los grupos juntos en una sola
 // pantalla) y también solo, en ManageAccounts (cuando se llega desde "Tipos
 // de cuentas" y elegís un único grupo).
-function AccountGroupEditor({ group, accounts, reload, showError, onOpenAccount }) {
+function AccountGroupEditor({ group, accounts, reload, showError, onOpenAccount, keepIndent = false }) {
   const groupAccounts = accounts.filter((a) => a.group_id === group.id && !a.deleted);
   const [order, setOrder] = useState(() => groupAccounts.map((a) => a.id));
 
@@ -798,6 +807,7 @@ function AccountGroupEditor({ group, accounts, reload, showError, onOpenAccount 
                     onOpen={() => onOpenAccount(id)}
                     onToggleHidden={() => toggleHidden(id)}
                     draggable={order.length > 1}
+                    keepIndent={keepIndent}
                   />
                 </div>
               );
@@ -809,19 +819,24 @@ function AccountGroupEditor({ group, accounts, reload, showError, onOpenAccount 
   );
 }
 
-function SortableAccountRow({ id, name, icon, hidden, isCreditCard, paymentAccountDeleted, onOpen, onToggleHidden, draggable }) {
+function SortableAccountRow({ id, name, icon, hidden, isCreditCard, paymentAccountDeleted, onOpen, onToggleHidden, draggable, keepIndent = false }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !draggable });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   return (
     <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 4, padding: "10px 14px", borderRadius: 10 }}>
-      {/* Sin ícono de arrastrar si hay un solo ítem — no hay con qué reordenar. */}
+      {/* Sin ícono de arrastrar si hay un solo ítem — no hay con qué reordenar.
+          `keepIndent`: en "Gestor de cuentas" varios grupos se muestran juntos
+          (ManageAllAccounts) -- si CUALQUIERA tiene más de 1 cuenta (y por lo
+          tanto muestra el ícono), los demás reservan igual el espacio para
+          seguir alineados entre sí. En "Editar grupo" (un solo grupo, nada al
+          lado) no se pasa, y acá sí se saca el espacio del todo. */}
       {draggable ? (
         <span {...attributes} {...listeners} style={{ display: "flex", alignItems: "center", justifyContent: "center", alignSelf: "stretch", width: 28, color: "#C9BBA0", cursor: "grab", touchAction: "none" }}>
           <Menu size={18} />
         </span>
-      ) : (
+      ) : keepIndent ? (
         <span style={{ width: 28, flexShrink: 0 }} />
-      )}
+      ) : null}
       {/* gap:0 acá adentro — ojo y flecha ya tienen su propio padding, no
           hace falta espacio extra. Solo el handle necesita los 4px del gap
           de la fila. */}

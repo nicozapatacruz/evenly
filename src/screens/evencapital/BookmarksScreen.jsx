@@ -29,6 +29,11 @@ export default function BookmarksScreen({ userId, accounts, categories, onBack, 
   const grouped = ["expense", "income", "transfer"]
     .map((type) => ({ type, items: bookmarks.filter((b) => b.type === type) }))
     .filter((g) => g.items.length > 0);
+  // Los 3 grupos (gasto/ingreso/transferencia) se muestran juntos en esta
+  // pantalla -- si CUALQUIERA tiene más de 1 marcador (y por lo tanto
+  // muestra el ícono de arrastrar), los demás reservan igual el espacio,
+  // para que todas las filas de todos los grupos queden alineadas entre sí.
+  const anyGroupHasMultiple = grouped.some((g) => g.items.length > 1);
 
   const handleRemove = async (id, name) => {
     try {
@@ -70,9 +75,17 @@ export default function BookmarksScreen({ userId, accounts, categories, onBack, 
         onBack={onBack}
         right={
           <div style={{ display: "flex", gap: 4 }}>
-            <button style={styles.iconBtnGhost} onClick={() => setManaging((v) => !v)} aria-label={managing ? "Listo" : "Gestionar"}>
-              {managing ? <Check size={19} /> : <Pencil size={18} />}
-            </button>
+            {/* Sin marcadores no hay nada que gestionar (reordenar/borrar) —
+                mismo criterio que el ícono de arrastrar con 1 solo ítem. Pero
+                si ya estás gestionando (ej. borraste el último marcador que
+                quedaba), el botón sigue ahí para poder salir -- si no,
+                `managing` quedaría trabado en true sin ninguna forma de
+                volver (el "+" tampoco se ve mientras se gestiona). */}
+            {(managing || bookmarks.length > 0) && (
+              <button style={styles.iconBtnGhost} onClick={() => setManaging((v) => !v)} aria-label={managing ? "Listo" : "Gestionar"}>
+                {managing ? <Check size={19} /> : <Pencil size={18} />}
+              </button>
+            )}
             {!managing && (
               <button style={styles.iconBtnGhost} onClick={() => setShowPicker(true)} aria-label="Agregar marcador">
                 <Plus size={20} />
@@ -100,6 +113,7 @@ export default function BookmarksScreen({ userId, accounts, categories, onBack, 
               onUse={onUseBookmark}
               onRemove={handleRemove}
               onReorder={(orderedIds) => handleReorder(type, orderedIds)}
+              keepIndent={anyGroupHasMultiple}
             />
           </div>
         ))}
@@ -108,7 +122,7 @@ export default function BookmarksScreen({ userId, accounts, categories, onBack, 
   );
 }
 
-function BookmarkGroup({ type, items, accounts, categories, managing, onUse, onRemove, onReorder }) {
+function BookmarkGroup({ type, items, accounts, categories, managing, onUse, onRemove, onReorder, keepIndent }) {
   const [order, setOrder] = useState(() => items.map((b) => b.id));
   const [confirmRemoveId, setConfirmRemoveId] = useState(null);
   const [removingId, setRemovingId] = useState(null);
@@ -144,6 +158,7 @@ function BookmarkGroup({ type, items, accounts, categories, managing, onUse, onR
                   managing={managing}
                   last={i === order.length - 1}
                   draggable={order.length > 1}
+                  keepIndent={keepIndent}
                   onUse={() => onUse(b)}
                   onRemove={() => setConfirmRemoveId(id)}
                 />
@@ -170,7 +185,7 @@ function BookmarkGroup({ type, items, accounts, categories, managing, onUse, onR
   );
 }
 
-function SortableBookmarkRow({ id, bookmark, accounts, categories, managing, last, draggable, onUse, onRemove }) {
+function SortableBookmarkRow({ id, bookmark, accounts, categories, managing, last, draggable, onUse, onRemove, keepIndent = false }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !draggable || !managing });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
 
@@ -202,10 +217,15 @@ function SortableBookmarkRow({ id, bookmark, accounts, categories, managing, las
       ref={setNodeRef}
       style={{ ...style, display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: last ? "none" : "1px solid #F5F1E8", fontFamily: "system-ui, sans-serif" }}
     >
+      {/* Sin ícono si hay un solo marcador en este grupo -- `keepIndent`
+          (true si ALGÚN otro grupo de tipo, en esta misma pantalla, sí tiene
+          más de uno) decide si igual se reserva el espacio para quedar
+          alineado con esos otros grupos, o se saca del todo si ninguno lo
+          necesita. */}
       {managing && (
         draggable
           ? <span {...attributes} {...listeners} style={{ display: "flex", alignItems: "center", justifyContent: "center", alignSelf: "stretch", width: 28, color: "#C9BBA0", cursor: "grab", touchAction: "none", flexShrink: 0 }}><Menu size={18} /></span>
-          : <span style={{ width: 28, flexShrink: 0 }} />
+          : keepIndent ? <span style={{ width: 28, flexShrink: 0 }} /> : null
       )}
       {managing ? content : (
         <button onClick={onUse} style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}>

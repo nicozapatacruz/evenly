@@ -780,8 +780,10 @@ function SortableGroupRow({ group, onOpen, draggable }) {
   };
   return (
     <div ref={setNodeRef} style={{ ...style, ...styles.shareRow, gap: 4, padding: "10px 14px" }}>
-      {/* Sin ícono de arrastrar si hay un solo ítem — no hay con qué reordenar. */}
-      {draggable ? (
+      {/* Sin ícono de arrastrar si hay un solo ítem — no hay con qué reordenar.
+          Lista aislada en su propia pantalla, así que sin draggable tampoco
+          se reserva el espacio: sacarlo del todo, no solo ocultar el ícono. */}
+      {draggable && (
         <span
           {...attributes}
           {...listeners}
@@ -798,8 +800,6 @@ function SortableGroupRow({ group, onOpen, draggable }) {
         >
           <Menu size={18} />
         </span>
-      ) : (
-        <span style={{ width: 28, flexShrink: 0 }} />
       )}
       <button style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0, background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left", font: "inherit", color: "inherit" }} onClick={onOpen}>
         <span style={{ ...styles.avatar, background: colorFor(group.id) }}>{initials(group.name)}</span>

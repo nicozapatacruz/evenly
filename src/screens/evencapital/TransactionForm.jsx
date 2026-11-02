@@ -479,7 +479,22 @@ export default function TransactionForm({
           // Todo el cartel es tocable y reemplaza al botón "Original" que
           // antes vivía aparte, arriba a la derecha -- un solo lugar que
           // conecta "esto está bloqueado" con "acá lo cambiás".
-          splitGroupId && onOpenEvenGroupExpense ? (
+          //
+          // "Compensación de lo prestado" (sl_role:"lend_offset") es un
+          // caso aparte: no viene de UN gasto/pago puntual, sale de sumar
+          // todo lo prestado con una tarjeta en un ciclo entero -- no tiene
+          // "Original" que mostrar (sl_source_id apunta a una fila de
+          // sl_mm_lend_offset_periods, no a un gasto/pago real). Mostrarle
+          // el cartel de "Original →" de todas formas llevaba a un
+          // "este gasto fue eliminado" falso al tocarlo -- encontrado por
+          // Nicolas 2026-11-02.
+          editingTransaction?.sl_role === "lend_offset" ? (
+            <p style={{ ...styles.muted, padding: 0 }}>
+              {TYPE_DEMONYM[type]} se genera sola a partir de lo que prestaste con esta tarjeta en ese ciclo, para{" "}
+              <Divide size={12} color="#A8754A" style={{ display: "inline", verticalAlign: "middle", marginBottom: 2 }} />{" "}
+              {splitGroupName || "EvenGroup"}. El monto, la cuenta y la fecha se recalculan solos la próxima vez que sincronice. Podés cambiarle la categoría o la nota.
+            </p>
+          ) : splitGroupId && onOpenEvenGroupExpense ? (
             <button
               type="button"
               onClick={() => onOpenEvenGroupExpense(splitGroupId, editingTransaction.sl_source_kind, editingTransaction.sl_source_id)}

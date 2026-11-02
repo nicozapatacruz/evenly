@@ -1,6 +1,6 @@
 import { supabase } from "./supabaseClient.js";
 import { fetchAllRows } from "./evenCapitalData.js";
-import { creditCardCycleStart } from "./helpers.jsx";
+import { creditCardCycleStart, fmtDate } from "./helpers.jsx";
 
 /* =========================================================================
    SINCRONIZACIÓN EVENGROUP → EVENCAPITAL — reconciliación completa del
@@ -336,12 +336,17 @@ async function computeLendOffsetDesired(link, ctx, desired) {
     const pinned = periodByKey.get(key);
     if (!pinned) continue; // todavía sin cuenta de pago configurada -- no se genera nada
     const closeDate = nextCycleStart(period.statementDay, period.cycleStart);
+    // Rango de fechas en vez de solo el día de inicio (ej. "Ciclo 01 oct
+    // 2026 - 31 oct 2026") -- más legible de un vistazo que la key cruda
+    // (YYYY-MM-DD), a pedido de Nicolas 2026-11-02. El fin del ciclo es un
+    // día antes de `closeDate` (que es el inicio del ciclo SIGUIENTE).
+    const cycleEndDate = new Date(closeDate.getTime() - 24 * 60 * 60 * 1000);
     offsetDesired.push({
       key: `lend_offset:${pinned.id}:lend_offset`,
       source_kind: "lend_offset", source_id: pinned.id, role: "lend_offset", type: "transfer",
       account_id: pinned.lend_offset_account_id, to_account_id: pinned.payment_account_id,
       amount: period.total, currency: period.currency, category_id: null,
-      title: "Compensación de lo prestado", memo: `Ciclo ${period.cycleStartKey}`, date: closeDate.getTime(),
+      title: "Compensación de lo prestado", memo: `Ciclo ${fmtDate(period.cycleStart.getTime())} - ${fmtDate(cycleEndDate.getTime())}`, date: closeDate.getTime(),
     });
   }
   return offsetDesired;

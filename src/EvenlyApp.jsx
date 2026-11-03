@@ -125,6 +125,18 @@ async function resolveSession(authUser) {
   }
 }
 
+// DEBUG TEMPORAL (investigación de logouts inesperados, ver PENDIENTES.md) —
+// breadcrumbs de qué pasa del lado del cliente justo antes/durante un
+// logout que el servidor no explica solo con sus propios logs de auth.
+// Fire-and-forget (nunca bloquea ni rompe el flujo real de auth) y con un
+// insert sin RLS por user_id porque el evento más importante a capturar
+// (la sesión cayendo a null) pasa justo cuando el cliente ya no tiene token
+// válido para que `auth.uid()` lo valide. Borrar esta función, sus 2
+// llamados y la tabla `client_auth_events` en Supabase una vez resuelto.
+function logAuthEvent(userId, event, detail) {
+  supabase.from("client_auth_events").insert({ user_id: userId || null, event, detail }).then(() => {}, () => {});
+}
+
 function useAuth() {
   const [session, setSession] = useState(null); // { userId, email, username, displayName, photoUrl, defaultGroupId, evenGroupEnabled } | null
   const [authLoading, setAuthLoading] = useState(true);
@@ -133,6 +145,7 @@ function useAuth() {
   // queremos mostrarle "elegí tu nueva contraseña" en vez de mandarlo directo
   // adentro de la app.
   const [recovering, setRecovering] = useState(false);
+  const lastUserIdRef = useRef(null); // DEBUG TEMPORAL, ver logAuthEvent
 
   useEffect(() => {
     let cancelled = false;
@@ -140,6 +153,7 @@ function useAuth() {
     (async () => {
       const { data: { session: authSession } } = await supabase.auth.getSession();
       if (authSession?.user) {
+        lastUserIdRef.current = authSession.user.id; // DEBUG TEMPORAL
         try {
           const session = await resolveSession(authSession.user);
           if (!cancelled) setSession(session);
@@ -149,14 +163,27 @@ function useAuth() {
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (event, authSession) => {
+      // DEBUG TEMPORAL — ver comentario de logAuthEvent.
+      logAuthEvent(authSession?.user?.id || lastUserIdRef.current, `auth:${event}`, JSON.stringify({ hasSession: !!authSession, visibility: document.visibilityState }));
       if (event === "PASSWORD_RECOVERY") setRecovering(true);
       if (!authSession?.user) { setSession(null); return; }
+      lastUserIdRef.current = authSession.user.id; // DEBUG TEMPORAL
       try {
         setSession(await resolveSession(authSession.user));
       } catch { /* ignorar, se resuelve en el próximo evento */ }
     });
 
-    return () => { cancelled = true; sub.subscription.unsubscribe(); };
+    // DEBUG TEMPORAL — ver comentario de logAuthEvent.
+    const onVisibilityChange = () => {
+      logAuthEvent(lastUserIdRef.current, "visibility", document.visibilityState);
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+      document.removeEventListener("visibilitychange", onVisibilityChange); // DEBUG TEMPORAL
+    };
   }, []);
 
   const register = useCallback(async (email, username, password) => {

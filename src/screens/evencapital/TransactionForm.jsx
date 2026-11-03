@@ -656,7 +656,7 @@ export default function TransactionForm({
           />
         )}
 
-        {!editingRecurring && date && new Date(date + "T12:00:00").getTime() > new Date(todayInputValue() + "T23:59:59").getTime() && (
+        {!isSynced && !editingRecurring && date && new Date(date + "T12:00:00").getTime() > new Date(todayInputValue() + "T23:59:59").getTime() && (
           <ToggleField
             label="Transacción futura"
             description="No se va a reflejar en tu saldo ni en Estadísticas hasta que llegue esta fecha."

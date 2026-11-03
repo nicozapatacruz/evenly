@@ -51,7 +51,7 @@ async function ensureEvenGroupAccountGroup(userId) {
 // nada — ver sl_mm_expense_choices (la que fija la cuenta real usada por
 // gasto, para que la transferencia oculta de préstamo siempre viaje junto
 // con el gasto, sin importar qué default tengas hoy).
-export async function linkGroupToAccount({ userId, groupId, memberId, groupName, defaultOwnAccountId, defaultOtherAccountId, currency, lendAccountId, loanAccountId, lendOffsetAccountId }) {
+export async function linkGroupToAccount({ userId, groupId, memberId, groupName, defaultOwnAccountId, defaultOtherAccountId, currency, lendAccountId, loanAccountId, lendOffsetAccountId, showGroupCategory }) {
   // Si este mismo grupo ya estuvo vinculado antes (y se desvinculó), se
   // reutiliza la misma cuenta pseudo — así no se pierde el saldo pendiente
   // que ya traía. Si esa cuenta vieja se borró a mano, se crea una nueva.
@@ -96,6 +96,7 @@ export async function linkGroupToAccount({ userId, groupId, memberId, groupName,
     lend_account_id: lendAccountId || null,
     loan_account_id: loanAccountId || null,
     lend_offset_account_id: lendOffsetAccountId || null,
+    show_group_category: showGroupCategory !== false,
   });
   if (error) throw error;
 }
@@ -106,7 +107,7 @@ export async function linkGroupToAccount({ userId, groupId, memberId, groupName,
 // sl_mm_expense_choices — esto solo cambia qué cuenta se usa de acá en más,
 // para gastos que todavía no tienen una fila ahí. La cuenta pseudo nunca se
 // toca acá (siempre auto-manejada, ver linkGroupToAccount).
-export async function updateLinkDefaults(linkId, { defaultOwnAccountId, defaultOtherAccountId, lendAccountId, loanAccountId, lendOffsetAccountId }) {
+export async function updateLinkDefaults(linkId, { defaultOwnAccountId, defaultOtherAccountId, lendAccountId, loanAccountId, lendOffsetAccountId, showGroupCategory }) {
   const { error } = await supabase
     .from("sl_mm_links")
     .update({
@@ -115,6 +116,7 @@ export async function updateLinkDefaults(linkId, { defaultOwnAccountId, defaultO
       lend_account_id: lendAccountId || null,
       loan_account_id: loanAccountId || null,
       lend_offset_account_id: lendOffsetAccountId || null,
+      show_group_category: showGroupCategory !== false,
     })
     .eq("id", linkId);
   if (error) throw error;

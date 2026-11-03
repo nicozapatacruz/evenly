@@ -17,6 +17,19 @@ Reglas:
 
 ## 2026-11-03
 
+- Toggle nuevo "Mostrar categoría de grupo en gastos" en Editar grupo
+  (EvenGroupTab.jsx, dentro del vínculo con EvenCapital), por defecto true.
+  Si se apaga, se esconde el campo "Categoría de {grupo}" en crear/editar
+  gasto y se reemplaza por el logo de EvenCapital (`EvenGroupIcon`, en
+  negro) en el listado de actividad y en el detalle del gasto. Solo existe
+  si el grupo está vinculado a EvenCapital -- columna nueva
+  `sl_mm_links.show_group_category` (default true, corre Nicolas a mano en
+  Supabase).
+- Toggle "Transacción futura" oculto para transacciones sincronizadas de
+  EvenGroup (`isSynced` en `TransactionForm.jsx`) — esa función era solo
+  para Money Manager; antes aparecía editable ahí igual, inconsistente con
+  el resto del form (que sí se bloquea cuando `isSynced`). `reconcileLink`
+  nunca seteaba `is_future`, así que no afecta datos existentes.
 - Redondeo a centavos en `computeCreditCardBalance` (`evenCapitalData.js`),
   `computeAmountMain` (`evenCapitalData.js`), `amountMainFor`
   (`evenGroupSync.js`) y los 3 agregados de `localAggregates.js` — evita

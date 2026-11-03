@@ -161,6 +161,7 @@ export default function EvenGroupTab({
         <GroupView
           group={activeGroup}
           session={session}
+          evenCapital={evenCapital}
           onRefresh={() => reloadGroup(activeGroup.id)}
           onBack={onBackOverride || (() => setView({ screen: "home" }))}
           onAddExpense={() => setView({ screen: "newExpense", groupId: activeGroup.id })}
@@ -187,6 +188,7 @@ export default function EvenGroupTab({
         <ExpenseDetail
           group={activeGroup}
           session={session}
+          evenCapital={evenCapital}
           expenseId={view.expenseId}
           onBack={onBackOverride || (() => setView({ screen: "group", groupId: activeGroup.id }))}
           onEdit={(expenseId) => setView({ screen: "newExpense", groupId: activeGroup.id, expenseId })}
@@ -705,6 +707,12 @@ function GroupForm({ group = null, session, evenCapital, onCancel, onCreate, onS
   // Solo tiene efecto si "lo que prestás" es una tarjeta de crédito -- ver
   // EvenGroupCapitalLink, que la oculta si no.
   const [mmLendOffsetAccountId, setMmLendOffsetAccountId] = useState(activeMmLink?.lend_offset_account_id || "");
+  // Solo tiene sentido con el vínculo activo -- controla si el campo
+  // "Categoría de {grupo}" sigue apareciendo en el formulario de gasto, o se
+  // esconde en favor del logo de EvenCapital (ver ExpenseForm/GroupView/
+  // ExpenseDetail). Por defecto en true (comportamiento de siempre) tanto
+  // para un vínculo nuevo como para uno viejo sin esta columna todavía.
+  const [mmShowGroupCategory, setMmShowGroupCategory] = useState(activeMmLink ? activeMmLink.show_group_category !== false : true);
   useEffect(() => {
     setMmLinked(!!activeMmLink);
     setMmOwnAccountId(activeMmLink?.default_own_account_id || "");
@@ -712,12 +720,14 @@ function GroupForm({ group = null, session, evenCapital, onCancel, onCreate, onS
     setMmLendAccountId(activeMmLink?.lend_account_id || "");
     setMmLoanAccountId(activeMmLink?.loan_account_id || "");
     setMmLendOffsetAccountId(activeMmLink?.lend_offset_account_id || "");
-  }, [activeMmLink?.id, activeMmLink?.default_own_account_id, activeMmLink?.default_other_account_id, activeMmLink?.lend_account_id, activeMmLink?.loan_account_id, activeMmLink?.lend_offset_account_id]);
+    setMmShowGroupCategory(activeMmLink ? activeMmLink.show_group_category !== false : true);
+  }, [activeMmLink?.id, activeMmLink?.default_own_account_id, activeMmLink?.default_other_account_id, activeMmLink?.lend_account_id, activeMmLink?.loan_account_id, activeMmLink?.lend_offset_account_id, activeMmLink?.show_group_category]);
   const mmNeedsAccounts = mmLinked && (!mmOwnAccountId || !mmOtherAccountId);
   const mmDirty = !!myMemberId && (activeMmLink
     ? (mmOwnAccountId !== activeMmLink.default_own_account_id || mmOtherAccountId !== activeMmLink.default_other_account_id
         || mmLendAccountId !== (activeMmLink.lend_account_id || "") || mmLoanAccountId !== (activeMmLink.loan_account_id || "")
-        || mmLendOffsetAccountId !== (activeMmLink.lend_offset_account_id || ""))
+        || mmLendOffsetAccountId !== (activeMmLink.lend_offset_account_id || "")
+        || mmShowGroupCategory !== (activeMmLink.show_group_category !== false))
     : (mmLinked && !!mmOwnAccountId && !!mmOtherAccountId));
 
   const canSaveEdit = name.trim() && members.length >= 2 && !hasEmptyCategory && !mmNeedsAccounts;
@@ -787,6 +797,7 @@ function GroupForm({ group = null, session, evenCapital, onCancel, onCreate, onS
             lendAccountId: mmLendAccountId || null,
             loanAccountId: mmLoanAccountId || null,
             lendOffsetAccountId: mmLendOffsetAccountId || null,
+            showGroupCategory: mmShowGroupCategory,
           });
         } else {
           await linkGroupToAccount({
@@ -799,6 +810,7 @@ function GroupForm({ group = null, session, evenCapital, onCancel, onCreate, onS
             lendAccountId: mmLendAccountId || null,
             loanAccountId: mmLoanAccountId || null,
             lendOffsetAccountId: mmLendOffsetAccountId || null,
+            showGroupCategory: mmShowGroupCategory,
             currency: evenCapital.settings.main_currency,
           });
         }
@@ -1095,6 +1107,8 @@ function GroupForm({ group = null, session, evenCapital, onCancel, onCreate, onS
             onLoanAccountChange={setMmLoanAccountId}
             lendOffsetAccountId={mmLendOffsetAccountId}
             onLendOffsetAccountChange={setMmLendOffsetAccountId}
+            showGroupCategory={mmShowGroupCategory}
+            onShowGroupCategoryChange={setMmShowGroupCategory}
             touched={touched}
             touch={touch}
             disabled={saving}
@@ -1189,6 +1203,7 @@ function EvenGroupCapitalLink({
   linked, onToggle, ownAccountId, onOwnAccountChange, otherAccountId, onOtherAccountChange,
   lendAccountId, onLendAccountChange, loanAccountId, onLoanAccountChange,
   lendOffsetAccountId, onLendOffsetAccountChange,
+  showGroupCategory, onShowGroupCategoryChange,
   touched, touch, disabled, isOnline = true,
 }) {
   const [unlinking, setUnlinking] = useState(false);
@@ -1368,6 +1383,13 @@ function EvenGroupCapitalLink({
               </div>
             )}
           </div>
+
+          <ToggleField
+            label="Mostrar categoría de grupo en gastos"
+            description="Si lo apagás, el campo de categoría de este grupo no aparece al crear/editar un gasto. Se reemplaza por el logo de EvenCapital en el resumen. Tu categoría personal (si participás) no se ve afectada."
+            checked={showGroupCategory}
+            onChange={onShowGroupCategoryChange}
+          />
         </>
       )}
     </div>
@@ -1438,8 +1460,13 @@ function SortableCategoryRow({ cat, onEditIcon, onChangeLabel, onRemove, draggab
    GROUP VIEW
    ========================================================================= */
 
-function GroupView({ group, session, onRefresh, onBack, onAddExpense, onOpenExpense, onOpenPayment, onSettleUp, onEditGroup, onSoftDeleteExpense, isOnline = true, showError }) {
+function GroupView({ group, session, evenCapital, onRefresh, onBack, onAddExpense, onOpenExpense, onOpenPayment, onSettleUp, onEditGroup, onSoftDeleteExpense, isOnline = true, showError }) {
   const blockOffline = () => showError("Estás offline, no podés hacer esto ahora.");
+  // Si el vínculo con EvenCapital tiene "Mostrar categoría de grupo" apagado,
+  // el ícono/nombre de categoría de cada gasto se reemplaza acá por el logo
+  // de EvenCapital (ver ExpenseForm, donde se esconde el campo del form).
+  const activeLink = evenCapital?.slLinks?.find((l) => l.active && l.group_id === group.id && l.user_id === session?.userId);
+  const hideGroupCategory = !!(activeLink && activeLink.show_group_category === false);
   const [tab, setTab] = useState("activity"); // activity | balances | individual
   useScrollToTopOnChange(tab);
 
@@ -1723,7 +1750,11 @@ function GroupView({ group, session, onRefresh, onBack, onAddExpense, onOpenExpe
                       </span>
                     </div>
                     {/* Ícono de categoría */}
-                    <div style={{ ...styles.expenseIcon, background: colorFor(cat.id), flexShrink: 0 }}><IconComp iconKey={cat.iconKey} size={16} /></div>
+                    {hideGroupCategory ? (
+                      <div style={{ ...styles.expenseIcon, background: "#FAF7F2", border: "1px solid #DDD2BE", flexShrink: 0 }} title="EvenCapital"><EvenGroupIcon size={28} color="#2B2620" /></div>
+                    ) : (
+                      <div style={{ ...styles.expenseIcon, background: colorFor(cat.id), flexShrink: 0 }}><IconComp iconKey={cat.iconKey} size={16} /></div>
+                    )}
                     {/* Texto */}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ ...styles.expenseTitle, display: "flex", alignItems: "center", gap: 4 }}>
@@ -1799,10 +1830,12 @@ function GroupView({ group, session, onRefresh, onBack, onAddExpense, onOpenExpe
    EXPENSE DETAIL (solo lectura — se abre al tocar la tarjeta de un gasto)
    ========================================================================= */
 
-function ExpenseDetail({ group, expenseId, onBack, onEdit, isOnline = true, showError, session }) {
+function ExpenseDetail({ group, expenseId, evenCapital, onBack, onEdit, isOnline = true, showError, session }) {
   const { members } = group;
   const e = group.expenses.find((x) => x.id === expenseId);
   const [showFullPhoto, setShowFullPhoto] = useState(false);
+  const activeLink = evenCapital?.slLinks?.find((l) => l.active && l.group_id === group.id && l.user_id === session?.userId);
+  const hideGroupCategory = !!(activeLink && activeLink.show_group_category === false);
 
   if (!e || e.deleted) {
     return (
@@ -1855,15 +1888,21 @@ function ExpenseDetail({ group, expenseId, onBack, onEdit, isOnline = true, show
       <div style={styles.form}>
         {/* Cabecera: ícono, descripción, categoría y fecha */}
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ ...styles.expenseIcon, width: 48, height: 48, minWidth: 48, background: colorFor(cat.id) }}>
-            <IconComp iconKey={cat.iconKey} size={22} />
-          </div>
+          {hideGroupCategory ? (
+            <div style={{ ...styles.expenseIcon, width: 48, height: 48, minWidth: 48, background: "#FAF7F2", border: "1px solid #DDD2BE" }} title="EvenCapital">
+              <EvenGroupIcon size={38} color="#2B2620" />
+            </div>
+          ) : (
+            <div style={{ ...styles.expenseIcon, width: 48, height: 48, minWidth: 48, background: colorFor(cat.id) }}>
+              <IconComp iconKey={cat.iconKey} size={22} />
+            </div>
+          )}
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ margin: 0, fontSize: 19, fontWeight: 700, fontFamily: "'Iowan Old Style', Georgia, serif" }}>
               {e.description}
             </p>
             <p style={{ margin: "2px 0 0", fontSize: 13, color: "#6B6355", fontFamily: "system-ui, sans-serif" }}>
-              {cat.label} · {fmtDate(e.date || e.createdAt)}
+              {hideGroupCategory ? "EvenCapital" : cat.label} · {fmtDate(e.date || e.createdAt)}
             </p>
           </div>
         </div>
@@ -2127,6 +2166,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
   const iParticipate = participants.has(myMemberId);
   const mmInvolved = !!(activeLink && myMemberId && (iPay || iParticipate));
   const showMmCategory = !!(activeLink && myMemberId && iParticipate);
+  const showGroupCategoryField = !activeLink || activeLink.show_group_category !== false;
   const descriptionSuggestions = activeLink && evenCapital.settings.autocomplete_notes && description.trim()
     ? recentNoteTitles.filter((t) => normalizeForSearch(t).includes(normalizeForSearch(description.trim())) && normalizeForSearch(t) !== normalizeForSearch(description.trim())).slice(0, 5)
     : [];
@@ -2405,19 +2445,24 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
         {/* La categoría de Split siempre está — la ve todo el grupo. El label
             queda fijo en "Categoría de {grupo}" apenas el grupo está
             vinculado a EvenCapital (participes/pagues o no) — así no
-            cambia de nombre según el caso, que sería más confuso que útil. */}
-        <Field>
-          <PickerField
-            rowLabel={activeLink ? `Categoría de ${group.name}` : "Categoría"}
-            title="Elegí una categoría"
-            value={category}
-            onChange={setCategory}
-            groups={[{
-              label: null,
-              items: groupCategories(group).map((c) => ({ value: c.id, label: c.label, icon: <IconComp iconKey={c.iconKey} size={16} /> })),
-            }]}
-          />
-        </Field>
+            cambia de nombre según el caso, que sería más confuso que útil.
+            Se esconde del todo si el vínculo tiene "Mostrar categoría de
+            grupo" apagado (ver EvenGroupCapitalLink) -- el valor por defecto
+            del gasto sigue guardándose igual, solo deja de pedirse acá. */}
+        {showGroupCategoryField && (
+          <Field>
+            <PickerField
+              rowLabel={activeLink ? `Categoría de ${group.name}` : "Categoría"}
+              title="Elegí una categoría"
+              value={category}
+              onChange={setCategory}
+              groups={[{
+                label: null,
+                items: groupCategories(group).map((c) => ({ value: c.id, label: c.label, icon: <IconComp iconKey={c.iconKey} size={16} /> })),
+              }]}
+            />
+          </Field>
+        )}
 
         <TextRow
           label="Descripción"

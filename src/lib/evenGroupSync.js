@@ -387,7 +387,7 @@ async function reconcileLink(link, userId, mainCurrency, accountsById) {
   const amountMainFor = (d, existing) => {
     if (d.currency === mainCurrency) return d.amount;
     const rate = existing && existing.currency === d.currency ? existing.exchange_rate : null;
-    return rate ? d.amount / rate : 0;
+    return rate ? roundCents(d.amount / rate) : 0;
   };
 
   const toInsert = [];

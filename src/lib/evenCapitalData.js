@@ -174,6 +174,14 @@ export function creditCardNextPaymentDate(paymentDay, now = new Date()) {
 //   adelante → actual.
 // - Si "pasado" queda positivo (el pago fue mayor a la deuda), el
 //   excedente pasa a "actual" — "pasado" nunca es mayor a 0.
+// Sumar montos en punto flotante uno a uno puede ensuciar el resultado (ej.
+// 31.05 - 15.53 = 15.519999999999998) -- redondear acá antes de que ese
+// ruido se guarde en una transacción nueva (pago automático) o se muestre
+// tal cual en pantalla. Mismo patrón que `roundCents` en evenGroupSync.js.
+function roundCents(n) {
+  return Math.round(n * 100) / 100;
+}
+
 export function computeCreditCardBalance(accountId, transactions, statementDay, now = new Date()) {
   const cycleStart = creditCardCycleStart(statementDay, now);
   const cycleStartKey = `${cycleStart.getFullYear()}-${String(cycleStart.getMonth() + 1).padStart(2, "0")}-${String(cycleStart.getDate()).padStart(2, "0")}`;
@@ -208,7 +216,7 @@ export function computeCreditCardBalance(accountId, transactions, statementDay, 
     actual += pasado;
     pasado = 0;
   }
-  return { pasado, actual };
+  return { pasado: roundCents(pasado), actual: roundCents(actual) };
 }
 
 const LOADING = Symbol("loading");
@@ -684,7 +692,7 @@ export async function disableAutoPayForDeletedAccounts(deletedAccountIds) {
 // principal (ej. 1 EUR = 4500 COP → rate=4500).
 export function computeAmountMain(amount, currency, mainCurrency, rate) {
   if (!currency || currency === mainCurrency) return amount;
-  if (rate) return amount / rate;
+  if (rate) return roundCents(amount / rate);
   return amount;
 }
 

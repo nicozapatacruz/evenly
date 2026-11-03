@@ -9,6 +9,13 @@ import { dateInputValueInZone, isFuturePending } from "./helpers.jsx";
 // Con a lo sumo unos miles de transacciones por usuario, un filter/reduce
 // directo alcanza de sobra — no hace falta ninguna optimización.
 
+// Sumar montos en punto flotante uno a uno puede ensuciar el resultado (ej.
+// 0.1 + 0.2 = 0.30000000000000004) -- redondear acá antes de devolver el
+// total, mismo patrón que `roundCents` en evenGroupSync.js/evenCapitalData.js.
+function roundCents(n) {
+  return Math.round(n * 100) / 100;
+}
+
 function monthKeyOf(t) {
   const key = dateInputValueInZone(new Date(t.date).getTime(), t.timezone); // "YYYY-MM-DD"
   return { year: Number(key.slice(0, 4)), month: Number(key.slice(5, 7)) };
@@ -26,7 +33,7 @@ export function computeAccountTotals(transactions) {
     else if ((t.type === "expense" || t.type === "transfer") && t.account_id) add(t.account_id, -t.amount_main);
     if (t.type === "transfer" && t.to_account_id) add(t.to_account_id, t.amount_main);
   }
-  return [...map.entries()].map(([account_id, total]) => ({ account_id, total }));
+  return [...map.entries()].map(([account_id, total]) => ({ account_id, total: roundCents(total) }));
 }
 
 // Por (año, mes, categoría) de un tipo (income/expense) en una moneda
@@ -45,7 +52,7 @@ export function computeCategoryMonthTotals(transactions, accounts, type, mainCur
     const key = `${year}-${month}-${categoryId}`;
     const amount = t.amount_main ?? t.amount;
     const prev = map.get(key);
-    map.set(key, { year, month, category_id: categoryId, total: (prev?.total || 0) + amount });
+    map.set(key, { year, month, category_id: categoryId, total: roundCents((prev?.total || 0) + amount) });
   }
   return [...map.values()];
 }
@@ -64,9 +71,9 @@ export function computeAccountMonthTotals(transactions, accountId) {
     const { year, month } = monthKeyOf(t);
     const key = `${year}-${month}`;
     const row = map.get(key) || { year, month, deposits: 0, withdrawals: 0 };
-    if (contribution >= 0) row.deposits += contribution;
-    else row.withdrawals += -contribution;
+    if (contribution >= 0) row.deposits = roundCents(row.deposits + contribution);
+    else row.withdrawals = roundCents(row.withdrawals - contribution);
     map.set(key, row);
   }
-  return [...map.values()].map((r) => ({ ...r, net: r.deposits - r.withdrawals }));
+  return [...map.values()].map((r) => ({ ...r, net: roundCents(r.deposits - r.withdrawals) }));
 }

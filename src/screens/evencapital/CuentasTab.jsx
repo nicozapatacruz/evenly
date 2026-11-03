@@ -241,9 +241,24 @@ export default function CuentasTab({ session, settings, groups, accounts, accoun
                 </span>
               </div>
               {realBalanceConfig && g.name === realBalanceConfig.group && (() => {
-                const saldoAcc = accounts.find((a) => a.name === realBalanceConfig.saldoName && !a.deleted);
-                const tcAcc = accounts.find((a) => a.name === realBalanceConfig.tcName && !a.deleted);
-                const pendienteAcc = accounts.find((a) => a.name === realBalanceConfig.pendienteName && !a.deleted);
+                // Saldo/Pendiente sí viven en el grupo "Santander" (`g.id`,
+                // ya confirmado que es el correcto por nombre arriba) --
+                // antes buscaba por nombre solo en TODAS las cuentas del
+                // usuario, sin importar el grupo. Funcionaba porque hoy no
+                // hay ambigüedad real, pero es frágil: encontramos 4 cuentas
+                // distintas llamadas "Pendiente" (3 ocultas de grupos viejos,
+                // 1 la real de Santander) al diagnosticar un desfase de
+                // Saldo Real, 2026-11-03 -- un `.find()` sin scopear podría
+                // haber agarrado la equivocada si el orden del array
+                // cambiara.
+                const saldoAcc = accounts.find((a) => a.name === realBalanceConfig.saldoName && a.group_id === g.id && !a.deleted);
+                const pendienteAcc = accounts.find((a) => a.name === realBalanceConfig.pendienteName && a.group_id === g.id && !a.deleted);
+                // La tarjeta NO vive en "Santander" (vive en su propio grupo
+                // "Tarjetas de crédito") -- acá el nombre solo tampoco
+                // alcanza como disambiguador real, así que se usa
+                // `is_credit_card` (un dato estructural de la cuenta, no
+                // depende de en qué grupo esté archivada).
+                const tcAcc = accounts.find((a) => a.name === realBalanceConfig.tcName && a.is_credit_card && !a.deleted);
                 // Cuenta pseudo del grupo de EvenGroup vinculado -- vive en el
                 // grupo de cuentas "EvenGroup" auto-creado (system_key
                 // "split_ledger"), con el mismo nombre que el grupo (ver

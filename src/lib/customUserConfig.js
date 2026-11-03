@@ -19,6 +19,6 @@ export const CUSTOM_USER_CONFIG = {
     realBalance: { group: "Santander", saldoName: "Saldo", tcName: "TC Santander", pendienteName: "Pendiente", groupName: "Nottinghill" },
   },
   "paulina.sanchezbt@gmail.com": {
-    realBalance: { group: "Santander", saldoName: "Saldo", tcName: "Tarjeta", pendienteName: "Pendiente" },
+    realBalance: { group: "Santander", saldoName: "Saldo", tcName: "Tarjeta", pendienteName: "Pendiente", groupName: "Nottinghill" },
   },
 };

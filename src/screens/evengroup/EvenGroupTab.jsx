@@ -2204,13 +2204,18 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLink?.id, existing?.id, mmChoicesLoaded]);
 
-  // Si cambiás quién pagó ANTES de tocar el selector de Cuenta a mano, el
-  // default (propia/ajena) se actualiza solo — apenas lo tocás vos
-  // (touched.mmAccountId), o si es un gasto que ya existe (nunca se
-  // recalcula un default sobre algo ya guardado), deja de tocarse.
+  // Si cambiás quién pagó ANTES de tocar el selector de Cuenta/Cuenta de lo
+  // prestado a mano, el default (propia/ajena) se actualiza solo en cada uno
+  // -- apenas tocás ESE campo en particular (touched.mmAccountId/
+  // touched.mmLoanAccountId), o si es un gasto que ya existe (nunca se
+  // recalcula un default sobre algo ya guardado), deja de tocarse. Antes
+  // "Cuenta de lo prestado" no tenía su propio efecto acá, así que se
+  // quedaba pegada en el default de quien pagó al abrir el form -- bug
+  // encontrado por Nicolas 2026-11-04.
   useEffect(() => {
-    if (!activeLink || touched.mmAccountId || existing) return;
-    setMmAccountId(iPay ? activeLink.default_own_account_id : activeLink.default_other_account_id);
+    if (!activeLink || existing) return;
+    if (!touched.mmAccountId) setMmAccountId(iPay ? activeLink.default_own_account_id : activeLink.default_other_account_id);
+    if (!touched.mmLoanAccountId) setMmLoanAccountId((iPay ? activeLink.lend_account_id : activeLink.loan_account_id) || "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [iPay, activeLink?.id]);
 
@@ -2410,7 +2415,8 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
             info="Para este gasto puntual: de dónde sale (o adónde entra) lo que prestás, si tu grupo tiene configurada una cuenta para eso. Dejalo vacío para usar 'Cuenta' de arriba, como siempre."
             value={mmLoanAccountId}
             onChange={setMmLoanAccountId}
-            onClear={() => setMmLoanAccountId("")}
+            onClear={() => { setMmLoanAccountId(""); touch("mmLoanAccountId"); }}
+            onBlur={() => touch("mmLoanAccountId")}
             disabled={!mmChoicesLoaded}
             placeholder={mmChoicesLoaded ? "Misma que 'Cuenta'" : "Cargando…"}
             title="Elegí una cuenta"
@@ -2921,9 +2927,13 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLink?.id, existing?.id, mmChoicesLoaded]);
 
+  // Mismo bug que en ExpenseForm (y mismo arreglo): "Cuenta de lo prestado"
+  // tenía que seguir a "¿Quién pagó?"/dirección igual que "Cuenta", pero no
+  // tenía su propio efecto acá -- bug encontrado por Nicolas 2026-11-04.
   useEffect(() => {
-    if (!activeLink || touched.mmAccountId || existing) return;
-    setMmAccountId(isFrom ? activeLink.default_own_account_id : activeLink.default_other_account_id);
+    if (!activeLink || existing) return;
+    if (!touched.mmAccountId) setMmAccountId(isFrom ? activeLink.default_own_account_id : activeLink.default_other_account_id);
+    if (!touched.mmLoanAccountId) setMmLoanAccountId((isFrom ? activeLink.loan_account_id : activeLink.lend_account_id) || "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFrom, activeLink?.id]);
 
@@ -3132,7 +3142,8 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
             info="Para este pago puntual: de dónde sale (o adónde entra) lo que se salda, si tu grupo tiene configurada una cuenta para eso. Dejalo vacío para usar 'Cuenta' de arriba, como siempre."
             value={mmLoanAccountId}
             onChange={setMmLoanAccountId}
-            onClear={() => setMmLoanAccountId("")}
+            onClear={() => { setMmLoanAccountId(""); touch("mmLoanAccountId"); }}
+            onBlur={() => touch("mmLoanAccountId")}
             disabled={!mmChoicesLoaded}
             placeholder={mmChoicesLoaded ? "Misma que 'Cuenta'" : "Cargando…"}
             title="Elegí una cuenta"

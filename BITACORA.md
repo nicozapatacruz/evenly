@@ -15,6 +15,16 @@ Reglas:
 
 ---
 
+## 2026-11-04
+
+- Bug: en un gasto/pago de EvenGroup donde pagó otra persona (no vos),
+  "Cuenta de lo prestado" se quedaba pegada en el default de "¿Quién pagó?"
+  con el que se abrió el formulario, sin actualizarse al cambiar de
+  pagador -- a diferencia de "Cuenta" (arriba), que sí reaccionaba. Faltaba
+  el efecto que la siguiera (`ExpenseForm`/`SettleUp` en
+  `EvenGroupTab.jsx`), y ahora respeta si la tocaste a mano (igual que
+  "Cuenta"). Encontrado por Nicolas.
+
 ## 2026-11-03
 
 - Toggle nuevo "Mostrar categoría de grupo en gastos" en Editar grupo

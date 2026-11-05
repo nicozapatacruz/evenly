@@ -11,6 +11,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { styles } from "../../lib/styles.js";
 import { TopBar, RootHeader, ConfirmInline, Modal, FormFooter, PhotoPicker, PhotoLightbox, ImageWithFallback, Field, ToggleField, PickerField, DateRow, TextRow, EvenGroupIcon, EmptyState, CalculatorAmountInput, SegmentedControl, Hint } from "../../components/Shared.jsx";
 import { linkGroupToAccount, updateLinkDefaults, unlinkGroup } from "../../lib/evenGroupLink.js";
+import { reconcileEvenGroup } from "../../lib/evenGroupSync.js";
 import { useRecentNoteTitles } from "../../lib/evenCapitalData.js";
 import {
   uid, CURRENCIES, CURRENCY_LIST, money, parseAmountInput, ICON_KEYS, IconComp,
@@ -19,6 +20,21 @@ import {
   dateInputValue, todayInputValue, fmtDate,
   useImageUpload, resolvePhotoUrl, useScrollToTopOnChange, useScrollIntoViewOnChange, normalizeForSearch,
 } from "../../lib/helpers.jsx";
+
+// Reconciliar justo después de crear/editar/borrar un gasto o pago (en vez
+// de esperar a la próxima sincronización completa, que solo corre al abrir
+// la app o reconectarse) -- si no, un gasto recién borrado en EvenGroup
+// seguía viéndose un rato en EvenCapital hasta recargar todo. Fire-and-
+// forget silencioso: si falla (sin señal real pese al chequeo previo, etc.)
+// no rompe el flujo de guardar/borrar, ya que la próxima sincronización
+// completa lo termina corrigiendo igual, como siempre.
+async function reconcileNow(userId) {
+  try {
+    await reconcileEvenGroup(userId);
+  } catch (e) {
+    console.error("No se pudo reconciliar con EvenCapital de una", e);
+  }
+}
 
 /* =========================================================================
    TAB DE EVENGROUP — recibe del shell raíz: la sesión, los grupos
@@ -177,6 +193,7 @@ export default function EvenGroupTab({
               const { error } = await supabase.from("expenses").update({ deleted: true }).eq("id", expenseId);
               if (error) throw error;
               await reloadGroup(activeGroup.id);
+              await reconcileNow(session.userId);
               await evenCapital?.reload();
               showInfo("Gasto eliminado.");
             } catch (e) { showError(`No se pudo borrar el gasto: ${e?.message || e}`); }
@@ -257,6 +274,7 @@ export default function EvenGroupTab({
                 savedId = data.id;
               }
               await reloadGroup(groupId);
+              await reconcileNow(session.userId);
               await evenCapital?.reload();
               // Si llegamos acá por "Ver original" desde una transacción
               // sincronizada (onBackOverride todavía activo porque no nos
@@ -286,6 +304,7 @@ export default function EvenGroupTab({
               const { error } = await supabase.from("expenses").update({ deleted: true }).eq("id", expenseId);
               if (error) throw error;
               await reloadGroup(activeGroup.id);
+              await reconcileNow(session.userId);
               await evenCapital?.reload();
               setView({ screen: "group", groupId: activeGroup.id });
               showInfo("Gasto eliminado.");
@@ -331,6 +350,7 @@ export default function EvenGroupTab({
                 savedId = data.id;
               }
               await reloadGroup(activeGroup.id);
+              await reconcileNow(session.userId);
               await evenCapital?.reload();
               // Mismo criterio que al guardar un gasto: si vinimos por "Ver
               // original", volver manda derecho a EvenCapital en vez de
@@ -355,6 +375,7 @@ export default function EvenGroupTab({
               const { error } = await supabase.from("payments").update({ deleted: true }).eq("id", paymentId);
               if (error) throw error;
               await reloadGroup(activeGroup.id);
+              await reconcileNow(session.userId);
               await evenCapital?.reload();
               setView({ screen: "group", groupId: activeGroup.id });
               showInfo("Pago eliminado.");
@@ -2312,6 +2333,7 @@ function ExpenseForm({ group, expenseId, extraHeaderField, onCancel, onSave, onD
           });
           if (syncError) console.error("No se pudo sincronizar la categoría con el otro miembro", syncError);
         }
+        await reconcileNow(session.userId);
         await evenCapital.reload();
         onMmChoiceSaved?.();
       }
@@ -2985,6 +3007,7 @@ function SettleUp({ group, paymentId, prefill, onCancel, onSave, onDelete, sessi
           { link_id: activeLink.id, source_kind: "payment", source_id: finalId, account_id: mmAccountId, loan_account_id: mmLoanAccountId || null },
           { onConflict: "link_id,source_kind,source_id" }
         );
+        await reconcileNow(session.userId);
         await evenCapital.reload();
         onMmChoiceSaved?.();
       }

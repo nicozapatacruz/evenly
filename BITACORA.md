@@ -17,6 +17,12 @@ Reglas:
 
 ## 2026-11-05
 
+- Reconciliación con EvenCapital ahora corre al toque después de crear,
+  editar o borrar un gasto/pago en EvenGroup (`reconcileNow` en
+  `EvenGroupTab.jsx`, 7 puntos), en vez de esperar a la próxima
+  sincronización completa (que solo corre al abrir la app o reconectarse).
+  Encontrado por Nicolas: un gasto borrado en EvenGroup se seguía viendo un
+  rato en EvenCapital hasta recargar todo.
 - Workflow de deploy (`.github/workflows/deploy.yml`): faltaba pasar
   `VITE_VAPID_PUBLIC_KEY` al build (secret ya creado en GitHub, pero el
   workflow nunca lo leía) -- agregado al `env:` del paso `npm run build`.

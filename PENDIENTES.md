@@ -27,6 +27,36 @@ Lista viva de pendientes del proyecto. Reglas:
 
 ## A. Mejoras pendientes
 
+- [ ] **Notificaciones push de EvenGroup (gasto nuevo) — falta el setup manual en Supabase**
+<details open><summary>Ver detalle</summary>
+
+Pedido de Nicolas 2026-11-05: avisar por notificación push cuando alguien agrega un gasto nuevo a un grupo de EvenGroup, a los demás miembros que participan en ese gasto puntual (no a todo el grupo a ciegas), excepto a quien lo creó. Todo el código ya está escrito (ver plan `expressive-wiggling-aurora.md` para el detalle completo de la arquitectura):
+
+- `src/sw.js` (nuevo) + `vite.config.js` (modo `injectManifest`): listeners `push`/`notificationclick`.
+- `src/lib/pushNotifications.js` (nuevo): pedir permiso, suscribir/desuscribir, guardar en `push_subscriptions`.
+- Toggle "Notificaciones de EvenGroup" en Config (`ConfigScreen.jsx`, junto al toggle de "EvenGroup").
+- `EvenGroupTab.jsx`: el insert de un gasto nuevo ahora manda `created_by: session.userId`.
+- `supabase/functions/notify-new-expense/index.ts` (nuevo, primera Edge Function del repo): recibe el Database Webhook, resuelve a quién le toca, manda el push con `npm:web-push`.
+
+Hecho 2026-11-05: SQL corrido, claves VAPID generadas, función desplegada
+"Via Editor" (sin CLI, terminó siendo más simple), secrets de la función
+cargados, webhook creado (Integrations → Database Webhooks, tabla
+`expenses`, evento Insert, destino `notify-new-expense`).
+
+Falta, todavía a mano por Nicolas:
+1. Agregar `VITE_VAPID_PUBLIC_KEY` como secret de GitHub Actions +
+   `.env.local` (esto es DISTINTO de los secrets de la Edge Function que ya
+   cargó — este lo necesita el código del navegador para poder
+   suscribirse) y volver a desplegar (push a `main`, o "Run workflow" a
+   mano) para que el build lo tome.
+2. Activar el toggle "Notificaciones de EvenGroup" en Config, en su
+   teléfono y en el de Paulina.
+3. Probar en vivo con los dos: un gasto que la incluya a ella (le debe
+   llegar), uno que no (no debe llegar nada) — recién ahí se da por
+   resuelto.
+
+</details>
+
 - [x] ~~Bug: "Compensar lo prestado" transfiere a la cuenta equivocada~~
 <details><summary>Ver detalle</summary>
 

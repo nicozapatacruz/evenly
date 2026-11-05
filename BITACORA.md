@@ -15,6 +15,18 @@ Reglas:
 
 ---
 
+## 2026-11-05
+
+- Armado el código para notificaciones push de EvenGroup (gasto nuevo):
+  `src/sw.js` (Service Worker propio, `vite.config.js` pasa a
+  `injectManifest`), `src/lib/pushNotifications.js`, toggle en
+  `ConfigScreen.jsx`, `created_by` en el insert de `EvenGroupTab.jsx`, y la
+  primera Edge Function del repo
+  (`supabase/functions/notify-new-expense/index.ts`). Falta todo el setup
+  manual (SQL, claves VAPID, deploy, Database Webhook) antes de que
+  funcione de verdad -- ver pendiente nuevo en `PENDIENTES.md` con los
+  pasos exactos.
+
 ## 2026-11-04
 
 - Bug: en un gasto/pago de EvenGroup donde pagó otra persona (no vos),

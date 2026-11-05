@@ -249,7 +249,10 @@ export default function EvenGroupTab({
                 const { error } = await supabase.from("expenses").update(payload).eq("id", expense.id);
                 if (error) throw error;
               } else {
-                const { data, error } = await supabase.from("expenses").insert(payload).select("id").single();
+                // created_by solo se fija al crear -- editar un gasto no le
+                // cambia de dueño, y es lo que usa notify-new-expense
+                // (Edge Function) para no notificarte tu propio gasto.
+                const { data, error } = await supabase.from("expenses").insert({ ...payload, created_by: session.userId }).select("id").single();
                 if (error) throw error;
                 savedId = data.id;
               }

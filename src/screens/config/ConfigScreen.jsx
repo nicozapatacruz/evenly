@@ -8,6 +8,7 @@ import { offlineSupabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
 import { TopBar, RootHeader, ConfirmInline, Footer, FormFooter, PhotoPicker, ToggleField, PickerField, PasswordInput, SegmentedControl, InfoTooltip } from "../../components/Shared.jsx";
 import { useImageUpload, resolvePhotoUrl, colorFor, initials, useScrollToTopOnChange } from "../../lib/helpers.jsx";
+import { isPushSupported, getCurrentSubscription, enablePush, disablePush } from "../../lib/pushNotifications.js";
 import RecurringScreen from "../evencapital/RecurringScreen.jsx";
 import TransactionForm, { ManageCategories } from "../evencapital/TransactionForm.jsx";
 import { ManageGroups, ManageAccounts, ManageAllAccounts } from "../evencapital/CuentasTab.jsx";
@@ -566,6 +567,15 @@ function EvenGroupSettings({ session, groups, reloadGroups, onCreateGroup, onOpe
   const [savingName, setSavingName] = useState(false);
   const [togglingEnabled, setTogglingEnabled] = useState(false);
   const [savingDefault, setSavingDefault] = useState(false);
+  // null mientras se resuelve (evita que el toggle parpadee en "apagado" un
+  // instante antes de saber si este dispositivo ya tenía una suscripción).
+  const [pushEnabled, setPushEnabled] = useState(null);
+  const [togglingPush, setTogglingPush] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    getCurrentSubscription().then((sub) => { if (!cancelled) setPushEnabled(!!sub); }).catch(() => { if (!cancelled) setPushEnabled(false); });
+    return () => { cancelled = true; };
+  }, []);
   // { id: invite.inviteId, action: "accept" | "reject" } — para saber cuál
   // de los 2 botones de ESA fila puntual mostrar como en curso (aceptar y
   // rechazar son mutuamente excluyentes para una misma invitación).
@@ -642,6 +652,23 @@ function EvenGroupSettings({ session, groups, reloadGroups, onCreateGroup, onOpe
     } catch (e) { showError(`No se pudo actualizar: ${e?.message || e}`); } finally { setTogglingEnabled(false); }
   };
 
+  // A diferencia del resto de esta pantalla, no pasa por offlineSupabase: no
+  // tiene sentido encolar "activar notificaciones" sin señal -- pedir el
+  // permiso y suscribirse al push ya requieren red de por sí.
+  const handleTogglePush = async () => {
+    if (!isOnline) { showError("Estás offline, no podés cambiar esto ahora."); return; }
+    setTogglingPush(true);
+    try {
+      if (pushEnabled) {
+        await disablePush(session.userId);
+        setPushEnabled(false);
+      } else {
+        await enablePush(session.userId);
+        setPushEnabled(true);
+      }
+    } catch (e) { showError(e?.message || "No se pudo actualizar."); } finally { setTogglingPush(false); }
+  };
+
   const handleDefaultGroupChange = async (e) => {
     const value = e.target.value || null;
     setSavingDefault(true);
@@ -661,6 +688,19 @@ function EvenGroupSettings({ session, groups, reloadGroups, onCreateGroup, onOpe
         checked={session.evenGroupEnabled}
         onChange={toggleEnabled}
         disabled={togglingEnabled}
+      />
+
+      <ToggleField
+        label="Notificaciones de EvenGroup"
+        description="Te avisamos cuando alguien agrega un gasto nuevo en el que participás, en cualquiera de tus grupos."
+        checked={!!pushEnabled}
+        onChange={handleTogglePush}
+        disabled={togglingPush || pushEnabled === null || !isPushSupported()}
+        blockedReason={
+          typeof Notification !== "undefined" && Notification.permission === "denied" ? "Bloqueado en el navegador. Activalo desde la configuración del sistema."
+          : !isPushSupported() ? "En iPhone, instalá la app a tu pantalla de inicio primero."
+          : undefined
+        }
       />
 
       <div>

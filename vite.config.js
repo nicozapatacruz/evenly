@@ -14,10 +14,19 @@ export default defineConfig({
     // OCR, ~13MB) queda afuera a propósito: se descarga sola la primera vez
     // que se usa "Importar foto", no tiene sentido inflar la precarga
     // inicial de la app con algo que la mayoría de las sesiones ni toca.
+    // injectManifest (en vez de generateSW, el modo de siempre) porque
+    // necesitamos código propio en el Service Worker -- los listeners
+    // "push"/"notificationclick" de src/sw.js, para las notificaciones de
+    // EvenGroup. El precache de la app shell sigue exactamente igual
+    // (mismo globPatterns/globIgnores de antes), solo que ahora el plugin
+    // lo inyecta DENTRO de nuestro archivo en vez de generar el suyo.
     VitePWA({
       registerType: "autoUpdate",
       manifest: false,
-      workbox: {
+      strategies: "injectManifest",
+      srcDir: "src",
+      filename: "sw.js",
+      injectManifest: {
         globPatterns: ["**/*.{js,css,html,png,ico,json}"],
         globIgnores: ["tesseract/**"],
       },

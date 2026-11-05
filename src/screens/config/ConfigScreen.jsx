@@ -302,6 +302,16 @@ export default function ConfigScreen({
           patchSession={patchSession}
         />
       )}
+
+      {/* Hash corto del commit + fecha/hora de build (GMT+1 fijo, sin DST --
+          pedido explícito así, no "hora de España") -- para confirmar a
+          simple vista que un deploy se aplicó de verdad. Ver vite.config.js,
+          __APP_VERSION__/__APP_BUILD_TIME__. */}
+      <p style={{ textAlign: "center", fontSize: 10, color: "#C4B8A0", margin: "16px 0 4px", fontFamily: "system-ui, sans-serif" }}>
+        {__APP_VERSION__} {new Date(__APP_BUILD_TIME__).toLocaleString("es-ES", {
+          day: "numeric", month: "numeric", year: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Etc/GMT-1",
+        })}
+      </p>
     </div>
   );
 }

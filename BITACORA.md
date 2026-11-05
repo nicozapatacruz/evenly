@@ -17,6 +17,14 @@ Reglas:
 
 ## 2026-11-05
 
+- Workflow de deploy (`.github/workflows/deploy.yml`): faltaba pasar
+  `VITE_VAPID_PUBLIC_KEY` al build (secret ya creado en GitHub, pero el
+  workflow nunca lo leía) -- agregado al `env:` del paso `npm run build`.
+- Versión de build en Config (pie de página chico): hash corto del commit +
+  fecha/hora en GMT+1 fijo (`a89b88c 5/11/26, 14:32`), calculado solo al
+  compilar (`vite.config.js`, `execSync("git rev-parse --short HEAD")` +
+  `define`) -- para confirmar a simple vista que un deploy se aplicó de
+  verdad, sin depender de bumpear un número de versión a mano.
 - Armado el código para notificaciones push de EvenGroup (gasto nuevo):
   `src/sw.js` (Service Worker propio, `vite.config.js` pasa a
   `injectManifest`), `src/lib/pushNotifications.js`, toggle en

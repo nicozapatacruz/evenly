@@ -1,8 +1,27 @@
+import { execSync } from "node:child_process";
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
+// Hash corto del commit que se está construyendo -- se usa en Config para
+// poder confirmar a simple vista que un deploy se aplicó de verdad, sin
+// depender de bumpear a mano un número de versión en package.json (que acá
+// nadie mantiene, se deploya seguido, commit a commit). "dev" si no hay
+// git disponible (no debería pasar en este repo, pero mejor no romper el
+// build por esto).
+const commitSha = (() => {
+  try {
+    return execSync("git rev-parse --short HEAD").toString().trim();
+  } catch {
+    return "dev";
+  }
+})();
+
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(commitSha),
+    __APP_BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
   plugins: [
     react(),
     // Cachea la "app shell" (JS/CSS/HTML/íconos) para que un recargo de

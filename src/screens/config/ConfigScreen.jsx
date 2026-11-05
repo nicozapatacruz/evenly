@@ -6,7 +6,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { supabase } from "../../lib/supabaseClient.js";
 import { offlineSupabase } from "../../lib/offlineSupabase.js";
 import { styles } from "../../lib/styles.js";
-import { TopBar, RootHeader, ConfirmInline, Footer, FormFooter, PhotoPicker, ToggleField, PickerField, PasswordInput, SegmentedControl, InfoTooltip } from "../../components/Shared.jsx";
+import { TopBar, RootHeader, ConfirmInline, Modal, Footer, FormFooter, PhotoPicker, ToggleField, PickerField, PasswordInput, SegmentedControl, InfoTooltip } from "../../components/Shared.jsx";
 import { useImageUpload, resolvePhotoUrl, colorFor, initials, useScrollToTopOnChange } from "../../lib/helpers.jsx";
 import { isPushSupported, getCurrentSubscription, enablePush, disablePush } from "../../lib/pushNotifications.js";
 import RecurringScreen from "../evencapital/RecurringScreen.jsx";
@@ -721,26 +721,33 @@ function EvenGroupSettings({ session, groups, reloadGroups, onCreateGroup, onOpe
 
       <ToggleField
         label="Notificaciones de EvenGroup"
-        description="Te avisamos cuando alguien agrega un gasto nuevo en el que participás, en cualquiera de tus grupos."
+        description="Te avisamos cuando alguien agrega un gasto nuevo en el que participas, en cualquiera de tus grupos."
         checked={!!pushEnabled}
         onChange={onTogglePushChange}
         disabled={togglingPush || pushEnabled === null || !isPushSupported() || permissionDenied}
         blockedReason={
-          permissionDenied ? "Bloqueado por el navegador. Andá a Ajustes del iPhone → bajá hasta \"Evenly\" → Notificaciones."
-          : !isPushSupported() ? "En iPhone, instalá la app a tu pantalla de inicio primero."
+          permissionDenied ? "Notificaciones apagadas. Para activarlas, entra a Ajustes del iPhone → Evenly → Notificaciones."
+          : !isPushSupported() ? "Instala la app a tu pantalla de inicio para poder usar notificaciones.\n\nEn Safari: toca el ícono de compartir y elige \"Agregar a pantalla de inicio\"."
           : undefined
         }
       />
       {confirmingPushPrompt && (
-        <ConfirmInline
-          title="Activar notificaciones"
-          message={"Ahora te va a aparecer el permiso de notificaciones del navegador -- aceptalo para que funcione.\n\nSi tocás \"No permitir\" ahí, no hay forma de volver a preguntarte: hay que activarlo después a mano desde la configuración del navegador/sistema."}
-          confirmLabel="Continuar"
-          danger={false}
-          onCancel={() => setConfirmingPushPrompt(false)}
-          onConfirm={() => { setConfirmingPushPrompt(false); handleTogglePush(true); }}
-          style={{ borderRadius: 10, borderTop: "1px solid #EBC9BA", marginTop: 8 }}
-        />
+        <Modal title="Activar notificaciones" onClose={() => setConfirmingPushPrompt(false)}>
+          <p style={{ margin: "0 0 14px", fontSize: 14, fontFamily: "system-ui, sans-serif", color: "#6B6355" }}>
+            A continuación te va a aparecer el permiso de notificaciones. Acéptalo para que funcione.
+            <br /><br />
+            Si eliges no permitir, no podremos volver a preguntarte: tendrías que activarlo después a mano desde Ajustes.
+          </p>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button style={{ ...styles.btnGhostSmall, flex: 1, justifyContent: "center" }} onClick={() => setConfirmingPushPrompt(false)}>Cancelar</button>
+            <button
+              style={{ ...styles.btnPrimarySmall, flex: 1, justifyContent: "center" }}
+              onClick={() => { setConfirmingPushPrompt(false); handleTogglePush(true); }}
+            >
+              Continuar
+            </button>
+          </div>
+        </Modal>
       )}
 
       <div>

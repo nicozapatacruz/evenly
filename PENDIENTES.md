@@ -283,6 +283,13 @@ También se revisaron (a pedido de Nicolas, que notó que la búsqueda inicial p
 
 ## B. Mejoras a futuro (sin compromiso de construirlas: ideas, no backlog)
 
+- [ ] **Instructivo de notificaciones bloqueadas, adaptado a Android**
+<details open><summary>Ver detalle</summary>
+
+El texto que explica cómo reactivar notificaciones si el navegador las bloqueó (`ConfigScreen.jsx`, toggle "Notificaciones de EvenGroup") hoy solo da el paso a paso de iPhone, a propósito -- Nicolas y Paulina son los únicos miembros vinculados a EvenCapital hoy, los dos en iPhone. Si algún día alguien con Android se suma, se puede detectar fácil (`navigator.userAgent`, misma técnica que ya usa `isPushSupported()` para distinguir iOS) y mostrar el instructivo que corresponda. Charlado 2026-11-05, sin apuro.
+
+</details>
+
 - [ ] **Permitir transacciones con importe 0 (notas/recordatorios)**
 <details open><summary>Ver detalle</summary>
 

@@ -30,6 +30,15 @@ function involves(expense: { shares?: Record<string, number>; payers?: Record<st
   return shareAmt > EPSILON || Math.abs(paidAmt - shareAmt) > EPSILON;
 }
 
+// Mismo formato que `money()` en src/lib/helpers.jsx (coma decimal,
+// siempre 2 decimales) -- duplicado por el mismo motivo que `involves`.
+// Usa el código de moneda (EUR) en vez del símbolo (€) para no tener que
+// duplicar también la tabla CURRENCIES acá.
+function formatMoney(amount: number, currency: string) {
+  const formatted = new Intl.NumberFormat("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(amount));
+  return `${amount < 0 ? "-" : ""}${formatted} ${currency}`;
+}
+
 Deno.serve(async (req) => {
   try {
     const payload = await req.json();
@@ -38,25 +47,49 @@ Deno.serve(async (req) => {
 
     const [{ data: group }, { data: members }] = await Promise.all([
       supabase.from("groups").select("name").eq("id", expense.group_id).single(),
-      supabase.from("group_members").select("id, linked_user_id").eq("group_id", expense.group_id),
+      supabase.from("group_members").select("id, name, linked_user_id").eq("group_id", expense.group_id),
     ]);
 
-    const recipientUserIds = (members || [])
-      .filter((m) => m.linked_user_id && m.linked_user_id !== expense.created_by && involves(expense, m.id))
-      .map((m) => m.linked_user_id);
+    const recipients = (members || []).filter((m) => m.linked_user_id && m.linked_user_id !== expense.created_by && involves(expense, m.id));
+    if (!recipients.length) return new Response("no recipients", { status: 200 });
 
-    if (!recipientUserIds.length) return new Response("no recipients", { status: 200 });
-
-    const { data: subs } = await supabase.from("push_subscriptions").select("*").in("user_id", recipientUserIds);
+    const { data: subs } = await supabase.from("push_subscriptions").select("*").in("user_id", recipients.map((m) => m.linked_user_id));
     if (!subs?.length) return new Response("no subscriptions", { status: 200 });
+    const subsByUser = new Map<string, typeof subs>();
+    for (const sub of subs) subsByUser.set(sub.user_id, [...(subsByUser.get(sub.user_id) || []), sub]);
 
-    const notifPayload = JSON.stringify({
-      title: `Nuevo gasto en ${group?.name || "tu grupo"}`,
-      body: `${expense.description || "Gasto"} · ${expense.amount} ${expense.currency}`,
-      url: "/evenly/",
+    const title = `Nuevo gasto en ${group?.name || "tu grupo"}`;
+    // Con un solo pagador (el caso de todos los días) se nombra -- con
+    // varios, se deja el monto solo, decir "Fulano y Mengano pagaron" no
+    // suma claridad para una notificación tan corta.
+    const payerIds = Object.keys(expense.payers || {});
+    const singlePayerName = payerIds.length === 1 ? members?.find((m) => m.id === payerIds[0])?.name : null;
+
+    const sends = recipients.flatMap((m) => {
+      const mySubs = subsByUser.get(m.linked_user_id) || [];
+      if (!mySubs.length) return [];
+      // Mismo cálculo y misma redacción que `loanDiff`/`showLoanSummary` en
+      // ExpenseDetail (EvenGroupTab.jsx): positivo = prestaste (pagaste de
+      // más), negativo = te prestaron (pagaste de menos, otro cubrió tu
+      // parte) -- así la notificación habla igual que el resto de la app.
+      const myPaid = Number(expense.payers?.[m.id] || 0);
+      const diff = myPaid - Number(expense.shares?.[m.id] || 0);
+      // Si pagaste algo vos (sea el único pagador o uno de varios), siempre
+      // se muestra tu propio monto -- es el dato más relevante para VOS,
+      // sin importar si hay otros pagadores. Si no pagaste nada, se nombra
+      // a quien sí pagó (si fue uno solo) o "Pago total" (si fueron
+      // varios y ninguno sos vos). Pedido de Nicolas 2026-11-05.
+      let body = myPaid > EPSILON
+        ? `${expense.description || "Gasto"} · Pagaste ${formatMoney(myPaid, expense.currency)}`
+        : singlePayerName
+          ? `${expense.description || "Gasto"} · ${singlePayerName} pagó ${formatMoney(expense.amount, expense.currency)}`
+          : `${expense.description || "Gasto"} · Pago total ${formatMoney(expense.amount, expense.currency)}`;
+      if (Math.abs(diff) > EPSILON) body += ` · ${diff > 0 ? "Prestaste" : "Te prestaron"} ${formatMoney(Math.abs(diff), expense.currency)}`;
+      const notifPayload = JSON.stringify({ title, body, url: "/evenly/" });
+      return mySubs.map((sub) => ({ sub, notifPayload }));
     });
 
-    await Promise.all(subs.map(async (sub) => {
+    await Promise.all(sends.map(async ({ sub, notifPayload }) => {
       try {
         await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, notifPayload);
       } catch (err: any) {

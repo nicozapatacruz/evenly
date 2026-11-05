@@ -581,6 +581,11 @@ function EvenGroupSettings({ session, groups, reloadGroups, onCreateGroup, onOpe
   // instante antes de saber si este dispositivo ya tenía una suscripción).
   const [pushEnabled, setPushEnabled] = useState(null);
   const [togglingPush, setTogglingPush] = useState(false);
+  // Antes de gastar el único diálogo nativo del navegador, un aviso propio
+  // explicando para qué es -- si igual eligen "No permitir" ahí, no hay
+  // forma de volver a preguntar (ni en iOS ni en el resto), así que mejor
+  // no sorprender a nadie. Pedido de Nicolas 2026-11-05.
+  const [confirmingPushPrompt, setConfirmingPushPrompt] = useState(false);
   useEffect(() => {
     let cancelled = false;
     getCurrentSubscription().then((sub) => { if (!cancelled) setPushEnabled(!!sub); }).catch(() => { if (!cancelled) setPushEnabled(false); });
@@ -665,18 +670,26 @@ function EvenGroupSettings({ session, groups, reloadGroups, onCreateGroup, onOpe
   // A diferencia del resto de esta pantalla, no pasa por offlineSupabase: no
   // tiene sentido encolar "activar notificaciones" sin señal -- pedir el
   // permiso y suscribirse al push ya requieren red de por sí.
-  const handleTogglePush = async () => {
+  const handleTogglePush = async (next) => {
     if (!isOnline) { showError("Estás offline, no podés cambiar esto ahora."); return; }
     setTogglingPush(true);
     try {
-      if (pushEnabled) {
-        await disablePush(session.userId);
-        setPushEnabled(false);
-      } else {
+      if (next) {
         await enablePush(session.userId);
         setPushEnabled(true);
+      } else {
+        await disablePush(session.userId);
+        setPushEnabled(false);
       }
     } catch (e) { showError(e?.message || "No se pudo actualizar."); } finally { setTogglingPush(false); }
+  };
+
+  // Apagar no necesita aviso previo (no dispara ningún permiso nativo) --
+  // solo prender pasa primero por la explicación propia, ver
+  // confirmingPushPrompt.
+  const onTogglePushChange = (next) => {
+    if (!next) { handleTogglePush(false); return; }
+    setConfirmingPushPrompt(true);
   };
 
   const handleDefaultGroupChange = async (e) => {
@@ -689,6 +702,12 @@ function EvenGroupSettings({ session, groups, reloadGroups, onCreateGroup, onOpe
       showInfo(isOnline ? "Guardado." : "Guardado. Se sube solo apenas vuelva la señal.");
     } catch (e) { showError(`No se pudo actualizar: ${e?.message || e}`); } finally { setSavingDefault(false); }
   };
+
+  // Tiene que repetirse en `disabled` (no solo en `blockedReason`) -- el
+  // texto de bloqueo de ToggleField solo se muestra cuando el campo
+  // también está `disabled` (ver Shared.jsx), si no quedaba el switch
+  // clickeable pero sin ninguna explicación de por qué nunca prende.
+  const permissionDenied = typeof Notification !== "undefined" && Notification.permission === "denied";
 
   return (
     <div style={styles.form}>
@@ -704,14 +723,25 @@ function EvenGroupSettings({ session, groups, reloadGroups, onCreateGroup, onOpe
         label="Notificaciones de EvenGroup"
         description="Te avisamos cuando alguien agrega un gasto nuevo en el que participás, en cualquiera de tus grupos."
         checked={!!pushEnabled}
-        onChange={handleTogglePush}
-        disabled={togglingPush || pushEnabled === null || !isPushSupported()}
+        onChange={onTogglePushChange}
+        disabled={togglingPush || pushEnabled === null || !isPushSupported() || permissionDenied}
         blockedReason={
-          typeof Notification !== "undefined" && Notification.permission === "denied" ? "Bloqueado en el navegador. Activalo desde la configuración del sistema."
+          permissionDenied ? "Bloqueado por el navegador. Andá a Ajustes del iPhone → bajá hasta \"Evenly\" → Notificaciones."
           : !isPushSupported() ? "En iPhone, instalá la app a tu pantalla de inicio primero."
           : undefined
         }
       />
+      {confirmingPushPrompt && (
+        <ConfirmInline
+          title="Activar notificaciones"
+          message={"Ahora te va a aparecer el permiso de notificaciones del navegador -- aceptalo para que funcione.\n\nSi tocás \"No permitir\" ahí, no hay forma de volver a preguntarte: hay que activarlo después a mano desde la configuración del navegador/sistema."}
+          confirmLabel="Continuar"
+          danger={false}
+          onCancel={() => setConfirmingPushPrompt(false)}
+          onConfirm={() => { setConfirmingPushPrompt(false); handleTogglePush(true); }}
+          style={{ borderRadius: 10, borderTop: "1px solid #EBC9BA", marginTop: 8 }}
+        />
+      )}
 
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 40, borderBottom: "1px solid #ECE3D3", fontFamily: "system-ui, sans-serif" }}>

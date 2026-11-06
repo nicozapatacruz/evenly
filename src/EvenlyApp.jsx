@@ -213,8 +213,17 @@ function useAuth() {
     return { needsEmailConfirmation: !data.session };
   }, []);
 
-  const login = useCallback(async (email, password) => {
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+  const login = useCallback(async (identifier, password) => {
+    const trimmed = identifier.trim();
+    let email = trimmed;
+    if (!trimmed.includes("@")) {
+      // No es un email -- se asume usuario, se resuelve a su email antes de
+      // loguear (Supabase Auth solo acepta email/teléfono, no usuario).
+      const { data: resolvedEmail, error: lookupError } = await supabase.rpc("get_email_for_username", { p_username: trimmed.toLowerCase() });
+      if (lookupError || !resolvedEmail) throw new Error("Email o contraseña incorrectos.");
+      email = resolvedEmail;
+    }
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       if (/email.*not.*confirmed|confirm.*email/i.test(error.message)) {
         throw new Error("Todavía no confirmas tu correo. Revisa tu bandeja de entrada y haz click en el enlace de confirmación.");
@@ -554,8 +563,8 @@ function AuthScreen({ onLogin, onRegister, onForgotPassword }) {
               <input style={styles.input} name="new-username" value={username} onChange={e => setUsername(e.target.value)} onBlur={() => touch("username")} placeholder="nombre_de_usuario" autoCapitalize="none" autoComplete="username" />
             </Field>
           )}
-          <Field label="Email" required error={touched.email && !email.trim() ? "Este campo es obligatorio." : ""}>
-            <input style={styles.input} type="email" name="email" value={email} onChange={e => setEmail(e.target.value)} onBlur={() => touch("email")} placeholder="tu@email.com" autoCapitalize="none" autoComplete={mode === "login" ? "username" : "email"} />
+          <Field label={mode === "login" ? "Email o usuario" : "Email"} required error={touched.email && !email.trim() ? "Este campo es obligatorio." : ""}>
+            <input style={styles.input} type={mode === "login" ? "text" : "email"} name="email" value={email} onChange={e => setEmail(e.target.value)} onBlur={() => touch("email")} placeholder={mode === "login" ? "tu@email.com o usuario" : "tu@email.com"} autoCapitalize="none" autoComplete={mode === "login" ? "username" : "email"} />
           </Field>
           {mode !== "forgot" && (
             <Field label="Contraseña" required error={touched.password && !password ? "Este campo es obligatorio." : ""}>

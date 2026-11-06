@@ -15,6 +15,14 @@ Reglas:
 
 ---
 
+## 2026-11-06
+
+- Login ahora acepta usuario además de email (`EvenlyApp.jsx`, campo "Email o
+  usuario"): si lo que se escribe no tiene `@`, se resuelve primero a su email
+  vía la función nueva `get_email_for_username` (SQL, corre Nicolas a mano en
+  Supabase) y después se loguea normal. El registro no cambia, sigue pidiendo
+  email y usuario por separado.
+
 ## 2026-11-05
 
 - Reconciliación con EvenCapital ahora corre al toque después de crear,

@@ -283,15 +283,6 @@ También se revisaron (a pedido de Nicolas, que notó que la búsqueda inicial p
 
 ## B. Mejoras a futuro (sin compromiso de construirlas: ideas, no backlog)
 
-- [ ] **Notificaciones: instructivo para Android, y sincronizar con el permiso real cuando sea app nativa**
-<details open><summary>Ver detalle</summary>
-
-El texto que explica cómo reactivar notificaciones si quedaron bloqueadas (`ConfigScreen.jsx`, toggle "Notificaciones de EvenGroup") hoy solo da el paso a paso de iPhone, a propósito: Nicolas y Paulina son los únicos miembros vinculados a EvenCapital hoy, los dos en iPhone. Si algún día alguien con Android se suma, se puede detectar fácil (`navigator.userAgent`, misma técnica que ya usa `isPushSupported()` para distinguir iOS) y mostrar el instructivo que corresponda.
-
-Relacionado, encontrado el 2026-11-05: si el usuario apaga las notificaciones desde Ajustes del sistema (no desde el toggle de la app), el toggle de Config se queda pegado en "encendido" sin forma de detectarlo. Es una limitación real de las PWA en iOS (no exponen una API como `UNUserNotificationCenter.getNotificationSettings` de las apps nativas, que sí permite consultar en cualquier momento si el permiso sigue activo). Si algún día Evenly pasa a ser una app nativa de verdad (Capacitor o similar), sincronizar el toggle con ese permiso real del sistema en vez de solo con `Notification.permission`/la suscripción guardada.
-
-</details>
-
 - [ ] **Permitir transacciones con importe 0 (notas/recordatorios)**
 <details open><summary>Ver detalle</summary>
 
@@ -345,6 +336,36 @@ Permitir usar Split Ledger offline en un grupo que no tenga otros miembros vincu
 <details open><summary>Ver detalle</summary>
 
 Si alguna vez se construye una versión nativa (Swift/UIKit/SwiftUI, o React Native) en vez de esta web app: revertir el patrón de `Footer` fijo (`position:"fixed"`) + `paddingBottom:100` reservado a mano en cada pantalla, por un layout nativo normal (header y footer "hug", body con su propio scroll nativo llenando el resto, sin reservar nada a mano). El padding manual de hoy es un compromiso necesario SOLO porque esto corre en un navegador/WebKit (evita el scroll anidado `overflow:auto`, que en iOS Safari se siente con tirones, calcula mal dónde llevar un input tapado por el teclado, y tiene rebote confuso entre scrolls anidados) — en nativo el sistema operativo resuelve todo eso solo, así que el workaround ya no haría falta. Agregado 2026-10-20, a raíz de la revisión de scroll innecesario.
+
+</details>
+
+- [ ] **Notificaciones: instructivo para Android, y sincronizar con el permiso real cuando sea app nativa**
+<details open><summary>Ver detalle</summary>
+
+El texto que explica cómo reactivar notificaciones si quedaron bloqueadas (`ConfigScreen.jsx`, toggle "Notificaciones de EvenGroup") hoy solo da el paso a paso de iPhone, a propósito: Nicolas y Paulina son los únicos miembros vinculados a EvenCapital hoy, los dos en iPhone. Si algún día alguien con Android se suma, se puede detectar fácil (`navigator.userAgent`, misma técnica que ya usa `isPushSupported()` para distinguir iOS) y mostrar el instructivo que corresponda.
+
+Relacionado, encontrado el 2026-11-05: si el usuario apaga las notificaciones desde Ajustes del sistema (no desde el toggle de la app), el toggle de Config se queda pegado en "encendido" sin forma de detectarlo. Es una limitación real de las PWA en iOS (no exponen una API como `UNUserNotificationCenter.getNotificationSettings` de las apps nativas, que sí permite consultar en cualquier momento si el permiso sigue activo). Si algún día Evenly pasa a ser una app nativa de verdad (Capacitor o similar), sincronizar el toggle con ese permiso real del sistema en vez de solo con `Notification.permission`/la suscripción guardada.
+
+</details>
+
+- [ ] **Reconciliación con EvenCapital de los DEMÁS miembros, del lado del servidor (pensando en escalar)**
+<details open><summary>Ver detalle</summary>
+
+Hoy la reconciliación (`reconcileEvenGroup`/`reconcileLink` en `src/lib/evenGroupSync.js`) corre del lado del cliente, autenticada como el usuario de turno — por diseño de RLS, solo puede leer/escribir las tablas privadas (`mm_transactions`, `sl_mm_links`, etc.) de ESE usuario, nunca las de otro miembro del grupo. Por eso, aunque agregamos `reconcileNow` (2026-11-05, ver `BITACORA.md`) para que reconciliar tu propio EvenCapital corra al toque después de crear/editar/borrar un gasto o pago en EvenGroup, eso solo acelera la reconciliación de QUIEN hizo la acción — el resto de los miembros vinculados (ej. Paulina) siguen esperando a su propia próxima sincronización completa (abrir su app, reconectarse) para ver el cambio reflejado en su Transacciones. Charlado con Nicolas 2026-11-05/06, de acuerdo en no construir esto todavía (ver razones abajo) pero dejarlo documentado para cuando la app crezca.
+
+**Qué haría falta para que todos los miembros vinculados se reconcilien al toque, sin importar quién hizo el cambio:**
+
+Un Database Webhook sobre `expenses`/`payments` (INSERT y UPDATE, incluyendo el soft-delete que es un UPDATE de `deleted`), igual mecanismo que ya usamos para `notify-new-expense`, apuntando a una Edge Function nueva que corra con la service role key (la única forma de escribir en las tablas privadas de CUALQUIER miembro sin pasar por RLS) y reconcilie el vínculo de cada miembro activo del grupo, no solo el de quien disparó el cambio.
+
+**Por qué no es un ajuste chico:**
+
+1. **De dónde sale la lógica.** Toda la reconciliación real vive en `evenGroupSync.js` (`loadLinkContext`, `ensureExpenseChoices`, `computeDesiredTransactions`, `computeLendOffsetDesired`, el diff insert/update/delete contra `mm_transactions`) — unas 300+ líneas con bastantes reglas particulares ya ajustadas a mano varias veces (compensación de lo prestado, elecciones de cuenta por transacción puntual, moneda pendiente de tasa, etc.), pensada para correr en el navegador. Hay que elegir entre:
+   - **Duplicarla** en la Edge Function (Deno): rápido de armar, pero cualquier ajuste futuro a una regla de reconciliación (que ha pasado seguido) hay que acordarse de replicarlo en los 2 lugares, si no el comportamiento se desalinea entre lo que ve cada quien.
+   - **Compartir la lógica de verdad**: separar el cálculo puro (qué transacciones deberían existir) de las llamadas a Supabase, para que el navegador y la Edge Function importen el mismo código, parametrizando qué cliente de Supabase usar (anon vs. service role). Más refactor ahora, pero sin riesgo de desalineación después. El camino recomendado si algún día se construye esto.
+
+2. **Costo real pensando en crecer.** No es la facturación de la Edge Function en sí (invocaciones baratas con pocos usuarios) — es que la reconciliación de HOY recalcula todo el historial de un vínculo desde que se activó en cada corrida, no procesa incremental solo lo que cambió. Eso es razonable corriendo una vez al abrir la app, pero si se dispara en cada gasto/pago para CADA miembro vinculado de un grupo con mucho historial y muchos usuarios, empieza a pesar de verdad en lecturas/escrituras de la base. Para escalar bien de verdad, además de mover esto al servidor habría que volverlo incremental (procesar solo la fila que cambió, no recalcular todo el set deseado desde cero) — un cambio más profundo al algoritmo, no solo de dónde corre.
+
+**Por qué no construirlo ahora:** con 2 personas, el costo real de este gap es "Paulina ve el cambio cuando reabre su app", no un problema de uso diario. Vale la pena priorizar esto recién si la sincronización casi instantánea entre varias personas se vuelve un pedido recurrente con más usuarios reales, y ahí construirlo bien (lógica compartida + incremental) desde el principio en vez de parchar con duplicación.
 
 </details>
 

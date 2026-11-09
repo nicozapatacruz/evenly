@@ -27,6 +27,16 @@ Reglas:
   expandir/colapsar si hay más contenido. Encontrado por Nicolas. De paso, el
   mismo `TextRow` colapsado (cuando no está enfocado, p.ej. llenando otro
   campo del form) pasó de mostrar solo la 1ra línea a mostrar hasta 3.
+- Revertido el scroll interno del textarea de notas de hace un rato (tope de
+  160px + `overflow: auto`): al estar enfocado creaba dos scrolls anidados
+  (el del campo y el de la página), que se sentían trabados entre sí y no
+  dejaban ver el final del texto sin hacer scroll aparte. Ahora el campo
+  crece libre con el contenido mientras lo editás (sin tope, un solo scroll,
+  el de la página), y vuelve a colapsar a 3 líneas al salir. Encontrado por
+  Nicolas. Además, como crecer el campo no hace que el navegador vuelva a
+  chequear solo si sigue visible, se agregó un `scrollIntoView` manual en
+  cada letra nueva mientras está enfocado, para que la página siga al
+  cursor mientras escribís una nota larga.
 
 ## 2026-11-06
 

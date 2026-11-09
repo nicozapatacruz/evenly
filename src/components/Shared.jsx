@@ -1125,11 +1125,22 @@ function truncateFromStart(text, maxWidth, font) {
 export function TextRow({ label, value, onChange, onFocus, onBlur, placeholder, suggestions, onPickSuggestion, multiline = false }) {
   const [focused, setFocused] = useState(false);
   const taRef = useRef(null);
+  // Enfocada, crece libre con el contenido (sin tope ni scroll propio) --
+  // así hay un solo scroll (el de la página). Pero crecer solo no alcanza
+  // para que la página siga el cursor -- el navegador no vuelve a chequear
+  // si el campo sigue visible una vez que YA estaba enfocado, así que acá
+  // se lo pedimos a mano en cada letra nueva (scrollIntoView, sin "smooth"
+  // para no encimar animaciones mientras se escribe rápido). Se resetea a
+  // "auto" antes de medir `scrollHeight` para que achique bien si se borra
+  // texto, no solo crezca.
   useEffect(() => {
     if (!multiline) return;
     const el = taRef.current;
     if (!el) return;
-    el.style.height = focused ? Math.min(el.scrollHeight, 160) + "px" : "";
+    if (!focused) { el.style.height = ""; return; }
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+    el.scrollIntoView({ block: "nearest" });
   }, [focused, value, multiline]);
 
   // Colapsada (no enfocada): hasta COLLAPSED_LINES líneas, cada una
@@ -1186,7 +1197,7 @@ export function TextRow({ label, value, onChange, onFocus, onBlur, placeholder, 
             onFocus={() => { setFocused(true); onFocus?.(); }}
             onBlur={() => { setFocused(false); onBlur?.(); }}
             placeholder={placeholder}
-            style={{ width: "100%", fontSize: 13.5, fontFamily: "system-ui, sans-serif", border: "none", background: "transparent", padding: 0, color: "#2B2420", resize: "none", overflow: focused ? "auto" : "hidden", lineHeight: 1.4 }}
+            style={{ width: "100%", fontSize: 13.5, fontFamily: "system-ui, sans-serif", border: "none", background: "transparent", padding: 0, color: "#2B2420", resize: "none", overflow: "hidden", lineHeight: 1.4 }}
           />
         ) : (
           <input

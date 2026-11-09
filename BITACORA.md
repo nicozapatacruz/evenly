@@ -15,6 +15,19 @@ Reglas:
 
 ---
 
+## 2026-11-09
+
+- Bug en el campo de notas (`TextRow` en `Shared.jsx`, usado tanto por
+  EvenCapital como por EvenGroup): al escribir muchas líneas, el texto que
+  pasaba del tope de 160px desaparecía sin scroll -- ahora scrollea
+  (`overflowY: auto` al enfocar). En la vista de detalle del gasto
+  (`ExpenseDetail`, EvenGroupTab.jsx), las notas ahora respetan los saltos de
+  línea (`white-space: pre-line`, antes se colapsaban en un párrafo) y se
+  recortan a 4 líneas con un chevron junto al título "Notas" para
+  expandir/colapsar si hay más contenido. Encontrado por Nicolas. De paso, el
+  mismo `TextRow` colapsado (cuando no está enfocado, p.ej. llenando otro
+  campo del form) pasó de mostrar solo la 1ra línea a mostrar hasta 3.
+
 ## 2026-11-06
 
 - Login ahora acepta usuario además de email (`EvenlyApp.jsx`, campo "Email o

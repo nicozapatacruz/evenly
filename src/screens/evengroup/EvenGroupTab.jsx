@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from "../../lib/supabaseClient.js";
 import {
   Plus, Receipt, X, ChevronRight, ArrowRight, Check, Trash2, Settings,
@@ -1858,6 +1858,17 @@ function ExpenseDetail({ group, expenseId, evenCapital, onBack, onEdit, isOnline
   const { members } = group;
   const e = group.expenses.find((x) => x.id === expenseId);
   const [showFullPhoto, setShowFullPhoto] = useState(false);
+  const notesRef = useRef(null);
+  const [notesExpanded, setNotesExpanded] = useState(false);
+  const [notesClamped, setNotesClamped] = useState(false);
+  // Detecta si el texto de notas se corta con el line-clamp de 4 líneas, para
+  // solo mostrar el chevron de expandir cuando hace falta (nunca se vuelve a
+  // medir mientras está expandida, así el chevron no desaparece al abrirla).
+  useLayoutEffect(() => {
+    const el = notesRef.current;
+    if (!el || notesExpanded) return;
+    setNotesClamped(el.scrollHeight > el.clientHeight + 1);
+  }, [e?.notes, notesExpanded]);
   const activeLink = evenCapital?.slLinks?.find((l) => l.active && l.group_id === group.id && l.user_id === session?.userId);
   const hideGroupCategory = !!(activeLink && activeLink.show_group_category === false);
 
@@ -2000,8 +2011,28 @@ function ExpenseDetail({ group, expenseId, evenCapital, onBack, onEdit, isOnline
 
         {e.notes && (
           <div>
-            <p style={{ ...styles.label, marginBottom: 6 }}>Notas</p>
-            <p style={{ ...styles.muted, padding: 0, margin: 0 }}>{e.notes}</p>
+            <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
+              <p style={{ ...styles.label, margin: 0 }}>Notas</p>
+              {notesClamped && (
+                <button
+                  type="button"
+                  onClick={() => setNotesExpanded((v) => !v)}
+                  aria-label={notesExpanded ? "Mostrar menos" : "Mostrar más"}
+                  style={{ background: "none", border: "none", padding: 2, margin: 0, display: "flex", cursor: "pointer" }}
+                >
+                  {notesExpanded ? <ChevronUp size={14} color="#6B6355" /> : <ChevronDownIcon size={14} color="#6B6355" />}
+                </button>
+              )}
+            </div>
+            <p
+              ref={notesRef}
+              style={{
+                ...styles.muted, padding: 0, margin: 0, whiteSpace: "pre-line",
+                ...(notesExpanded ? null : { display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }),
+              }}
+            >
+              {e.notes}
+            </p>
           </div>
         )}
       </div>

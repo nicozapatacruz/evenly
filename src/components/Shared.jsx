@@ -1132,27 +1132,34 @@ export function TextRow({ label, value, onChange, onFocus, onBlur, placeholder, 
     el.style.height = focused ? Math.min(el.scrollHeight, 160) + "px" : "";
   }, [focused, value, multiline]);
 
-  // Colapsada (no enfocada): solo la 1ra línea, recortada al ancho REAL de
-  // la fila (truncateToWidth) si hace falta — nunca se pierde nada (el
-  // valor completo sigue en `value`, esto es solo lo que se VE cerrado).
-  // Antes del primer montaje (taRef.current aún null) no hay ancho que
-  // medir; ese primer render cae en el valor completo, se corrige solo en
-  // cuanto el efecto de abajo dispara un re-render.
+  // Colapsada (no enfocada): hasta COLLAPSED_LINES líneas, cada una
+  // recortada al ancho REAL de la fila (truncateToWidth) si hace falta —
+  // nunca se pierde nada (el valor completo sigue en `value`, esto es solo
+  // lo que se VE cerrado). Antes del primer montaje (taRef.current aún
+  // null) no hay ancho que medir; ese primer render cae en el valor
+  // completo, se corrige solo en cuanto el efecto de abajo dispara un
+  // re-render.
+  const COLLAPSED_LINES = 3;
   const FONT = "16px system-ui, -apple-system, sans-serif";
   const [, forceMeasure] = useState(0);
   useLayoutEffect(() => { if (!focused) forceMeasure((n) => n + 1); }, [focused, value]);
   const collapsed = !value ? value : (() => {
-    const firstLine = value.split("\n")[0];
-    const hasMore = value.includes("\n");
+    const lines = value.split("\n");
+    const shown = lines.slice(0, COLLAPSED_LINES);
+    const hasMore = lines.length > COLLAPSED_LINES;
     const width = taRef.current?.clientWidth;
-    if (!width) return hasMore ? firstLine + "…" : firstLine; // antes del 1er montaje, sin ancho que medir
-    if (!hasMore) return truncateToWidth(firstLine, width, FONT);
-    // Con más contenido abajo, el "…" es obligatorio aunque la 1ra línea
-    // sola entre entera (truncateToWidth no lo agregaría si ya entra).
+    if (!width) return hasMore ? shown.join("\n") + "…" : shown.join("\n"); // antes del 1er montaje, sin ancho que medir
     if (!rowMeasureCtx) rowMeasureCtx = document.createElement("canvas").getContext("2d");
     rowMeasureCtx.font = FONT;
-    if (rowMeasureCtx.measureText(firstLine + "…").width <= width) return firstLine + "…";
-    return truncateToWidth(firstLine, width, FONT); // ya agrega su propio "…" al recortar
+    return shown.map((line, i) => {
+      const isLast = i === shown.length - 1;
+      if (isLast && hasMore) {
+        // Con más líneas abajo, el "…" es obligatorio en la última mostrada
+        // aunque ella sola entre entera (truncateToWidth no lo agregaría si ya entra).
+        if (rowMeasureCtx.measureText(line + "…").width <= width) return line + "…";
+      }
+      return truncateToWidth(line, width, FONT); // ya agrega su propio "…" al recortar si no entra
+    }).join("\n");
   })();
 
   return (
@@ -1172,14 +1179,14 @@ export function TextRow({ label, value, onChange, onFocus, onBlur, placeholder, 
         {multiline ? (
           <textarea
             ref={taRef}
-            rows={1}
+            rows={focused ? 1 : COLLAPSED_LINES}
             className="row-input"
             value={focused ? value : collapsed}
             onChange={(e) => onChange(e.target.value)}
             onFocus={() => { setFocused(true); onFocus?.(); }}
             onBlur={() => { setFocused(false); onBlur?.(); }}
             placeholder={placeholder}
-            style={{ width: "100%", fontSize: 13.5, fontFamily: "system-ui, sans-serif", border: "none", background: "transparent", padding: 0, color: "#2B2420", resize: "none", overflow: "hidden", lineHeight: 1.4, ...(focused ? null : { whiteSpace: "nowrap", textOverflow: "ellipsis" }) }}
+            style={{ width: "100%", fontSize: 13.5, fontFamily: "system-ui, sans-serif", border: "none", background: "transparent", padding: 0, color: "#2B2420", resize: "none", overflow: focused ? "auto" : "hidden", lineHeight: 1.4 }}
           />
         ) : (
           <input

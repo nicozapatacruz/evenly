@@ -214,22 +214,27 @@ function useAuth() {
   }, []);
 
   const login = useCallback(async (identifier, password) => {
-    const trimmed = identifier.trim();
-    let email = trimmed;
-    if (!trimmed.includes("@")) {
-      // No es un email -- se asume usuario, se resuelve a su email antes de
-      // loguear (Supabase Auth solo acepta email/teléfono, no usuario).
-      const { data: resolvedEmail, error: lookupError } = await supabase.rpc("get_email_for_username", { p_username: trimmed.toLowerCase() });
-      if (lookupError || !resolvedEmail) throw new Error("Email o contraseña incorrectos.");
-      email = resolvedEmail;
-    }
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      if (/email.*not.*confirmed|confirm.*email/i.test(error.message)) {
+    // Pasa por la Edge Function `login` (no directo a Supabase Auth) para
+    // que la resolución de usuario -> correo quede del lado del servidor
+    // (nunca vuelve al cliente) y para que el límite de intentos fallidos
+    // aplique tanto a login por correo como por usuario. Antes esto llamaba
+    // a una función SQL (`get_email_for_username`) invocable con la clave
+    // anon -- cualquiera con esa clave (pública) podía sacar el correo de
+    // cualquier usuario sabiendo su nombre de usuario.
+    const { data, error: invokeError } = await supabase.functions.invoke("login", {
+      body: { identifier: identifier.trim(), password },
+    });
+    if (invokeError || !data?.ok) {
+      if (data?.code === "CONFIRM_EMAIL") {
         throw new Error("Todavía no confirmas tu correo. Revisa tu bandeja de entrada y haz click en el enlace de confirmación.");
+      }
+      if (data?.code === "RATE_LIMITED") {
+        throw new Error("Demasiados intentos. Espera unos minutos y vuelve a intentar.");
       }
       throw new Error("Email o contraseña incorrectos.");
     }
+    const { error } = await supabase.auth.setSession({ access_token: data.access_token, refresh_token: data.refresh_token });
+    if (error) throw new Error("Email o contraseña incorrectos.");
   }, []);
 
   const logout = useCallback(async () => {

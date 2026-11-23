@@ -27,6 +27,40 @@ Lista viva de pendientes del proyecto. Reglas:
 
 ## A. Mejoras pendientes
 
+- [ ] **Brecha de seguridad en login por usuario — falta el setup manual en Supabase y el revoke final**
+<details open><summary>Ver detalle</summary>
+
+Encontrado por Nicolas 2026-11-23: `get_email_for_username` (agregada el
+2026-11-06 para el login por usuario) era invocable con la clave anon
+(pública, va en el bundle) desde cualquiera, sin haber iniciado sesión —
+cualquiera que supiera un nombre de usuario podía sacar el correo real
+asociado. Reemplazado por la Edge Function `login`
+(`supabase/functions/login/index.ts`): resuelve usuario→correo con la
+service role (nunca sale del servidor) y devuelve solo la sesión (tokens).
+Se usa también para login por correo, no solo por usuario, para que el
+límite de intentos aplique parejo a los dos casos. Código ya escrito y en
+`EvenlyApp.jsx` (`login` ahora llama `supabase.functions.invoke("login")` +
+`supabase.auth.setSession`).
+
+Incluye límite de 5 intentos fallidos en 15 minutos, por identificador Y
+por IP (tabla nueva `login_attempts`, sin políticas RLS — solo la Edge
+Function, con service role, puede tocarla). El identificador se cuenta tal
+cual se escribió, exista la cuenta o no, así que probar usuarios inventados
+se frena igual que uno real y el bloqueo en sí no delata cuáles existen.
+
+Falta, a mano por Nicolas, EN ESTE ORDEN (si se revoca el acceso de
+`get_email_for_username` antes de desplegar la función nueva, las versiones
+viejas de la app instaladas quedan sin poder loguearse por usuario):
+1. Correr el SQL de la tabla `login_attempts`.
+2. Desplegar la Edge Function `login` ("Via Editor", igual que
+   `notify-new-expense").
+3. Probar desde el iPhone: login por usuario y por correo.
+4. Recién ahí, revocar el `EXECUTE` de `get_email_for_username` para
+   `anon`/`authenticated` (y confirmar con `has_function_privilege` que
+   `anon` ya no puede).
+
+</details>
+
 - [ ] **Notificaciones push de EvenGroup (gasto nuevo) — falta el setup manual en Supabase**
 <details open><summary>Ver detalle</summary>
 

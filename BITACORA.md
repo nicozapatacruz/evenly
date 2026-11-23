@@ -15,6 +15,21 @@ Reglas:
 
 ---
 
+## 2026-11-23
+
+- Brecha de seguridad encontrada en el login por usuario (agregado el
+  2026-11-06): `get_email_for_username` era invocable con la clave anon
+  (pública, va en el bundle), así que cualquiera podía sacar el correo de
+  cualquier usuario sabiendo su nombre de usuario. Se reemplaza el login
+  entero (correo o usuario) por la Edge Function `login`
+  (`supabase/functions/login/index.ts`): resuelve el usuario a su correo
+  con la service role (nunca sale del servidor), loguea y devuelve solo la
+  sesión (tokens). Incluye límite de 5 intentos fallidos en 15 minutos por
+  identificador y por IP (tabla nueva `login_attempts`, solo accesible por
+  la función). Falta: correr el SQL de la tabla, desplegar la función,
+  probar desde el iPhone, y recién después revocar el acceso anon a
+  `get_email_for_username` -- ver PENDIENTES.md. Encontrado por Nicolas.
+
 ## 2026-11-09
 
 - Bug en el campo de notas (`TextRow` en `Shared.jsx`, usado tanto por

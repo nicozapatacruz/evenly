@@ -29,6 +29,29 @@ Reglas:
   la función). Falta: correr el SQL de la tabla, desplegar la función,
   probar desde el iPhone, y recién después revocar el acceso anon a
   `get_email_for_username` -- ver PENDIENTES.md. Encontrado por Nicolas.
+- Cerrado lo de arriba: tabla `login_attempts` creada, función `login`
+  desplegada y probada en los 2 iPhones (Nicolas y Paulina), acceso anon a
+  `get_email_for_username` revocado. Al revocar, `revoke ... from anon,
+  authenticated` solo no alcanzó -- `anon` seguía pudiendo ejecutarla
+  porque Postgres le da `EXECUTE` a `PUBLIC` por defecto al crear una
+  función, y `anon` hereda de ahí. Hubo que revocar de `PUBLIC` también.
+  Confirmado con `has_function_privilege('anon', ...)` devolviendo `false`.
+- Auditoría completa, a pedido de Nicolas, de qué más en la base se puede
+  llamar sin haber iniciado sesión: todas las políticas RLS confirmadas
+  bien (dependen de `auth.uid()` o de `is_group_member`, que da `false` sin
+  sesión -- la única abierta de verdad, `client_auth_events` "anyone can
+  insert", ya era sabida y está para borrarse). De 4 funciones
+  `security definer` que también heredaban `EXECUTE` de más (2 de `PUBLIC`
+  por defecto, 2 de un grant directo a `anon` -- señal de que se crearon
+  desde el Editor de Supabase, que por defecto se lo da a `anon` aparte):
+  ninguna era explotable en la práctica (`handle_new_user`/`rls_auto_enable`
+  solo corren como trigger, Postgres no las deja invocar a mano;
+  `is_group_member`/`sync_split_category_to_other_members` ya traían su
+  propio chequeo de `auth.uid()` adentro) pero se les cerró igual el acceso
+  a `anon` por prolijidad, con cuidado de mantenerle el acceso a
+  `authenticated` a las 2 que sí lo necesitan (de lo contrario se rompían
+  las políticas RLS de medio EvenGroup). Probado en vivo (crear un gasto)
+  sin problemas.
 
 ## 2026-11-09
 

@@ -15,6 +15,13 @@ Reglas:
 
 ---
 
+## 2026-11-26
+
+- Quitado el salto automático a "Cuenta" al dar "Ok" en la calculadora del
+  Importe en Transacciones (Money Manager, `TransactionForm.jsx`) — a
+  pedido de Nicolas. Solo existía ahí (no en EvenGroup, donde nunca se
+  había agregado).
+
 ## 2026-11-23
 
 - Brecha de seguridad encontrada en el login por usuario (agregado el

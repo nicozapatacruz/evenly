@@ -114,7 +114,6 @@ export default function TransactionForm({
   // Sube cada vez que el botón "Ok" del teclado de Importe confirma el monto
   // y pide saltar directo a elegir cuenta (ver CalculatorAmountInput) — el
   // campo que sigue a Importe desde que Cuenta pasó a ir antes que Categoría.
-  const [openAccountSignal, setOpenAccountSignal] = useState(0);
   // Sube cada vez que la moneda cambia a una distinta de la cuenta, para que
   // CurrencyConversionField se abra solo (ver abajo, cerca del campo Importe).
   const [openConversionSignal, setOpenConversionSignal] = useState(0);
@@ -545,7 +544,6 @@ export default function TransactionForm({
                 rate={exchangeRate}
                 onChangeRate={setExchangeRate}
                 onBlur={() => { touch("amount"); touch("exchangeRate"); }}
-                onConfirmNext={type !== "transfer" ? () => setOpenAccountSignal((n) => n + 1) : undefined}
                 openSignal={openConversionSignal}
                 amountDisabled={isSynced}
                 required
@@ -580,7 +578,6 @@ export default function TransactionForm({
                 value={amount}
                 onChange={setAmount}
                 onBlur={() => touch("amount")}
-                onConfirmNext={type !== "transfer" ? () => setOpenAccountSignal((n) => n + 1) : undefined}
                 placeholder="0,00"
                 disabled={isSynced}
                 style={{ flex: "0 1 auto", minWidth: 0, width: "auto", height: 56, border: "none", background: "transparent", padding: "0 10px", lineHeight: 1, fontSize: 40, fontWeight: 400, fontFamily: "'Iowan Old Style', 'Georgia', 'Source Serif Pro', serif", color: AMOUNT_COLOR[type], textAlign: "center", justifyContent: "center", borderRadius: 14 }}
@@ -674,7 +671,6 @@ export default function TransactionForm({
             onChange={setAccountId}
             onClear={() => setAccountId("")}
             onBlur={() => touch("accountId")}
-            openSignal={openAccountSignal}
             placeholder="Elegí una cuenta"
             disabled={isSynced}
             groups={groups
